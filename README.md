@@ -20,7 +20,7 @@ colima start                                # start the Docker VM (after each re
 npm install
 npm run db:up                               # Postgres 18 (127.0.0.1:5433) + Mailpit (http://127.0.0.1:8025)
 cp apps/web/.env.example apps/web/.env.local   # then set BETTER_AUTH_SECRET: openssl rand -base64 32
-(cd apps/web && npm run db:migrate && npm run db:seed)   # create tables + template catalogue
+npm run db:migrate && npm run db:seed      # create tables + template catalogue (re-run db:seed after new templates)
 npm run dev                                 # web app: http://localhost:3100
 ```
 

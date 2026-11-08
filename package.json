@@ -15,7 +15,9 @@
     "viewer:build": "esbuild scripts/viewer/main.ts --bundle --format=esm --target=es2022 --outdir=scripts/viewer/dist",
     "dev": "npm run dev -w web",
     "db:up": "docker compose -f infra/docker-compose.yml up -d",
-    "db:down": "docker compose -f infra/docker-compose.yml down"
+    "db:down": "docker compose -f infra/docker-compose.yml down",
+    "db:migrate": "npm run db:migrate -w web",
+    "db:seed": "npm run db:seed -w web"
   },
   "devDependencies": {
     "@types/clipper-lib": "^6.4.0",
