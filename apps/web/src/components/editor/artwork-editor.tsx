@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  Box,
   Circle,
   Copy,
   Eye,
@@ -25,7 +26,9 @@ import {
 } from "lucide-react";
 import { generateDieline } from "@packaging/dieline-engine";
 import type { Artwork, ArtworkObject } from "@packaging/schema";
-import { saveArtwork } from "@/app/editor/[id]/actions";
+import { saveArtwork, saveThreeD } from "@/app/editor/[id]/actions";
+import { Preview3D, type ThreeDSettings } from "@/components/viewer3d/preview-3d";
+import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { EditorController, type OverlayOptions, type Viewport } from "./editor-controller";
 import { assetUrl } from "./fabric-map";
 import { AutoSaver, type SaveState } from "@/lib/autosave";
@@ -62,6 +65,7 @@ export function ArtworkEditor({
   params,
   artwork: initialArtwork,
   assets: initialAssets,
+  threeD: initialThreeD,
 }: {
   projectId: string;
   name: string;
@@ -69,6 +73,7 @@ export function ArtworkEditor({
   params: Record<string, unknown>;
   artwork: Artwork;
   assets: Asset[];
+  threeD: ThreeDSettings;
 }) {
   // Keyed by value: a props refresh with equal params must not rebuild the editor (and lose undo history).
   const paramsKey = JSON.stringify(params);
@@ -95,6 +100,16 @@ export function ArtworkEditor({
   const [message, setMessage] = useState<{ kind: "error" | "info"; text: string } | null>(null);
   const [assets, setAssets] = useState<Asset[]>(initialAssets);
   const [uploading, setUploading] = useState(false);
+  const [show3d, setShow3d] = useState(true);
+  const [threeD, setThreeD] = useState<ThreeDSettings>(initialThreeD);
+  const view3d = useRef<CartonViewHandle>(null);
+  const artworkForPreview = useMemo<Artwork>(() => ({ objects }), [objects]);
+  const updateThreeD = (s: ThreeDSettings) => {
+    setThreeD(s);
+    void saveThreeD(projectId, s).then((r) => {
+      if (!r.ok) setMessage({ kind: "error", text: r.message });
+    });
+  };
 
   // ------------------------------------------------------------ saving
   const [saver] = useState(
@@ -283,13 +298,17 @@ export function ArtworkEditor({
             {{ showGrid: "Grid", showBleed: "Bleed", showSafe: "Safe area" }[k]}
           </label>
         ))}
+        <div className="mx-1 h-5 w-px bg-border" />
+        <ToolButton label={show3d ? "Hide 3D preview" : "Show 3D preview"} active={show3d} onClick={() => setShow3d((v) => !v)}>
+          <Box className="size-4" /> 3D
+        </ToolButton>
         <div className="ml-auto flex items-center gap-2">
           <span className={`text-xs ${saveState === "error" ? "text-destructive" : "text-muted-foreground"}`} aria-live="polite">{saveLabel}</span>
           <button type="button" onClick={saveNow} className="h-8 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/80">Save</button>
         </div>
       </header>
 
-      <div className="grid min-h-0 grid-cols-[240px_1fr_288px]">
+      <div className={`grid min-h-0 ${show3d ? "grid-cols-[240px_1fr_minmax(280px,38%)_288px]" : "grid-cols-[240px_1fr_288px]"}`}>
         {/* Left: layers + uploads */}
         <aside className="flex min-h-0 flex-col border-r">
           <h2 className="border-b px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Layers</h2>
@@ -347,6 +366,12 @@ export function ArtworkEditor({
             ) : null}
           </div>
         </div>
+
+        {show3d ? (
+          <section className="min-h-0 min-w-0 border-l" aria-label="3D preview">
+            <Preview3D geo={geo} artwork={artworkForPreview} settings={threeD} onSettings={updateThreeD} viewRef={view3d} />
+          </section>
+        ) : null}
 
         {/* Right: properties */}
         <aside className="min-h-0 overflow-auto border-l">

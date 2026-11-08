@@ -520,4 +520,13 @@ Reply with answers, or "go with your recommendations", to begin.
 - **Verified:** 153 tests (anchoring, schema, image sniffing, autosave). In the browser: add all object types, upload logo (SVG disguised as PNG rejected 415; cross-site 403; signed-out 401), mouse select + drag (object re-anchors to the panel it is dropped on), properties edit, duplicate/delete/undo/redo via keyboard, reload: artwork identical (0 differences across 7 objects).
 - Known limits: no snapping/smart guides, no clipping to panels, no text on path, no gradients, raster images only (no SVG/PDF/AI import), uploaded images cannot be deleted from the UI yet, 2D only (3D comes next).
 
-- **Next:** Phase 5, 3D preview in the app with the artwork as texture.
+### Phase 5: 3D preview in the app (done 2026-11-08)
+- Editor shows a live 3D view beside the 2D canvas (toggle "3D"). Built with plain three.js on top of `packages/model3d` (the tested fold/UV code) instead of React Three Fiber: same result, two fewer dependencies.
+- Artwork texture: the editor's own Fabric mapping renders the artwork offscreen in flat-sheet space (bleed bounds, up to 4096 px, board colour as background), so 3D shows exactly what the 2D editor shows. Updates ~0.35 s after each change.
+- Controls: orbit/zoom, fold slider + fold animation, reset view, board (outside) and inside colours. Fold and colours are saved in the project (`threeD`, validated server-side).
+- Neutral tone mapping so printed colours stay close to the artwork.
+- **Bug fixed while testing:** with React Strict Mode the renderer was recreated but the camera was not re-framed (view started inside the box).
+- **Verified in the browser:** artwork appears on the correct faces (front text/logo; circle and rectangle on the back), text reads unmirrored, a text change shows in 3D within about a second, 40% fold shows the kraft inside colour, fold setting survives reload. Folded size = L x W x H is enforced by the engine's folded checks on every generation.
+- Known limits: zero-thickness panels; the animation folds all hinges together (not a real erecting sequence); inside print not supported yet; no 3D on the project page (editor only).
+
+- **Next:** Phase 6, exports.

@@ -1,6 +1,6 @@
 "use server";
 
-import { MAX_ARTWORK_JSON_BYTES, artworkSchema, parseProjectDoc } from "@packaging/schema";
+import { MAX_ARTWORK_JSON_BYTES, artworkSchema, parseProjectDoc, projectDocV1 } from "@packaging/schema";
 import { db } from "@/server/db";
 import { requireUser } from "@/server/session";
 
@@ -36,5 +36,23 @@ export async function saveArtwork(projectId: string, artwork: unknown): Promise<
   const next = parseProjectDoc({ ...doc, artwork: parsed.data });
   // No revalidatePath: it would refresh the editor's props mid-session. Project pages read live data.
   const saved = await db.project.update({ where: { id: row.id }, data: { projectData: next }, select: { updatedAt: true } });
+  return { ok: true, savedAt: saved.updatedAt.toISOString() };
+}
+
+const threeDSchema = projectDocV1.shape.threeD;
+
+/** Save 3D preview settings (fold, board and inside colours) of a project the user owns. */
+export async function saveThreeD(projectId: string, settings: unknown): Promise<SaveResult> {
+  const user = await requireUser();
+  const parsed = threeDSchema.safeParse(settings);
+  if (!parsed.success || typeof projectId !== "string") return { ok: false, message: "Invalid 3D settings." };
+  const row = await db.project.findFirst({ where: { id: projectId, userId: user.id } });
+  if (!row) return { ok: false, message: "Project not found." };
+  const doc = parseProjectDoc(row.projectData);
+  const saved = await db.project.update({
+    where: { id: row.id },
+    data: { projectData: parseProjectDoc({ ...doc, threeD: parsed.data }) },
+    select: { updatedAt: true },
+  });
   return { ok: true, savedAt: saved.updatedAt.toISOString() };
 }

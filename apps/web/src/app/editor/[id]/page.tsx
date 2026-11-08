@@ -25,6 +25,7 @@ async function EditorView({ params }: { params: PageProps<"/editor/[id]">["param
       params={project.doc.template.params}
       artwork={project.doc.artwork}
       assets={assets}
+      threeD={project.doc.threeD}
     />
   );
 }
