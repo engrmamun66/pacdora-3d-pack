@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { artworkSchema } from "./artwork";
+
+export * from "./artwork";
 
 /**
  * ProjectDoc: the single source of truth for a packaging project, stored as
@@ -29,8 +32,8 @@ export const projectDocV1 = z.object({
     /** Raw user parameters (validated by the generator, not here). */
     params: z.record(z.string().max(60), paramValue),
   }),
-  /** Artwork objects placed on the dieline (Phase 4). JSON objects; detailed schema comes with the editor. */
-  artwork: z.object({ objects: z.array(z.record(z.string(), z.json())).max(5000) }),
+  /** Artwork placed on the dieline (see artwork.ts). */
+  artwork: artworkSchema,
   threeD: z.object({
     foldProgress: z.number().min(0).max(1),
     outsideColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),

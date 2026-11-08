@@ -5,6 +5,7 @@ import { requireUser } from "@/server/session";
 import { getProject } from "@/server/projects";
 import { TemplateDesigner } from "@/components/templates/template-designer";
 import { DeleteProjectButton } from "@/components/projects/delete-project-button";
+import { ButtonLink } from "@/components/button-link";
 
 async function ProjectView({ params }: { params: PageProps<"/projects/[id]">["params"] }) {
   const { id } = await params;
@@ -22,7 +23,10 @@ async function ProjectView({ params }: { params: PageProps<"/projects/[id]">["pa
           <h1 className="text-2xl font-semibold">{project.name}</h1>
           <p className="text-xs text-muted-foreground">Last saved {project.updatedAt.toISOString().replace("T", " ").slice(0, 16)} UTC</p>
         </div>
-        <DeleteProjectButton projectId={project.id} name={project.name} />
+        <div className="flex items-center gap-2">
+          <ButtonLink href={`/editor/${project.id}`}>Edit artwork</ButtonLink>
+          <DeleteProjectButton projectId={project.id} name={project.name} />
+        </div>
       </div>
       <TemplateDesigner
         mode={{ kind: "edit", projectId: project.id }}

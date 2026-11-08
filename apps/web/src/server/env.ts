@@ -20,6 +20,8 @@ const schema = z.object({
   // Google sign-in is optional: the button only appears when both are set.
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  /** Directory for uploaded files (default: ./storage relative to the app). */
+  STORAGE_DIR: z.string().min(1).optional(),
 });
 
 const parsed = schema.safeParse(process.env);

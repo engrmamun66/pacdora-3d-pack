@@ -507,4 +507,17 @@ Reply with answers, or "go with your recommendations", to begin.
 - Preset "Regular slotted shipping box" (category Shipping).
 - **Verified:** 139 tests (incl. 300-case property test and broken-fold detection); dev viewer flat + 85% fold; web designer 22/22.
 
-- **Next:** remaining Core 8 generators (FEFCO 0427 mailer, tray with lid, sleeve, pizza box), then Phase 4 (2D artwork editor).
+- Remaining Core 8 generators (FEFCO 0427 mailer, tray with lid, sleeve, pizza box) postponed by request (2026-11-08); phases first.
+
+### Phase 4: 2D artwork editor (done 2026-11-08)
+- **Artwork schema** (`packages/schema/src/artwork.ts`): our own format, not Fabric's. Objects: text, image, rect, ellipse, line. Millimetres; each object's centre stored as offset from its panel's bounding-box centre (`panelId`, `dx`, `dy`), so artwork follows its panel when box dimensions change. Strict zod validation (colours, 6 bundled fonts, sizes, unique ids, 2000 objects, 1 MB).
+- **`packages/artwork`**: pure anchoring math (panel hit test, anchor round trip, orphan detection). Shared later by 3D texture and exporters.
+- **Fonts**: Inter, Roboto, Montserrat, Oswald, Lora, Playfair Display (SIL OFL, `@fontsource`, self-hosted). Same files will be used for text-to-outline in exports.
+- **Uploads**: `POST /api/assets` (PNG/JPEG/WebP identified by magic bytes, SVG rejected, 10 MB, per-user quota, same-origin check), `GET /api/assets/[id]` owner-only with `nosniff` + `default-src 'none'`. `StorageProvider` interface, local disk (`STORAGE_DIR`, default `apps/web/storage`, gitignored).
+- **Editor** (`/editor/[id]`, Fabric 7.4.0 pinned): mm scene units; sheet, bleed, glue, grid drawn under artwork; cut/crease/safe/bleed lines drawn over it at constant 1 px; rulers in mm; zoom (Ctrl/Cmd + wheel or pinch, buttons, fit), pan (wheel/trackpad, Space or middle-drag); add text/shapes/images; properties panel; layers (select, show/hide, lock, reorder); align to panel; duplicate, delete, arrow nudge (Shift = 10 mm); undo/redo (100 steps); autosave (debounced, one request at a time, retry after network failure) + Ctrl/Cmd+S; unsaved-changes warning.
+- **Server**: `saveArtwork` action re-validates schema and size, and checks every referenced image belongs to the user.
+- **Bugs found while testing and fixed**: autosave retried in a tight loop when offline (unit test); each autosave refreshed the page props and rebuilt the editor, losing undo history (browser test).
+- **Verified:** 153 tests (anchoring, schema, image sniffing, autosave). In the browser: add all object types, upload logo (SVG disguised as PNG rejected 415; cross-site 403; signed-out 401), mouse select + drag (object re-anchors to the panel it is dropped on), properties edit, duplicate/delete/undo/redo via keyboard, reload: artwork identical (0 differences across 7 objects).
+- Known limits: no snapping/smart guides, no clipping to panels, no text on path, no gradients, raster images only (no SVG/PDF/AI import), uploaded images cannot be deleted from the UI yet, 2D only (3D comes next).
+
+- **Next:** Phase 5, 3D preview in the app with the artwork as texture.

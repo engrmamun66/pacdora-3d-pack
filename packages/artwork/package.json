@@ -1,0 +1,14 @@
+{
+  "name": "@packaging/artwork",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@packaging/dieline-engine": "^0.0.0",
+    "@packaging/schema": "^0.0.0"
+  }
+}

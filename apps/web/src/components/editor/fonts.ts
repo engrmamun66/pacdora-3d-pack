@@ -1,0 +1,23 @@
+// Artwork fonts (SIL OFL, self-hosted via @fontsource). Keep in sync with ARTWORK_FONTS.
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/700.css";
+import "@fontsource/inter/400-italic.css";
+import "@fontsource/inter/700-italic.css";
+import "@fontsource/roboto/400.css";
+import "@fontsource/roboto/700.css";
+import "@fontsource/roboto/400-italic.css";
+import "@fontsource/roboto/700-italic.css";
+import "@fontsource/montserrat/400.css";
+import "@fontsource/montserrat/700.css";
+import "@fontsource/montserrat/400-italic.css";
+import "@fontsource/montserrat/700-italic.css";
+import "@fontsource/oswald/400.css";
+import "@fontsource/oswald/700.css";
+import "@fontsource/lora/400.css";
+import "@fontsource/lora/700.css";
+import "@fontsource/lora/400-italic.css";
+import "@fontsource/lora/700-italic.css";
+import "@fontsource/playfair-display/400.css";
+import "@fontsource/playfair-display/700.css";
+import "@fontsource/playfair-display/400-italic.css";
+import "@fontsource/playfair-display/700-italic.css";
