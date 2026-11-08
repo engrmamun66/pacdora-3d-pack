@@ -99,7 +99,9 @@ async function regenerate() {
     const next =
       style === "crash-lock"
         ? generateDieline("crash-lock-carton", dims)
-        : generateDieline("tuck-end-carton", { ...dims, variant: style });
+        : style === "slotted-box"
+          ? generateDieline("slotted-box", dims)
+          : generateDieline("tuck-end-carton", { ...dims, variant: style });
     geo = next;
     flatEl.innerHTML = renderDielineSvg(next, { showPanelLabels: true });
     const vb = dielineViewBox(next);

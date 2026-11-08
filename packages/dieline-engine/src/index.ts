@@ -11,6 +11,7 @@ export * from "./templates/tuck-end-params";
 export * from "./templates/tuck-end-carton";
 export * from "./templates/crash-lock-params";
 export * from "./templates/crash-lock-carton";
+export * from "./templates/slotted-box";
 
 export * from "./templates/registry";
 

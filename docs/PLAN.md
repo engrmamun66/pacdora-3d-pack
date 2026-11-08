@@ -501,4 +501,10 @@ Reply with answers, or "go with your recommendations", to begin.
 - Fix: default tuck depth now also stays below 0.9 x height, so short boxes no longer fail on defaults alone.
 - **Verified:** 124 tests; dev viewer flat + closed + half fold; web library, designer (21/21 checks, depth > width error shown), project created and saved.
 
-- **Next:** remaining Core 8 generators (FEFCO 0201, FEFCO 0427 mailer, tray with lid, sleeve, pizza box), then Phase 4 (2D artwork editor).
+### Core 8: FEFCO 0201 regular slotted container (done 2026-11-08)
+- `TubeBuilder` / `TubeLayout` split out so tubes without tuck parameters reuse body, joint, finishing and annotations.
+- New generator `slotted-box`: 8 flaps W/2 deep, slots centred on creases (slits when slot = 0); 22 checks incl. major flaps meeting at the centre and end coverage `L x W - s^2`.
+- Preset "Regular slotted shipping box" (category Shipping).
+- **Verified:** 139 tests (incl. 300-case property test and broken-fold detection); dev viewer flat + 85% fold; web designer 22/22.
+
+- **Next:** remaining Core 8 generators (FEFCO 0427 mailer, tray with lid, sleeve, pizza box), then Phase 4 (2D artwork editor).

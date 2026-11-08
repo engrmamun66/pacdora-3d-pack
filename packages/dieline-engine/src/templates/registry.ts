@@ -3,6 +3,7 @@ import { tuckEndInputSchema } from "./tuck-end-params";
 import { generateTuckEndCarton, TUCK_END_TEMPLATE_ID } from "./tuck-end-carton";
 import { crashLockInputSchema } from "./crash-lock-params";
 import { generateCrashLockCarton, CRASH_LOCK_TEMPLATE_ID } from "./crash-lock-carton";
+import { generateSlottedBox, SLOTTED_BOX_TEMPLATE_ID, slottedBoxInputSchema } from "./slotted-box";
 
 /** UI metadata for one generator parameter (drives the parameter form). */
 export type ParamDescriptor =
@@ -147,9 +148,46 @@ export const crashLockDefinition: GeneratorDefinition = {
   ],
 };
 
+export const slottedBoxDefinition: GeneratorDefinition = {
+  id: SLOTTED_BOX_TEMPLATE_ID,
+  name: "Regular slotted container (FEFCO 0201)",
+  schemaVersion: 1,
+  generate: generateSlottedBox,
+  schemaKeys: Object.keys(slottedBoxInputSchema.shape),
+  params: [
+    num("width", "Length", "Dimensions", 10, 2000, { step: 1, help: "Major panel length (the flaps on these panels meet in the middle)." }),
+    num("depth", "Width", "Dimensions", 10, 2000, { step: 1, help: "Minor panel length. Must not exceed the length." }),
+    num("height", "Height", "Dimensions", 10, 2000, { step: 1 }),
+    {
+      key: "sizeMode",
+      kind: "enum",
+      label: "Size mode",
+      group: "Structure",
+      options: [
+        { value: "manufacture", label: "Manufacture (crease-to-crease)" },
+        { value: "inner", label: "Inner (inside of the box)" },
+      ],
+    },
+    num("thickness", "Board thickness", "Material", 0.5, 15, { step: 0.1, help: "Corrugated: about 3 mm (B flute) or 4 mm (C flute)." }),
+    num("allowanceFactor", "Allowance (x thickness)", "Material", 0, 5, {
+      step: 0.1,
+      unit: "factor",
+      optional: true,
+      help: "Added to each dimension in inner size mode. Confirm with your printer.",
+      showWhen: { key: "sizeMode", equals: "inner" },
+    }),
+    num("bleed", "Bleed", "Print", 0, 20),
+    num("safeMargin", "Safe margin", "Print", 0, 50),
+    num("glueFlapWidth", "Joint (glue flap) width", "Flaps (advanced)", 5, 100, { optional: true }),
+    num("glueFlapBevel", "Joint bevel", "Flaps (advanced)", 0, 50, { optional: true }),
+    num("slotWidth", "Slot width", "Flaps (advanced)", 0, 30, { optional: true, help: "Gap between neighbouring flaps. 0 = plain cut." }),
+  ],
+};
+
 export const generators: Readonly<Record<string, GeneratorDefinition>> = {
   [tuckEndDefinition.id]: tuckEndDefinition,
   [crashLockDefinition.id]: crashLockDefinition,
+  [slottedBoxDefinition.id]: slottedBoxDefinition,
 };
 
 export function getGenerator(id: string): GeneratorDefinition {
@@ -220,6 +258,16 @@ export const templateCatalog: readonly TemplatePreset[] = [
       "Tuck top with a pre-glued bottom that locks itself when the flat carton is opened. Also called auto-bottom. Fast to pack; good for heavier products.",
     defaults: { width: 80, depth: 60, height: 120 },
     tags: ["auto bottom", "crash lock", "pre-glued"],
+  },
+  {
+    id: "regular-slotted-shipping-box",
+    generatorId: SLOTTED_BOX_TEMPLATE_ID,
+    name: "Regular slotted shipping box",
+    category: "shipping",
+    description:
+      "The standard corrugated shipping carton (FEFCO 0201): equal-length flaps top and bottom, outer flaps meet in the middle and are closed with tape.",
+    defaults: { width: 300, depth: 200, height: 200 },
+    tags: ["FEFCO 0201", "RSC", "corrugated", "shipping"],
   },
 ];
 

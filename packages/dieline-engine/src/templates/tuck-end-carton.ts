@@ -1,6 +1,6 @@
 import type { FoldTree } from "../fold-tree/types";
 import type { DielineGeometry } from "../geometry-types";
-import { CartonBuilder, effectiveDims, finalizeCarton, sheetOrigin, tubeExpectations } from "./carton-common";
+import { CartonBuilder, cartonLayout, effectiveDims, finalizeCarton, sheetOrigin, tubeExpectations } from "./carton-common";
 import { resolveTuckEndParams, type TuckEndParams } from "./tuck-end-params";
 
 export const TUCK_END_TEMPLATE_ID = "tuck-end-carton";
@@ -38,6 +38,7 @@ export function generateTuckEndCarton(input: unknown): DielineGeometry {
   return finalizeCarton({
     templateId: TUCK_END_TEMPLATE_ID,
     params,
+    layout: cartonLayout(params),
     unverifiedDefaultsUsed,
     tree: buildTuckEndTree(params),
     expect,

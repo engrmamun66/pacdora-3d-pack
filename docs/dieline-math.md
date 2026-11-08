@@ -116,3 +116,43 @@ Total crease length = body `4H` + top `L + (L - 2 x tuckSlitLength) + 2W` + bott
 - The 3D view animates every hinge at the same rate; the real erecting motion (both halves swinging in together as the tube squares) is not simulated. Only the closed state is checked.
 - No interlocking hook or notch on the centre line; the lock is the overlap described above. Ask your printer whether they want a hook profile.
 - Board thickness at the glued layers (three layers near each tab) is not compensated.
+
+---
+
+# Regular slotted container, FEFCO 0201 (template `slotted-box`)
+
+Our own implementation of the public FEFCO 0201 structure (corrugated). Body and joint as above; `width` = major panel length `L`, `depth` = minor panel length `W`.
+
+## Parameters
+
+| Name | Meaning | Range | Default |
+|---|---|---|---|
+| `width`, `depth`, `height` | `L`, `W`, `H` | 10 to 2000 | required |
+| `thickness` | board thickness | 0.5 to 15 | 3 |
+| `sizeMode`, `allowanceFactor` | as for the tuck end | | |
+| `bleed` / `safeMargin` | | 0 or 0.01 to 20 / 50 | 3 / 5 |
+| `glueFlapWidth` | manufacturer's joint | 5 to 100 | **UNVERIFIED** `min(30, W)` |
+| `glueFlapBevel` | joint end bevel | 0 to 50 | **UNVERIFIED** `min(5, 0.4 x joint, 0.1 x H)` |
+| `slotWidth` | gap between neighbouring flaps, centred on the body crease | 0 or 0.01 to `< W/2` | **UNVERIFIED** `min(2 x thickness, W/4)` |
+
+Rules: `W <= L` (minor flaps, each `W/2`, must not overlap); `2 x safeMargin < min(W/2, H)`.
+
+## Layout
+
+Each body panel carries a top and a bottom flap `W/2` deep, set in by `slotWidth/2` at both ends (so hinge = panel width minus one slot). Front/back flaps are the **major** (outer, printable) flaps; right/left the **minor** (inner) flaps. With `slotWidth = 0`, neighbouring flaps are separated by slits.
+
+## Invariants (in addition to the shared ones)
+
+| Check | Expected |
+|---|---|
+| sheet | `(joint + 2L + 2W) x (H + W)` |
+| total crease length | `4H + 4L + 4W - 8 x slotWidth` |
+| folded major flaps | far edges meet at the centre line `z = W/2` (top and bottom) |
+| folded end flat | all flaps of each end on the end plane |
+| end covered | union of the 4 flaps = `L x W - slotWidth^2` (four `s/2 x s/2` corner holes) |
+| no overlap | majors do not overlap each other; minors do not overlap each other |
+
+## Limits
+
+- Slot ends are square; no rounded slot ends or score offsets for flute direction.
+- Allowance is the simple per-dimension rule; real corrugated allowances differ by dimension and flute. Confirm with your converter.

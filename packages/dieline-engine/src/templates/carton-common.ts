@@ -184,6 +184,24 @@ export function topExtent(p: CartonBaseParams): number {
   return Math.max(W + p.tuckDepth, p.dustFlapDepth);
 }
 
+/**
+ * Geometry every tube (four body panels in a row + side-seam glue strip)
+ * shares, independent of how the ends are closed.
+ */
+export interface TubeLayout {
+  readonly L: number;
+  readonly W: number;
+  readonly H: number;
+  /** Sheet position of the front panel's top-left corner. */
+  readonly origin: Vec2;
+  readonly glueFlapWidth: number;
+  readonly glueFlapBevel: number;
+}
+
+export function cartonLayout(p: CartonBaseParams): TubeLayout {
+  return { ...effectiveDims(p), origin: sheetOrigin(p), glueFlapWidth: p.glueFlapWidth, glueFlapBevel: p.glueFlapBevel };
+}
+
 // ---------------------------------------------------------------------------
 // Fold tree construction
 // ---------------------------------------------------------------------------
@@ -208,7 +226,7 @@ export function rounded(param: string, points: Vec2[], radii: number[]): Shape {
 }
 
 /** Mutable fold tree under construction, in body-local coordinates (origin = top-left of the front panel). */
-export class CartonBuilder {
+export class TubeBuilder {
   readonly panels: Panel[] = [];
   readonly hinges: Hinge[] = [];
   readonly slits: Slit[] = [];
@@ -218,20 +236,18 @@ export class CartonBuilder {
   /** x of each body panel's left edge (body-local). */
   readonly bodyX: Readonly<Record<Body, number>>;
   readonly bodyW: Readonly<Record<Body, number>>;
-  private readonly o: Vec2;
 
-  constructor(readonly p: CartonBaseParams) {
-    const { L, W, H } = effectiveDims(p);
+  constructor(readonly layout: TubeLayout) {
+    const { L, W, H } = layout;
     this.L = L;
     this.W = W;
     this.H = H;
-    this.o = sheetOrigin(p);
     this.bodyX = { front: 0, right: L, back: L + W, left: 2 * L + W };
     this.bodyW = { front: L, right: W, back: L, left: W };
   }
 
   /** Body-local point to sheet coordinates. */
-  P = (x: number, y: number): Vec2 => vec(x + this.o.x, y + this.o.y);
+  P = (x: number, y: number): Vec2 => vec(x + this.layout.origin.x, y + this.layout.origin.y);
 
   addPanel(id: string, role: PanelRole, label: string, shape: Shape, printable: boolean): void {
     this.panels.push({ id, role, label, polygon: shape.polygon, ...(shape.bulges ? { bulges: shape.bulges } : {}), printable });
@@ -244,20 +260,36 @@ export class CartonBuilder {
   /**
    * Layout (x direction): [glue flap][front L][right W][back L][left W], each
    * body panel H tall, glue strip on the free left edge of the front panel.
+   * `edgeInset` > 0 adds vertices that far in from both ends of every top and
+   * bottom body edge (hinge endpoints of flaps narrower than their panel).
    */
-  addBodyAndGlueStrip(): void {
+  addBodyAndGlueStrip(edgeInset = 0): void {
     const { P, L, W, H } = this;
-    const { glueFlapWidth: g, glueFlapBevel: gb } = this.p;
+    const { glueFlapWidth: g, glueFlapBevel: gb } = this.layout;
+    const e = edgeInset;
     for (const id of ["front", "right", "back", "left"] as Body[]) {
       const x = this.bodyX[id];
       const w = this.bodyW[id];
-      this.addPanel(id, "body", id, { polygon: poly(P(x, 0), P(x + w, 0), P(x + w, H), P(x, H)) }, true);
+      const top = e > 0 ? [P(x + e, 0), P(x + w - e, 0)] : [];
+      const bottom = e > 0 ? [P(x + w - e, H), P(x + e, H)] : [];
+      this.addPanel(id, "body", id, { polygon: poly(P(x, 0), ...top, P(x + w, 0), P(x + w, H), ...bottom, P(x, H)) }, true);
     }
     this.addHinge("right", "front", P(L, 0), P(L, H));
     this.addHinge("back", "right", P(L + W, 0), P(L + W, H));
     this.addHinge("left", "back", P(2 * L + W, 0), P(2 * L + W, H));
     this.addPanel("glue", "glue-flap", "glue flap", { polygon: poly(P(0, 0), P(0, H), P(-g, H - gb), P(-g, gb)) }, false);
     this.addHinge("glue", "front", P(0, 0), P(0, H));
+  }
+
+  tree(): FoldTree {
+    return { rootId: "front", panels: this.panels, hinges: this.hinges, slits: this.slits };
+  }
+}
+
+/** Tube carton with tuck closures and dust flaps (folding-carton board). */
+export class CartonBuilder extends TubeBuilder {
+  constructor(readonly p: CartonBaseParams) {
+    super(cartonLayout(p));
   }
 
   /**
@@ -308,9 +340,6 @@ export class CartonBuilder {
     }
   }
 
-  tree(): FoldTree {
-    return { rootId: "front", panels: this.panels, hinges: this.hinges, slits: this.slits };
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -318,22 +347,19 @@ export class CartonBuilder {
 // ---------------------------------------------------------------------------
 
 /**
- * Expected values for the parts every tube carton has. `bottomExtent` is how far
- * the bottom flaps reach below the body; `bottomCrease` is the crease length of
- * the bottom closure. Both come from the template's own formula.
+ * Expected values for any tube: sheet size, crease total, closed box, side
+ * seam. `endCrease` is the crease length of everything except the four body
+ * creases (top + bottom closures), from the template's own formula.
  */
-export function tubeExpectations(
-  p: CartonBaseParams,
-  bottom: { extent: number; crease: number; lids: CartonExpectations["lids"] },
+export function tubeBaseExpectations(
+  t: TubeLayout,
+  ends: { top: number; bottom: number; endCrease: number; lids: CartonExpectations["lids"]; outwardRoles: CartonExpectations["outwardRoles"] },
 ): CartonExpectations {
-  const { L, W, H } = effectiveDims(p);
-  const o = sheetOrigin(p);
-  // Body: 3 body creases + glue crease. Top: closure + shortened tuck crease + 2 dust flaps.
-  const topCrease = L + (L - 2 * p.tuckSlitLength) + 2 * W;
+  const { L, W, H, origin: o } = t;
   return {
-    sheetWidth: p.glueFlapWidth + 2 * L + 2 * W,
-    sheetHeight: topExtent(p) + H + bottom.extent,
-    creaseLength: 4 * H + topCrease + bottom.crease,
+    sheetWidth: t.glueFlapWidth + 2 * L + 2 * W,
+    sheetHeight: ends.top + H + ends.bottom,
+    creaseLength: 4 * H + ends.endCrease,
     box: { min: { x: o.x, y: o.y, z: 0 }, max: { x: o.x + L, y: o.y + H, z: W } },
     seam: {
       panelId: "left",
@@ -344,9 +370,27 @@ export function tubeExpectations(
         { x: o.x, y: o.y + H, z: 0 },
       ],
     },
-    lids: [{ closureId: "top-closure", y: o.y, z: 0, xMin: o.x, xMax: o.x + L }, ...bottom.lids],
-    outwardRoles: ["body", "closure", "bottom-flap"],
+    lids: ends.lids,
+    outwardRoles: ends.outwardRoles,
   };
+}
+
+/** Tube carton with the shared tuck top; the template supplies the bottom. */
+export function tubeExpectations(
+  p: CartonBaseParams,
+  bottom: { extent: number; crease: number; lids: CartonExpectations["lids"] },
+): CartonExpectations {
+  const t = cartonLayout(p);
+  const { L, W } = t;
+  // Top: closure + shortened tuck crease + 2 dust flaps.
+  const topCrease = L + (L - 2 * p.tuckSlitLength) + 2 * W;
+  return tubeBaseExpectations(t, {
+    top: topExtent(p),
+    bottom: bottom.extent,
+    endCrease: topCrease + bottom.crease,
+    lids: [{ closureId: "top-closure", y: t.origin.y, z: 0, xMin: t.origin.x, xMax: t.origin.x + L }, ...bottom.lids],
+    outwardRoles: ["body", "closure", "bottom-flap"],
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -357,7 +401,9 @@ const fmt = (n: number): string => n.toFixed(2);
 
 export interface FinalizeInput {
   readonly templateId: string;
-  readonly params: CartonBaseParams;
+  /** Resolved parameters, stored in the output as given. */
+  readonly params: { readonly bleed: number; readonly safeMargin: number };
+  readonly layout: TubeLayout;
   readonly unverifiedDefaultsUsed: readonly string[];
   readonly tree: FoldTree;
   readonly expect: CartonExpectations;
@@ -400,7 +446,7 @@ export function finalizeCarton(input: FinalizeInput): DielineGeometry {
 
   const cutBounds = outlineBounds(outer);
   const bleedBounds = bounds(bleedLoop);
-  const annotations = buildCartonAnnotations(params, cutBounds);
+  const annotations = buildTubeAnnotations(input.layout, params.bleed, cutBounds);
 
   const checks = runChecks({
     tree,
@@ -436,12 +482,11 @@ export function finalizeCarton(input: FinalizeInput): DielineGeometry {
   };
 }
 
-function buildCartonAnnotations(p: CartonBaseParams, cb: { min: Vec2; max: Vec2 }): LinearAnnotation[] {
-  const { L, W, H } = effectiveDims(p);
-  const o = sheetOrigin(p);
+function buildTubeAnnotations(t: TubeLayout, bleed: number, cb: { min: Vec2; max: Vec2 }): LinearAnnotation[] {
+  const { L, W, H, origin: o } = t;
   const out: LinearAnnotation[] = [];
-  const row1 = p.bleed + 6;
-  const row2 = p.bleed + 14;
+  const row1 = bleed + 6;
+  const row2 = bleed + 14;
   const xs = [0, L, L + W, 2 * L + W, 2 * L + 2 * W];
   const names = ["Width", "Depth", "Width", "Depth"];
   const sizes = [L, W, L, W];
@@ -468,7 +513,7 @@ function buildCartonAnnotations(p: CartonBaseParams, cb: { min: Vec2; max: Vec2 
     kind: "linear",
     p1: vec(o.x, o.y),
     p2: vec(o.x, o.y + H),
-    offset: p.glueFlapWidth + p.bleed + 6,
+    offset: t.glueFlapWidth + bleed + 6,
     text: `Height ${fmt(H)}`,
   });
   out.push({
@@ -476,7 +521,7 @@ function buildCartonAnnotations(p: CartonBaseParams, cb: { min: Vec2; max: Vec2 
     kind: "linear",
     p1: vec(cb.max.x, cb.min.y),
     p2: vec(cb.max.x, cb.max.y),
-    offset: -(p.bleed + 6),
+    offset: -(bleed + 6),
     text: `Sheet ${fmt(cb.max.y - cb.min.y)}`,
   });
   return out;

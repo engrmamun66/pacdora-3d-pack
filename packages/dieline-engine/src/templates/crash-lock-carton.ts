@@ -3,7 +3,7 @@ import type { CheckResult, DielineGeometry } from "../geometry-types";
 import { flatPoint, transformPoint } from "../fold-tree/fold3d";
 import { area, intersectionArea, unionArea } from "../primitives/polygon";
 import { type Vec2, vec } from "../primitives/vec2";
-import { CartonBuilder, effectiveDims, finalizeCarton, poly, sheetOrigin, tubeExpectations } from "./carton-common";
+import { CartonBuilder, cartonLayout, effectiveDims, finalizeCarton, poly, sheetOrigin, tubeExpectations } from "./carton-common";
 import { type CrashLockParams, resolveCrashLockParams } from "./crash-lock-params";
 
 export const CRASH_LOCK_TEMPLATE_ID = "crash-lock-carton";
@@ -73,6 +73,7 @@ export function generateCrashLockCarton(input: unknown): DielineGeometry {
   return finalizeCarton({
     templateId: CRASH_LOCK_TEMPLATE_ID,
     params,
+    layout: cartonLayout(params),
     unverifiedDefaultsUsed,
     tree,
     expect,
