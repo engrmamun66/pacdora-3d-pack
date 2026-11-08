@@ -1,0 +1,14 @@
+{
+  "name": "@packaging/dieline-engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "clipper-lib": "^6.4.2",
+    "zod": "^4.6.7"
+  }
+}

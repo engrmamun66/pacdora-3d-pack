@@ -1,0 +1,12 @@
+node_modules
+out
+storage
+.env
+.env.*
+!.env.example
+.next
+dist
+coverage
+.DS_Store
+.playwright-mcp
+scripts/viewer/dist

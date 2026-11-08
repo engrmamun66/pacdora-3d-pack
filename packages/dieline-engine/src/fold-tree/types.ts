@@ -1,0 +1,48 @@
+import type { Vec2 } from "../primitives/vec2";
+
+export type PanelRole = "body" | "closure" | "tuck" | "dust-flap" | "glue-flap";
+
+/** A flat piece of board, polygon in flat sheet coordinates (mm, y down). */
+export interface Panel {
+  readonly id: string;
+  readonly role: PanelRole;
+  readonly label: string;
+  readonly polygon: readonly Vec2[];
+  /** True if artwork may be printed on this panel (gets a safe area). */
+  readonly printable: boolean;
+}
+
+/**
+ * A fold between two panels. `a`-`b` is the hinge segment in flat coordinates
+ * and MUST coincide exactly with one edge of both parent and child polygons.
+ * All folds bring the unprinted (inside) faces toward each other, i.e. the
+ * printed side ends up outside the carton.
+ */
+export interface Hinge {
+  readonly id: string;
+  readonly parentId: string;
+  readonly childId: string;
+  readonly a: Vec2;
+  readonly b: Vec2;
+  /** Target fold angle when closed, in degrees (90 = right angle). */
+  readonly foldAngleDeg: number;
+}
+
+/** Panels joined by hinges. Single source for flat layout (2D) and folding (3D). */
+export interface FoldTree {
+  readonly rootId: string;
+  readonly panels: readonly Panel[];
+  readonly hinges: readonly Hinge[];
+}
+
+/** Dimension annotation, rendered by the SVG/PDF backends. */
+export interface LinearAnnotation {
+  readonly id: string;
+  readonly kind: "linear";
+  readonly p1: Vec2;
+  readonly p2: Vec2;
+  /** Distance of the dimension line from p1-p2, along the normal (mm). */
+  readonly offset: number;
+  /** Text shown, e.g. "W 100.00". */
+  readonly text: string;
+}

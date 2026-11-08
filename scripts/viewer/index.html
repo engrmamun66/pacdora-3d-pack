@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Carton viewer (dev)</title>
+<style>
+  :root { --bg: #f4f4f2; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --border: #dddbd4; --accent: #e6007e; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.4 system-ui, -apple-system, sans-serif; color: var(--text); background: var(--bg); display: grid; grid-template-columns: 260px 1fr 1fr; height: 100vh; }
+  aside { background: var(--panel); border-right: 1px solid var(--border); padding: 16px; overflow: auto; }
+  h1 { font-size: 14px; margin: 0 0 12px; }
+  label { display: block; margin: 10px 0 4px; color: var(--muted); }
+  input[type=number], select { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font: inherit; }
+  input[type=range] { width: 100%; }
+  #status { margin-top: 14px; padding: 8px; border-radius: 6px; background: #eef7ee; white-space: pre-wrap; font-size: 12px; }
+  #status.error { background: #fdecef; color: #8a0030; }
+  #flat { overflow: auto; padding: 12px; border-right: 1px solid var(--border); background: #fff; }
+  #flat svg { width: 100%; height: auto; }
+  #three { position: relative; }
+  #three canvas { display: block; width: 100%; height: 100%; }
+  .row { display: flex; gap: 6px; } .row > * { flex: 1; }
+  button { margin-top: 8px; padding: 6px; border: 1px solid var(--border); border-radius: 6px; background: #fff; font: inherit; cursor: pointer; }
+</style>
+</head>
+<body>
+<aside>
+  <h1>Tuck-end carton (dev viewer)</h1>
+  <label>Variant</label>
+  <select id="variant"><option value="straight">Straight tuck end</option><option value="reverse">Reverse tuck end</option></select>
+  <label>Width (mm)</label><input id="width" type="number" value="100" step="1" />
+  <label>Depth (mm)</label><input id="depth" type="number" value="50" step="1" />
+  <label>Height (mm)</label><input id="height" type="number" value="150" step="1" />
+  <label>Fold: <span id="foldValue">100%</span></label>
+  <input id="fold" type="range" min="0" max="100" value="100" />
+  <div class="row"><button id="flatBtn">Flat</button><button id="animBtn">Animate</button><button id="closeBtn">Closed</button></div>
+  <div id="status"></div>
+</aside>
+<div id="flat"></div>
+<div id="three"></div>
+<script type="module" src="./dist/main.js"></script>
+</body>
+</html>

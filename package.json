@@ -1,0 +1,26 @@
+{
+  "name": "packaging-platform",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p scripts/viewer/tsconfig.json",
+    "demo": "tsx scripts/demo.ts",
+    "viewer": "esbuild scripts/viewer/main.ts --bundle --format=esm --target=es2022 --outdir=scripts/viewer/dist --servedir=scripts/viewer --serve=127.0.0.1:4310",
+    "viewer:build": "esbuild scripts/viewer/main.ts --bundle --format=esm --target=es2022 --outdir=scripts/viewer/dist"
+  },
+  "devDependencies": {
+    "@types/clipper-lib": "^6.4.0",
+    "@types/node": "^26.6.6",
+    "@types/three": "^0.187.0",
+    "esbuild": "^0.28.2",
+    "fast-check": "^4.10.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}

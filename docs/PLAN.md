@@ -1,6 +1,6 @@
 # Packaging Design Platform: Architecture and Development Plan
 
-Status: **DRAFT for review. No code written yet.** Implementation of Phase 1 starts only after approval.
+Status: **Approved to start (2026-11-08). Phase 0 (engine spike) complete; Phase 1 not started.** See "Implementation log" at the end.
 
 Date: 2026-11-08
 
@@ -438,3 +438,28 @@ After each phase I provide exact steps and the checks that must pass before movi
 11. **Captcha provider.** Cloudflare Turnstile (recommended, mostly invisible) or Google reCAPTCHA / hCaptcha? Using reCAPTCHA means your users get the familiar "I'm not a robot" checkbox; Turnstile can show a similar checkbox if you want it visible.
 
 Reply with answers, or "go with your recommendations", to begin.
+
+
+---
+
+## 13. Implementation log
+
+### Phase 0: engine spike (done 2026-11-08)
+- Built `packages/dieline-engine` (tuck-end carton, straight and reverse) and `packages/render-svg`.
+- 42 automated tests pass, including a property test (300 random valid parameter sets per run, 5 runs checked).
+- Output visually checked for both variants (cut, crease, glue, bleed, safe area, dimensions).
+- **Deviations from this plan (decided during build, please review):**
+  1. **npm workspaces instead of pnpm.** Corepack on this machine fails to verify pnpm's signature (old corepack). The only workaround found disables signature verification, so it was not used. Fix later with `npm i -g corepack@latest` if you want pnpm back.
+  2. **Clipper (`clipper-lib`, Boost licence) added for bleed and safe-area offsets.** A naive offset self-intersects in the narrow slits between dust flaps and closures. `clipper2-js` was tried first and returned wrong geometry for a plain square, so it is not used.
+  3. **Param names are `width`, `depth`, `height`** (user-facing) rather than L/W/H.
+- **Open risks:** all flap-size defaults are unverified (see `docs/dieline-math.md`); thickness compensation is only a simple allowance.
+
+### Early Phase 5 work: 3D fold geometry (done 2026-11-08)
+- `fold-tree/fold3d.ts` (engine, pure math): per-panel 4x4 transforms from the same fold tree as the 2D dieline; progress 0..1 and per-hinge overrides for future staged animation.
+- Closed-box checks added to every generation (box size, seam, lids, print outward). They found a real rule: tuck flap must be shorter than the height.
+- `packages/model3d`: three.js meshes, printed side textured with UVs = flat dieline coordinates (artwork on the 2D sheet lands on the same 3D panel), kraft inside.
+- Dev viewer (`npm run viewer`) checked visually: closed, half-folded, back view.
+- 63 automated tests pass.
+- Not done yet: material thickness in 3D, staged fold animation order, GLB export, PBR material presets.
+
+- **Not started:** Phase 1 (Next.js, Postgres, Prisma, auth, Google sign-in, captcha), which also needs Docker, still not installed.

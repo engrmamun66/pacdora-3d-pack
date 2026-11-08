@@ -1,0 +1,52 @@
+import { describe, expect, it } from "vitest";
+import { generateDieline } from "@packaging/dieline-engine";
+import { renderDielineSvg } from "../src";
+
+const geo = generateDieline("tuck-end-carton", { width: 100, depth: 50, height: 150 });
+
+describe("renderDielineSvg", () => {
+  const svg = renderDielineSvg(geo);
+
+  it("declares physical size in millimetres matching the viewBox", () => {
+    const m = svg.match(/width="([\d.]+)mm" height="([\d.]+)mm" viewBox="(-?[\d.]+) (-?[\d.]+) ([\d.]+) ([\d.]+)"/);
+    expect(m).not.toBeNull();
+    const [, w, h, , , vw, vh] = m!;
+    expect(Number(w)).toBeCloseTo(Number(vw), 6);
+    expect(Number(h)).toBeCloseTo(Number(vh), 6);
+    const expectedW = geo.bleedBounds.max.x - geo.bleedBounds.min.x + 2 * 22;
+    expect(Number(w)).toBeCloseTo(expectedW, 3);
+  });
+
+  it("has one named layer per line type", () => {
+    for (const id of ["bleed", "glue", "safe", "crease", "cut", "annotations"]) {
+      expect(svg).toContain(`<g id="${id}" inkscape:groupmode="layer"`);
+    }
+  });
+
+  it("draws one crease line per hinge and one cut path per loop", () => {
+    expect((svg.match(/<line id="crease-/g) ?? []).length).toBe(geo.foldTree.hinges.length);
+    const cutLayer = svg.slice(svg.indexOf('<g id="cut"'), svg.indexOf("</g>", svg.indexOf('<g id="cut"')));
+    expect((cutLayer.match(/<path /g) ?? []).length).toBe(geo.cutLoops.length);
+  });
+
+  it("styles cut and crease differently (crease is dashed, cut is solid)", () => {
+    const cutLayer = svg.slice(svg.indexOf('<g id="cut"'));
+    expect(cutLayer.split("</g>")[0]).not.toContain("stroke-dasharray");
+    const creaseLayer = svg.slice(svg.indexOf('<g id="crease"')).split("</g>")[0]!;
+    expect(creaseLayer).toContain("stroke-dasharray");
+  });
+
+  it("can hide optional layers", () => {
+    const min = renderDielineSvg(geo, { showBleed: false, showSafe: false, showGlue: false, showAnnotations: false });
+    expect(min).not.toContain('id="bleed"');
+    expect(min).not.toContain('id="annotations"');
+    expect(min).toContain('id="cut"');
+  });
+
+  it("includes dimension text with the real dimensions", () => {
+    expect(svg).toContain("Width 100.00");
+    expect(svg).toContain("Depth 50.00");
+    expect(svg).toContain("Height 150.00");
+    expect(svg).toContain("Sheet 315.00");
+  });
+});
