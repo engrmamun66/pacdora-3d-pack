@@ -6,6 +6,8 @@ import {
   type Vec3,
   PRINTED_NORMAL,
   flatPoint,
+  flattenOutline,
+  panelOutline,
   foldTree,
   transformDirection,
   transformPoint,
@@ -47,7 +49,7 @@ const INNER_ROLES = new Set(["glue-flap", "tuck", "dust-flap"]);
 function foldedBounds(geo: DielineGeometry, world: Map<string, Mat4>) {
   const box = new THREE.Box3();
   for (const p of geo.foldTree.panels) {
-    for (const v of p.polygon) {
+    for (const v of flattenOutline(panelOutline(p))) {
       const q = transformPoint(world.get(p.id)!, flatPoint(v));
       box.expandByPoint(new THREE.Vector3(q.x, q.y, q.z));
     }
@@ -90,7 +92,8 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
   inner.position.set(-centre.x, -centre.y, -centre.z);
 
   for (const panel of geo.foldTree.panels) {
-    const shape = new THREE.Shape(panel.polygon.map((v) => new THREE.Vector2(v.x, v.y)));
+    const outline = flattenOutline(panelOutline(panel), 0.05); // arcs as fine polylines for display
+    const shape = new THREE.Shape(outline.map((v) => new THREE.Vector2(v.x, v.y)));
     const geom = new THREE.ShapeGeometry(shape);
     const pos = geom.getAttribute("position");
     const uv = new Float32Array(pos.count * 2);
@@ -107,7 +110,7 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
     outside.castShadow = insideMesh.castShadow = true;
     outside.receiveShadow = insideMesh.receiveShadow = true;
     const edges = new THREE.LineLoop(
-      new THREE.BufferGeometry().setFromPoints(panel.polygon.map((v) => new THREE.Vector3(v.x, v.y, 0))),
+      new THREE.BufferGeometry().setFromPoints(outline.map((v) => new THREE.Vector3(v.x, v.y, 0))),
       edgeMat,
     );
 

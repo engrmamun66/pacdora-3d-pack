@@ -23,18 +23,27 @@ export const tuckEndInputSchema = z.object({
   /** Board thickness, mm. */
   thickness: mm(0.05, 5).default(0.5),
   /**
-   * Allowance added to width, depth and height = allowanceFactor * thickness.
-   * Default 0: no thickness compensation until a rule is chosen with the printer.
+   * "manufacture": width/depth/height are crease-to-crease panel sizes (used as given).
+   * "inner": they are the inside dimensions of the box; each gets an allowance of
+   * allowanceFactor x thickness added to obtain the panel size.
    */
-  allowanceFactor: mm(0, 5).default(0),
+  sizeMode: z.enum(["manufacture", "inner"]).default("manufacture"),
+  /** Only used when sizeMode = "inner". */
+  allowanceFactor: mm(0, 5).optional(),
   bleed: mm(0, 20).default(3),
   safeMargin: mm(0, 20).default(3),
   glueFlapWidth: mm(2, 100).optional(),
   glueFlapBevel: mm(0, 50).optional(),
   tuckDepth: mm(2, 500).optional(),
   tuckCornerCut: mm(0, 50).optional(),
+  /** Shape of the tuck flap's free corners: rounded (radius = tuckCornerCut) or straight chamfer. */
+  tuckCornerStyle: z.enum(["round", "chamfer"]).default("round"),
+  /** Cut slit at each end of the tuck crease (tuck lock). 0 = no slits. */
+  tuckSlitLength: mm(0, 50).default(0),
   dustFlapDepth: mm(2, 500).optional(),
   dustFlapInset: mm(0, 100).optional(),
+  /** Radius rounding the dust flap's free corners. */
+  dustFlapCornerRadius: mm(0, 50).optional(),
 });
 
 export type TuckEndInput = z.input<typeof tuckEndInputSchema>;
@@ -45,6 +54,8 @@ export interface TuckEndParams {
   readonly depth: number;
   readonly height: number;
   readonly thickness: number;
+  readonly sizeMode: "manufacture" | "inner";
+  /** Effective factor (0 in manufacture mode). */
   readonly allowanceFactor: number;
   readonly bleed: number;
   readonly safeMargin: number;
@@ -52,8 +63,11 @@ export interface TuckEndParams {
   readonly glueFlapBevel: number;
   readonly tuckDepth: number;
   readonly tuckCornerCut: number;
+  readonly tuckCornerStyle: "round" | "chamfer";
+  readonly tuckSlitLength: number;
   readonly dustFlapDepth: number;
   readonly dustFlapInset: number;
+  readonly dustFlapCornerRadius: number;
 }
 
 export interface ResolvedTuckEnd {
@@ -82,8 +96,10 @@ export function resolveTuckEndParams(input: unknown): ResolvedTuckEnd {
     return fallback();
   };
 
-  const w = d.width + d.allowanceFactor * d.thickness;
-  const dp = d.depth + d.allowanceFactor * d.thickness;
+  const allowanceFactor =
+    d.sizeMode === "inner" ? pick("allowanceFactor", d.allowanceFactor, () => 1) : 0;
+  const w = d.width + allowanceFactor * d.thickness;
+  const dp = d.depth + allowanceFactor * d.thickness;
 
   // UNVERIFIED defaults (documented in docs/dieline-math.md).
   const glueFlapWidth = pick("glueFlapWidth", d.glueFlapWidth, () => Math.min(15, dp));
@@ -92,6 +108,9 @@ export function resolveTuckEndParams(input: unknown): ResolvedTuckEnd {
   const tuckCornerCut = pick("tuckCornerCut", d.tuckCornerCut, () => Math.min(4, tuckDepth / 3));
   const dustFlapDepth = pick("dustFlapDepth", d.dustFlapDepth, () => Math.min(dp * 0.5, w * 0.4));
   const dustFlapInset = pick("dustFlapInset", d.dustFlapInset, () => Math.min(3, dp * 0.1));
+  const dustFlapCornerRadius = pick("dustFlapCornerRadius", d.dustFlapCornerRadius, () =>
+    Math.min(3, dustFlapDepth / 4, (dp - 2 * dustFlapInset) / 4),
+  );
 
   const params: TuckEndParams = {
     variant: d.variant,
@@ -99,18 +118,22 @@ export function resolveTuckEndParams(input: unknown): ResolvedTuckEnd {
     depth: d.depth,
     height: d.height,
     thickness: d.thickness,
-    allowanceFactor: d.allowanceFactor,
+    sizeMode: d.sizeMode,
+    allowanceFactor,
     bleed: d.bleed,
     safeMargin: d.safeMargin,
     glueFlapWidth,
     glueFlapBevel,
     tuckDepth,
     tuckCornerCut,
+    tuckCornerStyle: d.tuckCornerStyle,
+    tuckSlitLength: d.tuckSlitLength,
     dustFlapDepth,
     dustFlapInset,
+    dustFlapCornerRadius,
   };
 
-  const h = d.height + d.allowanceFactor * d.thickness;
+  const h = d.height + allowanceFactor * d.thickness;
   const issues: { path: string; message: string }[] = [];
   const need = (ok: boolean, path: string, message: string) => {
     if (!ok) issues.push({ path, message });
@@ -127,6 +150,8 @@ export function resolveTuckEndParams(input: unknown): ResolvedTuckEnd {
   need(2 * tuckCornerCut < w, "tuckCornerCut", "must be less than half the width");
   need(2 * dustFlapDepth < w, "dustFlapDepth", "must be less than half the width (opposite dust flaps would collide)");
   need(2 * dustFlapInset < dp, "dustFlapInset", "must be less than half the depth");
+  need(d.sizeMode === "inner" || d.allowanceFactor === undefined, "allowanceFactor", 'only applies when sizeMode is "inner"');
+  need(2 * d.tuckSlitLength < w - 2 * tuckCornerCut, "tuckSlitLength", "slits at both ends must leave a crease between the tuck corners");
   need(
     2 * d.safeMargin < Math.min(w, dp, h, tuckDepth),
     "safeMargin",

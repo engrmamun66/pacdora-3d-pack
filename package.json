@@ -4,14 +4,18 @@
   "version": "0.0.0",
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p scripts/viewer/tsconfig.json",
     "demo": "tsx scripts/demo.ts",
     "viewer": "esbuild scripts/viewer/main.ts --bundle --format=esm --target=es2022 --outdir=scripts/viewer/dist --servedir=scripts/viewer --serve=127.0.0.1:4310",
-    "viewer:build": "esbuild scripts/viewer/main.ts --bundle --format=esm --target=es2022 --outdir=scripts/viewer/dist"
+    "viewer:build": "esbuild scripts/viewer/main.ts --bundle --format=esm --target=es2022 --outdir=scripts/viewer/dist",
+    "dev": "npm run dev -w web",
+    "db:up": "docker compose -f infra/docker-compose.yml up -d",
+    "db:down": "docker compose -f infra/docker-compose.yml down"
   },
   "devDependencies": {
     "@types/clipper-lib": "^6.4.0",
@@ -20,7 +24,7 @@
     "esbuild": "^0.28.2",
     "fast-check": "^4.10.2",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2",
+    "typescript": "^6.0.3",
     "vitest": "^5.1.0"
   }
 }

@@ -1,0 +1,150 @@
+// Database schema. Connection URL lives in prisma.config.ts (Prisma 7).
+// Auth models follow Better Auth 1.7 core tables (user, session, account,
+// verification, rateLimit); field names must match what Better Auth expects.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---- Auth (Better Auth) ----
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  projects      Project[]
+  assets        Asset[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+/// One row per login method: "credential" (email/password, holds the hash) or an OAuth provider.
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+/// Email verification and password reset tokens.
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+/// Rate-limit counters (database storage survives restarts and multiple instances).
+model RateLimit {
+  id          String @id
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+
+  @@map("rate_limit")
+}
+
+// ---- Domain models (merged into schema.prisma) ----
+
+/// A packaging template: one parametric generator + a named preset.
+/// Geometry rules live in code (packages/dieline-engine); the DB stores the
+/// catalogue entry and its default parameters.
+model Template {
+  id                String    @id // stable slug, e.g. "tuck-end-carton-straight"
+  generatorId       String    // engine template id, e.g. "tuck-end-carton"
+  name              String
+  category          String    // e.g. "folding-carton", "mailer", "shipping"
+  description       String
+  schemaVersion     Int
+  defaultParameters Json      @db.JsonB
+  previewUrl        String?
+  published         Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  projects          Project[]
+
+  @@index([category])
+  @@index([generatorId])
+  @@map("template")
+}
+
+/// A user's packaging project. `projectData` holds the full versioned
+/// ProjectDoc JSON (parameters, artwork, 3D and export settings).
+model Project {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  templateId   String
+  template     Template @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  projectData  Json     @db.JsonB
+  thumbnailUrl String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  assets       Asset[]
+
+  @@index([userId, updatedAt(sort: Desc)])
+  @@map("project")
+}
+
+/// Uploaded or generated file. Bytes live in object storage; only the key/URL here.
+model Asset {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId  String?
+  project    Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  fileName   String
+  fileType   String   // MIME type
+  sizeBytes  Int
+  storageKey String   @unique
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([projectId])
+  @@map("asset")
+}

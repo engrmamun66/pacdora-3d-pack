@@ -1,0 +1,31 @@
+# Local development services. Production deployment uses its own compose file (Phase 8).
+name: packaging-dev
+
+services:
+  db:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: packaging
+      POSTGRES_PASSWORD: packaging_dev_only
+      POSTGRES_DB: packaging
+    ports:
+      - "127.0.0.1:5433:5432" # 5433 avoids clashing with any Postgres already on 5432
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U packaging -d packaging"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mail:
+    # Catches all outgoing email in development. Web UI: http://127.0.0.1:8025
+    image: axllent/mailpit:v1.33.1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1025:1025" # SMTP
+      - "127.0.0.1:8025:8025" # web UI + API
+
+volumes:
+  pgdata:

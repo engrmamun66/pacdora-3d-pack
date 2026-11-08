@@ -1,4 +1,6 @@
-import { area } from "../primitives/polygon";
+import { area, outlineArea } from "../primitives/polygon";
+import { flattenOutline } from "../primitives/arc";
+import { panelOutline } from "../fold-tree/extract";
 import { dist } from "../primitives/vec2";
 import type { Bounds } from "../primitives/polygon";
 import type { Vec2 } from "../primitives/vec2";
@@ -35,9 +37,9 @@ export function runChecks(input: CheckInput): CheckResult[] {
   check("single-cut-loop", lines.cutLoops.length === 1, `${lines.cutLoops.length} cut loop(s)`);
 
   const outer = lines.cutLoops[0];
-  const panelArea = tree.panels.reduce((s, pa) => s + area(pa.polygon), 0);
+  const panelArea = tree.panels.reduce((s, pa) => s + outlineArea(panelOutline(pa)), 0);
   if (outer) {
-    const outerArea = area(outer);
+    const outerArea = outlineArea(outer);
     check(
       "panels-fill-outline",
       near(panelArea, outerArea, 1e-6 * Math.max(1, outerArea)),
@@ -55,7 +57,8 @@ export function runChecks(input: CheckInput): CheckResult[] {
   check("sheet-height", near(sheetH, expH), `${sheetH.toFixed(4)} vs expected ${expH.toFixed(4)} mm`);
 
   const creaseTotal = lines.creaseLines.reduce((s, c) => s + dist(c.a, c.b), 0);
-  const expCrease = 4 * H + 4 * L + 4 * W;
+  // Tuck creases are shortened by a slit at each end.
+  const expCrease = 4 * H + 2 * L + 2 * (L - 2 * p.tuckSlitLength) + 4 * W;
   check("total-crease-length", near(creaseTotal, expCrease), `${creaseTotal.toFixed(4)} vs expected ${expCrease.toFixed(4)} mm`);
 
   check(
@@ -66,7 +69,7 @@ export function runChecks(input: CheckInput): CheckResult[] {
 
   check("bleed-single-loop", bleedPieces === 1, `${bleedPieces} bleed polygon(s)`);
   if (p.bleed > 0 && outer) {
-    check("bleed-grows-outline", area(bleedLoop) > area(outer), "bleed area larger than cut area");
+    check("bleed-grows-outline", area(bleedLoop) > outlineArea(outer), "bleed area larger than cut area");
     const tol = 1e-3;
     const okBounds =
       near(bleedBounds.min.x, cutBounds.min.x - p.bleed, tol) &&
@@ -109,7 +112,7 @@ function foldedChecks(p: TuckEndParams, tree: FoldTree): CheckResult[] {
   let min = { x: Infinity, y: Infinity, z: Infinity };
   let max = { x: -Infinity, y: -Infinity, z: -Infinity };
   for (const panel of tree.panels) {
-    for (const v of panel.polygon) {
+    for (const v of flattenOutline(panelOutline(panel))) {
       const q = transformPoint(M(panel.id), flatPoint(v));
       min = { x: Math.min(min.x, q.x), y: Math.min(min.y, q.y), z: Math.min(min.z, q.z) };
       max = { x: Math.max(max.x, q.x), y: Math.max(max.y, q.y), z: Math.max(max.z, q.z) };
@@ -134,19 +137,26 @@ function foldedChecks(p: TuckEndParams, tree: FoldTree): CheckResult[] {
   );
 
   // 3. Each closure's far edge lands on the top/bottom edge of the opposite panel.
-  const lid = (closure: string, tuck: string, y: number, oppositeZ: number) => {
-    const h = hingeOf(tuck);
-    const a = transformPoint(M(closure), flatPoint(h.a));
-    const b = transformPoint(M(closure), flatPoint(h.b));
-    check(
-      `folded-${closure}-closes`,
-      sameSegment(a, b, { x: o.x, y, z: oppositeZ }, { x: o.x + L, y, z: oppositeZ }),
-      `far edge at ${fmt3(a)}-${fmt3(b)}`,
-    );
+  const lid = (closureId: string, y: number, oppositeZ: number) => {
+    const h = hingeOf(closureId);
+    const panel = tree.panels.find((x) => x.id === closureId)!;
+    const hx = h.b.x - h.a.x;
+    const hy = h.b.y - h.a.y;
+    const hl = Math.hypot(hx, hy);
+    const far = panel.polygon
+      .filter((v) => Math.abs((hx * (v.y - h.a.y) - hy * (v.x - h.a.x)) / hl) > 1e-6)
+      .map((v) => transformPoint(M(closureId), flatPoint(v)));
+    const xs = far.map((q) => q.x);
+    const ok =
+      far.length >= 2 &&
+      far.every((q) => Math.abs(q.y - y) <= 1e-6 && Math.abs(q.z - oppositeZ) <= 1e-6) &&
+      Math.abs(Math.min(...xs) - o.x) <= 1e-6 &&
+      Math.abs(Math.max(...xs) - (o.x + L)) <= 1e-6;
+    check(`folded-${closureId}-closes`, ok, `far edge at ${far.map(fmt3).join(", ")}`);
   };
   const opposite = (host: string) => (host === "back" ? 0 : W);
-  lid("top-closure", "top-tuck", o.y, opposite(hingeOf("top-closure").parentId));
-  lid("bottom-closure", "bottom-tuck", o.y + H, opposite(hingeOf("bottom-closure").parentId));
+  lid("top-closure", o.y, opposite(hingeOf("top-closure").parentId));
+  lid("bottom-closure", o.y + H, opposite(hingeOf("bottom-closure").parentId));
 
   // 4. Print faces outward on every outer panel (body + closures).
   const centre = { x: o.x + L / 2, y: o.y + H / 2, z: W / 2 };

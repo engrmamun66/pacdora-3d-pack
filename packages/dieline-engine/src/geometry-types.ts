@@ -1,4 +1,5 @@
-import type { CreaseLine, GlueArea } from "./fold-tree/extract";
+import type { CreaseLine, CutSegment, GlueArea } from "./fold-tree/extract";
+import type { Outline } from "./primitives/arc";
 import type { FoldTree, LinearAnnotation } from "./fold-tree/types";
 import type { Bounds } from "./primitives/polygon";
 import type { Vec2 } from "./primitives/vec2";
@@ -23,9 +24,13 @@ export interface DielineGeometry {
   /** Parameters filled from unverified built-in defaults. */
   readonly unverifiedDefaultsUsed: readonly string[];
   readonly foldTree: FoldTree;
-  readonly cutLoops: readonly (readonly Vec2[])[];
+  /** Closed cut outlines with arc bulges (outer first). */
+  readonly cutLoops: readonly Outline[];
+  /** Open cut segments (slits) on shared edges. */
+  readonly slitLines: readonly CutSegment[];
   readonly creaseLines: readonly CreaseLine[];
   readonly glueAreas: readonly GlueArea[];
+  /** Bleed outline (flattened polygon; arcs approximated to 5 micrometres). */
   readonly bleedLoop: readonly Vec2[];
   readonly safeAreas: readonly SafeArea[];
   readonly annotations: readonly LinearAnnotation[];

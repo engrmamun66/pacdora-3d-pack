@@ -1,4 +1,5 @@
 import ClipperLib from "clipper-lib";
+import { type Outline, bulgeAt, bulgeSegmentArea, arcFromBulge, flattenOutline } from "./arc";
 import { type Vec2, vec } from "./vec2";
 
 /** Clipper works on integers; 1 mm = 10_000 units (0.1 micrometre). */
@@ -82,4 +83,42 @@ export function offsetPolygon(poly: readonly Vec2[], distance: number, miterLimi
   const solution: IntPoint[][] = [];
   co.Execute(solution, distance * SCALE);
   return solution.map(fromClipper);
+}
+
+// ---- Outlines with arc edges (bulges) ----
+
+/** Exact signed area of an outline with arc edges. */
+export function outlineSignedArea(o: Outline): number {
+  let a = signedArea(o.points);
+  const n = o.points.length;
+  for (let i = 0; i < n; i++) a += bulgeSegmentArea(o.points[i]!, o.points[(i + 1) % n]!, bulgeAt(o, i));
+  return a;
+}
+
+export const outlineArea = (o: Outline): number => Math.abs(outlineSignedArea(o));
+
+/** Exact bounds of an outline, including arc extremes between vertices. */
+export function outlineBounds(o: Outline): Bounds {
+  const pts: Vec2[] = [...o.points];
+  const n = o.points.length;
+  for (let i = 0; i < n; i++) {
+    const bulge = bulgeAt(o, i);
+    if (bulge === 0) continue;
+    const arc = arcFromBulge(o.points[i]!, o.points[(i + 1) % n]!, bulge);
+    // Axis-aligned extremes occur at angles k*pi/2 lying inside the sweep.
+    for (let k = -8; k <= 8; k++) {
+      const ang = (k * Math.PI) / 2;
+      // Normalise by full turns: try the angle shifted by multiples of 2*pi.
+      for (const shift of [-4 * Math.PI, -2 * Math.PI, 0, 2 * Math.PI, 4 * Math.PI]) {
+        const t = (ang + shift - arc.startAngle) / arc.sweep;
+        if (t > 0 && t < 1) pts.push(vec(arc.center.x + arc.radius * Math.cos(ang), arc.center.y + arc.radius * Math.sin(ang)));
+      }
+    }
+  }
+  return bounds(pts);
+}
+
+/** Offset an outline with arcs (flattened to 5 micrometre tolerance first). */
+export function offsetOutline(o: Outline, distance: number, miterLimit = 3): Vec2[][] {
+  return offsetPolygon(flattenOutline(o), distance, miterLimit);
 }

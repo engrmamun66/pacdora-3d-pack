@@ -233,8 +233,8 @@ The full zod schema is designed in Phase 2 and documented in `docs/schema.md`.
 **Google Cloud setup (you do this once; I'll give click-by-click steps in Phase 1)**
 1. Google Cloud Console → create project → OAuth consent screen (External, app name, support email).
 2. Create OAuth client ID, type **Web application**.
-3. Authorized JavaScript origin: `http://localhost:3000`
-4. Authorized redirect URI: `http://localhost:3000/api/auth/callback/google`
+3. Authorized JavaScript origin: `http://localhost:3100`
+4. Authorized redirect URI: `http://localhost:3100/api/auth/callback/google`
 5. Put values in `.env`: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (never committed).
 6. While the consent screen is in **Testing** mode, only listed test users can sign in. For production, add the real domain's origin and redirect URI and publish the app (basic scopes need no Google review).
 
@@ -399,7 +399,7 @@ docker compose up -d db            # PostgreSQL
 cp .env.example .env               # set DATABASE_URL, auth secret
 pnpm prisma migrate dev            # apply migrations
 pnpm db:seed                       # seed templates
-pnpm dev                           # http://localhost:3000
+pnpm dev                           # http://localhost:3100
 
 pnpm test                          # engine + schema unit tests (Node)
 pnpm test:e2e                      # Playwright critical workflows
@@ -462,4 +462,35 @@ Reply with answers, or "go with your recommendations", to begin.
 - 63 automated tests pass.
 - Not done yet: material thickness in 3D, staged fold animation order, GLB export, PBR material presets.
 
-- **Not started:** Phase 1 (Next.js, Postgres, Prisma, auth, Google sign-in, captcha), which also needs Docker, still not installed.
+
+### Template source decision (2026-11-08)
+- Reviewed pacdora.com/dielines (2,148 templates). Their Terms of Service forbid copying content or derivative works, and robots.txt disallows `/dielines-detail/`. **Decision (user): build our own parametric generators for public standard structures (FEFCO/ECMA, generic names); never import or scrape Pacdora files, IDs, descriptions or images.**
+- First batch ("Core 8"): straight/reverse tuck end (done), crash-lock (auto) bottom, FEFCO 0201, FEFCO 0427 mailer, tray with lid, sleeve, pizza box.
+- Engine features needed for that batch (seen as common industry features, implemented from scratch): **arc edges** (rounded flap corners), **tuck slits**, crash-lock **glue-crease hinges that stay flat when erected**, explicit **size mode** (inner / outer / manufacture).
+- Export list gains **DXF** (Phase 6).
+
+### Phase 1: foundation (done 2026-11-08)
+- Docker via **Colima**; `infra/docker-compose.yml`: Postgres 18.6 (127.0.0.1:5433) + Mailpit (127.0.0.1:1025/8025).
+- `apps/web`: Next.js 16.4.5 (App Router, cacheComponents), TypeScript 6, Tailwind 4, shadcn/ui (Base UI).
+- Prisma 7.10.1 (pg driver adapter, `prisma.config.ts`), first migration: user/session/account/verification/rate_limit + template/project/asset with indexes and foreign keys.
+- Better Auth 1.7.18: email/password (min 10 chars, verified email required), confirmation + reset emails, Google (enabled when keys set; links only to verified local accounts), Turnstile captcha on sign-up/sign-in/reset/resend, DB-backed rate limits (sign-in 5/min, sign-up 3/min, reset 3/5min), sessions revoked on password reset, open-redirect guard on `next`.
+- Pages: landing, login, register, forgot/reset password, dashboard, settings (profile name, sign-in methods). `proxy.ts` gives optimistic redirects; every page and server action re-checks the session.
+- **Verified in a real browser**: register -> email in Mailpit -> unconfirmed login blocked -> confirm link -> dashboard; profile update; logout; login with `next`; forgot -> reset -> old password rejected; reset token single-use; missing captcha rejected (400); rate limit returns 429.
+- Bugs found and fixed during testing: Base UI menu label crash, self-referencing font variable, captcha ref usage flagged by React Compiler lint, TypeScript 7 incompatible with typescript-eslint (workspace pinned to TS 6.0.3), port 3000 taken (app uses **3100**).
+- Google sign-in verified end to end with the owner's Google account (new user, verified email, avatar).
+- **Phase 8 must-do:** configure trusted proxy IP headers (`advanced.ipAddress`) for production; locally every request shares one rate-limit key, and behind a proxy without this, one attacker could lock all users out of login.
+- Dev-only audit warnings: 8 moderate in ESLint tooling (typescript-eslint), none in runtime dependencies.
+
+### Engine upgrade for Core 8 (done 2026-11-08)
+- Arc edges (DXF bulges) with exact area/bounds/length, true SVG arcs, fillet helper; rounded tuck tips and dust-flap corners; tuck slits as cut lines; size mode (manufacture / inner).
+- Property test now also fuzzes corner style, slits and corner radii.
+
+### Phase 2: template system (done 2026-11-08)
+- Engine: generator registry with UI parameter descriptors (test keeps them in sync with the input schema) and our own preset catalogue (3 tuck-end presets).
+- `packages/schema`: versioned ProjectDoc v1 (zod) with migration hook; geometry is regenerated from parameters, not stored.
+- Web: template library (search + category filter, live thumbnails), template designer (grouped parameter form, live dieline preview, inline validation errors, default/auto placeholders, unverified-default warning), create / edit / delete projects (delete asks for confirmation), projects list, dashboard with recent projects, `npm run db:seed` syncs the catalogue table.
+- Server re-validates every parameter set with the engine before saving; every query is scoped to the signed-in user.
+- **Verified in browser:** library, live preview, invalid value blocks saving with a field error, create -> stored ProjectDoc v1, edit -> saved, delete. Second user cannot see or open another user's project (gets the not-found page; status 200 because the page streams).
+- Known limits: parameter input in mm only (inches later); 3D preview not yet in the app (Phase 5); templates require login.
+
+- **Next:** remaining Core 8 generators (crash-lock bottom, FEFCO 0201, FEFCO 0427 mailer, tray with lid, sleeve, pizza box), then Phase 4 (2D artwork editor).

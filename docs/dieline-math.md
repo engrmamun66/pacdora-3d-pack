@@ -11,19 +11,27 @@ Units: millimetres. Sheet coordinates: x right, y DOWN (SVG convention). Origin 
 | `depth` | side panel width | 10 to 1000 | required |
 | `height` | body height | 10 to 1000 | required |
 | `thickness` | board thickness | 0.05 to 5 | 0.5 |
-| `allowanceFactor` | allowance = factor x thickness added to width, depth, height | 0 to 5 | **0** (no compensation) |
+| `sizeMode` | `manufacture` (crease-to-crease, used as given) or `inner` (inside size) | enum | `manufacture` |
+| `allowanceFactor` | inner mode only: allowance = factor x thickness added to width, depth, height | 0 to 5 | **UNVERIFIED** `1` (inner mode) |
 | `bleed` | bleed distance | 0 or 0.01 to 20 | 3 |
 | `safeMargin` | inset of printable safe area | 0 or 0.01 to 20 | 3 |
 | `glueFlapWidth` | glue flap width | 2 to 100 | **UNVERIFIED** `min(15, depth)` |
 | `glueFlapBevel` | slant at glue flap ends | 0 to 50 | **UNVERIFIED** `min(3, 0.4 x glueFlapWidth)` |
 | `tuckDepth` | tuck flap length | 2 to 500 | **UNVERIFIED** `min(0.6 x depth, 25)` |
-| `tuckCornerCut` | chamfer on tuck flap free corners | 0 to 50 | **UNVERIFIED** `min(4, tuckDepth / 3)` |
+| `tuckCornerCut` | radius (round) or chamfer size on the tuck flap's free corners | 0 to 50 | **UNVERIFIED** `min(4, tuckDepth / 3)` |
+| `tuckCornerStyle` | `round` (true arcs) or `chamfer` | enum | `round` |
+| `tuckSlitLength` | cut slit at each end of the tuck crease | 0 to 50 | 0 (no slits) |
 | `dustFlapDepth` | dust flap length | 2 to 500 | **UNVERIFIED** `min(0.5 x depth, 0.4 x width)` |
 | `dustFlapInset` | taper of dust flap free edge, each side | 0 to 100 | **UNVERIFIED** `min(3, 0.1 x depth)` |
+| `dustFlapCornerRadius` | radius rounding the dust flap's free corners | 0 to 50 | **UNVERIFIED** `min(3, dustFlapDepth/4, (depth - 2 x inset)/4)` |
 
 > **The UNVERIFIED defaults are placeholders chosen to give a plausible shape. They are not taken from any packaging standard.** The engine reports which ones were used (`unverifiedDefaultsUsed`). Confirm every one with your printer, or pass explicit values, before using output for production.
 
-Effective dimensions: `L = width + k`, `W = depth + k`, `H = height + k`, with `k = allowanceFactor x thickness`.
+Effective dimensions: `L = width + k`, `W = depth + k`, `H = height + k`, with `k = allowanceFactor x thickness` in inner mode and `k = 0` in manufacture mode.
+
+## Arc edges
+
+Panel edges may be circular arcs, stored as a DXF-style **bulge** per edge (`tan(sweep/4)`, 0 = straight). Areas, bounds and lengths are computed exactly; SVG output uses true arc commands. Only cut edges may be curved: hinges and slits must be straight. Offsets (bleed, safe area) flatten arcs to 5 micrometres first.
 
 ## Layout (flat)
 
@@ -44,7 +52,7 @@ An edge used by one panel is a **cut**; an edge shared by two panels must be a d
 |---|---|
 | sheet width | `g + 2L + 2W` |
 | sheet height | `H + 2 x max(W + tuckDepth, dustFlapDepth)` |
-| total crease length | `4H + 4L + 4W` |
+| total crease length | `4H + 2L + 2(L - 2 x tuckSlitLength) + 4W` |
 | sum of panel areas | equals area of outer cut loop (no overlaps, no gaps) |
 | hinges | panels minus 1 (connected tree) |
 | cut loops | exactly 1 |

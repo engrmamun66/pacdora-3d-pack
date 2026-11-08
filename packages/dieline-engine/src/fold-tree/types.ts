@@ -8,6 +8,11 @@ export interface Panel {
   readonly role: PanelRole;
   readonly label: string;
   readonly polygon: readonly Vec2[];
+  /**
+   * Optional bulge per edge (edge i = vertex i -> i+1), DXF convention; see
+   * primitives/arc.ts. Missing or 0 = straight. Hinge edges must be straight.
+   */
+  readonly bulges?: readonly number[];
   /** True if artwork may be printed on this panel (gets a safe area). */
   readonly printable: boolean;
 }
@@ -33,6 +38,17 @@ export interface FoldTree {
   readonly rootId: string;
   readonly panels: readonly Panel[];
   readonly hinges: readonly Hinge[];
+  /**
+   * Cut segments lying on an edge shared by two panels (e.g. tuck-lock slits at
+   * the ends of a tuck crease). Each must coincide exactly with one shared edge.
+   */
+  readonly slits?: readonly Slit[];
+}
+
+export interface Slit {
+  readonly id: string;
+  readonly a: Vec2;
+  readonly b: Vec2;
 }
 
 /** Dimension annotation, rendered by the SVG/PDF backends. */

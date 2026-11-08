@@ -4,6 +4,7 @@ import {
   ParamValidationError,
   area,
   dist,
+  outlineArea,
   generateDieline,
   type DielineGeometry,
 } from "../src";
@@ -22,6 +23,7 @@ describe("tuck-end carton, explicit hand-calculated reference", () => {
     tuckCornerCut: 4,
     dustFlapDepth: 25,
     dustFlapInset: 3,
+    dustFlapCornerRadius: 3,
     bleed: 3,
     safeMargin: 3,
   };
@@ -98,14 +100,14 @@ describe("variants", () => {
     const a = gen({ ...base, variant: "straight" });
     const b = gen({ ...base, variant: "reverse" });
     expect(b.cutBounds).toEqual(a.cutBounds);
-    expect(area(b.cutLoops[0]!)).toBeCloseTo(area(a.cutLoops[0]!), 6);
+    expect(outlineArea(b.cutLoops[0]!)).toBeCloseTo(outlineArea(a.cutLoops[0]!), 6);
   });
 });
 
 describe("thickness allowance", () => {
   it("adds factor*thickness to each of width, depth and height", () => {
     const plain = gen({ ...base, tuckDepth: 20, dustFlapDepth: 20 });
-    const comp = gen({ ...base, tuckDepth: 20, dustFlapDepth: 20, thickness: 0.5, allowanceFactor: 2 });
+    const comp = gen({ ...base, tuckDepth: 20, dustFlapDepth: 20, thickness: 0.5, sizeMode: "inner", allowanceFactor: 2 });
     const wPlain = plain.cutBounds.max.x - plain.cutBounds.min.x;
     const wComp = comp.cutBounds.max.x - comp.cutBounds.min.x;
     expect(wComp - wPlain).toBeCloseTo(4 * 1.0, 6); // 4 vertical body panels, k = 1.0
@@ -154,7 +156,8 @@ describe("property: any valid parameter set yields a fully valid dieline", () =>
       depth: frac(20, 500),
       height: frac(20, 500),
       bleed: frac(0, 10).map((b) => (b < 0.01 ? 0 : b)),
-      f: fc.array(frac(0.05, 1), { minLength: 7, maxLength: 7 }),
+      f: fc.array(frac(0.05, 1), { minLength: 10, maxLength: 10 }),
+      tuckCornerStyle: fc.constantFrom("round", "chamfer"),
     })
     .map(({ f, ...r }) => {
       // Clamp to the schema ranges so float rounding never produces e.g. 100.00000000000001.
@@ -170,6 +173,8 @@ describe("property: any valid parameter set yields a fully valid dieline", () =>
         dustFlapDepth: clamp(f[4]! * 0.45 * r.width, 2, 500),
         dustFlapInset: clamp(f[5]! * 0.45 * r.depth, 0, 100),
         safeMargin: ((m) => (m < 0.01 ? 0 : Math.min(20, m)))(f[6]! * 0.45 * Math.min(r.width, r.depth, r.height, tuckDepth)),
+        tuckSlitLength: f[7]! < 0.3 ? 0 : Math.min(50, f[8]! * 0.2 * r.width),
+        dustFlapCornerRadius: Math.min(50, f[9]! * 0.2 * Math.min(r.width, r.depth)),
       };
     });
 
@@ -192,5 +197,61 @@ describe("property: any valid parameter set yields a fully valid dieline", () =>
     );
     // Guard against the generator drifting into mostly-invalid territory.
     expect(valid).toBeGreaterThan(240);
+  });
+});
+
+describe("rounded corners, slits and size mode", () => {
+  const explicit = {
+    ...base,
+    glueFlapWidth: 15,
+    glueFlapBevel: 3,
+    tuckDepth: 25,
+    tuckCornerCut: 6,
+    dustFlapDepth: 25,
+    dustFlapInset: 3,
+    dustFlapCornerRadius: 0,
+  };
+
+  it("round tuck corners remove exactly 2 r^2 (1 - pi/4) per tuck", () => {
+    const round = gen({ ...explicit, tuckCornerStyle: "round" });
+    const tuck = round.foldTree.panels.find((p) => p.id === "top-tuck")!;
+    expect(outlineArea({ points: tuck.polygon, bulges: tuck.bulges })).toBeCloseTo(100 * 25 - 2 * 36 * (1 - Math.PI / 4), 6);
+    expect(round.checks.every((c) => c.pass)).toBe(true);
+  });
+
+  it("chamfer style still works and removes 2 * c^2 / 2", () => {
+    const ch = gen({ ...explicit, tuckCornerStyle: "chamfer" });
+    const tuck = ch.foldTree.panels.find((p) => p.id === "top-tuck")!;
+    expect(area(tuck.polygon)).toBeCloseTo(100 * 25 - 36, 6);
+  });
+
+  it("slits shorten each tuck crease and appear as cut lines", () => {
+    const g = gen({ ...explicit, tuckSlitLength: 4 });
+    expect(g.slitLines).toHaveLength(4);
+    for (const s of g.slitLines) expect(dist(s.a, s.b)).toBeCloseTo(4, 9);
+    const tuckCrease = g.creaseLines.find((c) => c.hingeId === "h-top-tuck")!;
+    expect(dist(tuckCrease.a, tuckCrease.b)).toBeCloseTo(100 - 8, 9);
+    expect(g.checks.every((c) => c.pass)).toBe(true);
+  });
+
+  it("rejects slits that consume the whole crease", () => {
+    expect(() => gen({ ...explicit, tuckSlitLength: 45 })).toThrow(ParamValidationError);
+  });
+
+  it("rejects a dust flap corner radius that does not fit", () => {
+    expect(() => gen({ ...explicit, dustFlapCornerRadius: 30 })).toThrow(ParamValidationError);
+  });
+
+  it("inner size mode adds the allowance; manufacture mode ignores none", () => {
+    const m = gen({ ...explicit, thickness: 0.5 });
+    const i = gen({ ...explicit, thickness: 0.5, sizeMode: "inner", allowanceFactor: 1 });
+    const w = (g: typeof m) => g.cutBounds.max.x - g.cutBounds.min.x;
+    expect(w(i) - w(m)).toBeCloseTo(4 * 0.5, 9);
+    expect(m.unverifiedDefaultsUsed).not.toContain("allowanceFactor");
+    expect(gen({ ...explicit, sizeMode: "inner" }).unverifiedDefaultsUsed).toContain("allowanceFactor");
+  });
+
+  it("rejects allowanceFactor in manufacture mode (it would be silently ignored)", () => {
+    expect(() => gen({ ...explicit, allowanceFactor: 1 })).toThrow(ParamValidationError);
   });
 });

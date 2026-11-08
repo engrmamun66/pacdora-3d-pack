@@ -1,4 +1,4 @@
-import { type DielineGeometry, type LinearAnnotation, type Vec2, length, sub } from "@packaging/dieline-engine";
+import { type DielineGeometry, type LinearAnnotation, type Outline, type Vec2, arcFromBulge, bulgeAt, length, sub } from "@packaging/dieline-engine";
 
 export interface SvgOptions {
   readonly showBleed?: boolean;
@@ -8,6 +8,8 @@ export interface SvgOptions {
   readonly showPanelLabels?: boolean;
   /** Extra white space around the artwork area, mm (room for dimension lines). */
   readonly margin?: number;
+  /** Multiplies all line widths (e.g. 4 for small thumbnails). Default 1. */
+  readonly strokeScale?: number;
 }
 
 const DEFAULT_MARGIN = 22;
@@ -39,6 +41,27 @@ export const STYLE = {
 const n = (v: number): string => (Math.round(v * 10_000) / 10_000).toString();
 const pts = (poly: readonly Vec2[]): string => poly.map((p) => `${n(p.x)},${n(p.y)}`).join(" ");
 const pathD = (poly: readonly Vec2[]): string => `M${poly.map((p) => `${n(p.x)} ${n(p.y)}`).join(" L")} Z`;
+
+/** SVG path for an outline with true circular arcs (SVG "A" commands). */
+export function outlinePathD(o: Outline): string {
+  const pts = o.points;
+  const parts = [`M${n(pts[0]!.x)} ${n(pts[0]!.y)}`];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i]!;
+    const b = pts[(i + 1) % pts.length]!;
+    const bulge = bulgeAt(o, i);
+    if (bulge === 0) {
+      if (i < pts.length - 1) parts.push(`L${n(b.x)} ${n(b.y)}`);
+      continue;
+    }
+    const arc = arcFromBulge(a, b, bulge);
+    const large = Math.abs(arc.sweep) > Math.PI ? 1 : 0;
+    // SVG sweep-flag 1 = increasing angle in the SVG (y-down) frame, same frame as ours.
+    const sweep = arc.sweep > 0 ? 1 : 0;
+    parts.push(`A${n(arc.radius)} ${n(arc.radius)} 0 ${large} ${sweep} ${n(b.x)} ${n(b.y)}`);
+  }
+  return parts.join(" ") + " Z";
+}
 const esc = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -78,26 +101,27 @@ function annotationSvg(a: LinearAnnotation): string {
  * width/height carry mm units, so the file opens at true physical size.
  */
 export function renderDielineSvg(geo: DielineGeometry, opts: SvgOptions = {}): string {
-  const o = { showBleed: true, showSafe: true, showGlue: true, showAnnotations: true, showPanelLabels: false, margin: DEFAULT_MARGIN, ...opts };
+  const o = { showBleed: true, showSafe: true, showGlue: true, showAnnotations: true, showPanelLabels: false, margin: DEFAULT_MARGIN, strokeScale: 1, ...opts };
+  const sw = (w: number) => n(w * o.strokeScale);
   const { minX, minY, width: w, height: h } = dielineViewBox(geo, o.margin);
 
   const layers: string[] = [];
   if (o.showBleed) {
     const s = STYLE.bleed;
     layers.push(
-      layer("bleed", "Bleed", `<path d="${pathD(geo.bleedLoop)}" fill="none" stroke="${s.stroke}" stroke-width="${s.width}" stroke-dasharray="${s.dash}"/>`),
+      layer("bleed", "Bleed", `<path d="${pathD(geo.bleedLoop)}" fill="none" stroke="${s.stroke}" stroke-width="${sw(s.width)}" stroke-dasharray="${s.dash}"/>`),
     );
   }
   if (o.showGlue) {
     const s = STYLE.glue;
     layers.push(
-      layer("glue", "Glue", geo.glueAreas.map((g) => `<polygon points="${pts(g.polygon)}" fill="${s.fill}" fill-opacity="${s.opacity}" stroke="none"/>`).join("")),
+      layer("glue", "Glue", geo.glueAreas.map((g) => `<path d="${outlinePathD(g.outline)}" fill="${s.fill}" fill-opacity="${s.opacity}" stroke="none"/>`).join("")),
     );
   }
   if (o.showSafe) {
     const s = STYLE.safe;
     layers.push(
-      layer("safe", "Safe area", geo.safeAreas.map((a) => `<polygon points="${pts(a.polygon)}" fill="none" stroke="${s.stroke}" stroke-width="${s.width}" stroke-dasharray="${s.dash}"/>`).join("")),
+      layer("safe", "Safe area", geo.safeAreas.map((a) => `<polygon points="${pts(a.polygon)}" fill="none" stroke="${s.stroke}" stroke-width="${sw(s.width)}" stroke-dasharray="${s.dash}"/>`).join("")),
     );
   }
   {
@@ -107,7 +131,7 @@ export function renderDielineSvg(geo: DielineGeometry, opts: SvgOptions = {}): s
         "crease",
         "Crease",
         geo.creaseLines
-          .map((c) => `<line id="${esc(c.id)}" x1="${n(c.a.x)}" y1="${n(c.a.y)}" x2="${n(c.b.x)}" y2="${n(c.b.y)}" stroke="${s.stroke}" stroke-width="${s.width}" stroke-dasharray="${s.dash}"/>`)
+          .map((c) => `<line id="${esc(c.id)}" x1="${n(c.a.x)}" y1="${n(c.a.y)}" x2="${n(c.b.x)}" y2="${n(c.b.y)}" stroke="${s.stroke}" stroke-width="${sw(s.width)}" stroke-dasharray="${s.dash}"/>`)
           .join(""),
       ),
     );
@@ -115,7 +139,8 @@ export function renderDielineSvg(geo: DielineGeometry, opts: SvgOptions = {}): s
   {
     const s = STYLE.cut;
     layers.push(
-      layer("cut", "Cut", geo.cutLoops.map((l) => `<path d="${pathD(l)}" fill="none" stroke="${s.stroke}" stroke-width="${s.width}" stroke-linejoin="miter"/>`).join("")),
+      layer("cut", "Cut", geo.cutLoops.map((l) => `<path d="${outlinePathD(l)}" fill="none" stroke="${s.stroke}" stroke-width="${sw(s.width)}" stroke-linejoin="miter"/>`).join("") +
+          geo.slitLines.map((c) => `<line id="${esc(c.id)}" x1="${n(c.a.x)}" y1="${n(c.a.y)}" x2="${n(c.b.x)}" y2="${n(c.b.y)}" stroke="${s.stroke}" stroke-width="${sw(s.width)}"/>`).join("")),
     );
   }
   if (o.showPanelLabels) {

@@ -50,3 +50,18 @@ describe("renderDielineSvg", () => {
     expect(svg).toContain("Sheet 315.00");
   });
 });
+
+describe("arc output", () => {
+  it("writes true SVG arcs for rounded corners", () => {
+    const g = generateDieline("tuck-end-carton", { width: 100, depth: 50, height: 150, tuckCornerStyle: "round" });
+    const svg = renderDielineSvg(g);
+    const cut = svg.slice(svg.indexOf('<g id="cut"')).split("</g>")[0]!;
+    expect(cut).toMatch(/ A\d/);
+  });
+
+  it("draws slits as cut lines", () => {
+    const g = generateDieline("tuck-end-carton", { width: 100, depth: 50, height: 150, tuckSlitLength: 4 });
+    const svg = renderDielineSvg(g);
+    expect((svg.match(/<line id="slit-/g) ?? []).length).toBe(4);
+  });
+});
