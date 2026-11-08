@@ -11,7 +11,7 @@ const MAX_BYTES_PER_USER = 1024 * 1024 * 1024;
 
 const fail = (status: number, message: string) => NextResponse.json({ error: message }, { status });
 
-/** Upload an image (PNG, JPEG, WebP) for the signed-in user. Multipart field "file", optional "projectId". */
+/** Upload an image (PNG or JPEG) for the signed-in user. Multipart field "file", optional "projectId". */
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return fail(403, "Cross-site request rejected.");
   const session = await auth.api.getSession({ headers: request.headers });
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   const type = sniffImage(bytes);
-  if (!type) return fail(415, "Only PNG, JPEG and WebP images are supported.");
+  if (!type) return fail(415, "Only PNG and JPEG images are supported.");
 
   const projectIdRaw = form.get("projectId");
   let projectId: string | null = null;

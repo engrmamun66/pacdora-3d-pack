@@ -1,9 +1,9 @@
 /**
  * Identify an uploaded image by its first bytes (never trust the browser's
- * MIME type or the file name). Only raster formats are accepted: SVG can carry
- * scripts and is rejected.
+ * MIME type or the file name). Only PNG and JPEG are accepted: SVG can carry
+ * scripts, and the print exporters (PDF, AI, EPS) embed PNG/JPEG natively.
  */
-export type ImageType = { mime: "image/png" | "image/jpeg" | "image/webp"; ext: "png" | "jpg" | "webp" };
+export type ImageType = { mime: "image/png" | "image/jpeg"; ext: "png" | "jpg" };
 
 export function sniffImage(bytes: Uint8Array): ImageType | null {
   const b = (i: number) => bytes[i];
@@ -11,8 +11,6 @@ export function sniffImage(bytes: Uint8Array): ImageType | null {
     return { mime: "image/png", ext: "png" };
   }
   if (bytes.length >= 3 && b(0) === 0xff && b(1) === 0xd8 && b(2) === 0xff) return { mime: "image/jpeg", ext: "jpg" };
-  const ascii = (from: number, to: number) => String.fromCharCode(...bytes.slice(from, to));
-  if (bytes.length >= 12 && ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP") return { mime: "image/webp", ext: "webp" };
   return null;
 }
 

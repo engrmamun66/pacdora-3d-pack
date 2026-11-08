@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@types/clipper-lib": "^6.4.0",
+    "@types/fontkit": "^2.0.9",
     "@types/node": "^26.6.6",
     "@types/three": "^0.187.0",
     "esbuild": "^0.28.2",

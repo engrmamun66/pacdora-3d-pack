@@ -266,14 +266,14 @@ export function ArtworkEditor({
         <ToolButton label="Add rectangle" onClick={() => void c?.add("rect")}><Square className="size-4" /></ToolButton>
         <ToolButton label="Add ellipse" onClick={() => void c?.add("ellipse")}><Circle className="size-4" /></ToolButton>
         <ToolButton label="Add line" onClick={() => void c?.add("line")}><Slash className="size-4" /></ToolButton>
-        <ToolButton label="Upload image (PNG, JPEG, WebP, max 10 MB)" disabled={uploading} onClick={() => fileInput.current?.click()}>
+        <ToolButton label="Upload image (PNG or JPEG, max 10 MB)" disabled={uploading} onClick={() => fileInput.current?.click()}>
           <ImagePlus className="size-4" />
           {uploading ? <span>Uploading…</span> : null}
         </ToolButton>
         <input
           ref={fileInput}
           type="file"
-          accept="image/png,image/jpeg,image/webp"
+          accept="image/png,image/jpeg"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];

@@ -26,6 +26,7 @@
     "@packaging/model3d": "^0.0.0",
     "@packaging/render-svg": "^0.0.0",
     "@packaging/schema": "^0.0.0",
+    "@packaging/vector-scene": "^0.0.0",
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "better-auth": "^1.7.18",
