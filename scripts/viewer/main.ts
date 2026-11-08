@@ -89,14 +89,17 @@ function frameCamera() {
 }
 
 async function regenerate() {
-  const input = {
-    variant: $<HTMLSelectElement>("variant").value,
+  const style = $<HTMLSelectElement>("variant").value;
+  const dims = {
     width: Number($<HTMLInputElement>("width").value),
     depth: Number($<HTMLInputElement>("depth").value),
     height: Number($<HTMLInputElement>("height").value),
   };
   try {
-    const next = generateDieline("tuck-end-carton", input);
+    const next =
+      style === "crash-lock"
+        ? generateDieline("crash-lock-carton", dims)
+        : generateDieline("tuck-end-carton", { ...dims, variant: style });
     geo = next;
     flatEl.innerHTML = renderDielineSvg(next, { showPanelLabels: true });
     const vb = dielineViewBox(next);

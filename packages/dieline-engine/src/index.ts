@@ -5,8 +5,12 @@ export * from "./fold-tree/types";
 export * from "./fold-tree/extract";
 export * from "./fold-tree/fold3d";
 export * from "./geometry-types";
+export type { CartonExpectations } from "./validate/checks";
+export * from "./templates/carton-common";
 export * from "./templates/tuck-end-params";
 export * from "./templates/tuck-end-carton";
+export * from "./templates/crash-lock-params";
+export * from "./templates/crash-lock-carton";
 
 export * from "./templates/registry";
 

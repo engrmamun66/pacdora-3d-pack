@@ -1,6 +1,8 @@
 import type { DielineGeometry } from "../geometry-types";
 import { tuckEndInputSchema } from "./tuck-end-params";
 import { generateTuckEndCarton, TUCK_END_TEMPLATE_ID } from "./tuck-end-carton";
+import { crashLockInputSchema } from "./crash-lock-params";
+import { generateCrashLockCarton, CRASH_LOCK_TEMPLATE_ID } from "./crash-lock-carton";
 
 /** UI metadata for one generator parameter (drives the parameter form). */
 export type ParamDescriptor =
@@ -64,69 +66,90 @@ const num = (
   ...(opts.showWhen ? { showWhen: opts.showWhen } : {}),
 });
 
+const variantParam: ParamDescriptor = {
+  key: "variant",
+  kind: "enum",
+  label: "Tuck style",
+  group: "Structure",
+  options: [
+    { value: "straight", label: "Straight tuck end (both tucks on the same side)" },
+    { value: "reverse", label: "Reverse tuck end (tucks on opposite sides)" },
+  ],
+};
+
+/** Descriptors for cartonBaseShape (shared by all tube cartons). */
+const cartonBaseParams = (structure: readonly ParamDescriptor[]): ParamDescriptor[] => [
+  num("width", "Width", "Dimensions", 10, 1000, { step: 1, help: "Front/back panel width." }),
+  num("depth", "Depth", "Dimensions", 10, 1000, { step: 1, help: "Side panel width." }),
+  num("height", "Height", "Dimensions", 10, 1000, { step: 1 }),
+  ...structure,
+  {
+    key: "sizeMode",
+    kind: "enum",
+    label: "Size mode",
+    group: "Structure",
+    options: [
+      { value: "manufacture", label: "Manufacture (crease-to-crease)" },
+      { value: "inner", label: "Inner (inside of the box)" },
+    ],
+  },
+  num("thickness", "Board thickness", "Material", 0.05, 5, { step: 0.05 }),
+  num("allowanceFactor", "Allowance (x thickness)", "Material", 0, 5, {
+    step: 0.1,
+    unit: "factor",
+    optional: true,
+    help: "Added to each dimension in inner size mode. Confirm with your printer.",
+    showWhen: { key: "sizeMode", equals: "inner" },
+  }),
+  num("bleed", "Bleed", "Print", 0, 20),
+  num("safeMargin", "Safe margin", "Print", 0, 20),
+  num("glueFlapWidth", "Glue flap width", "Flaps (advanced)", 2, 100, { optional: true }),
+  num("glueFlapBevel", "Glue flap bevel", "Flaps (advanced)", 0, 50, { optional: true }),
+  num("tuckDepth", "Tuck flap depth", "Flaps (advanced)", 2, 500, { optional: true }),
+  {
+    key: "tuckCornerStyle",
+    kind: "enum",
+    label: "Tuck corners",
+    group: "Flaps (advanced)",
+    options: [
+      { value: "round", label: "Rounded" },
+      { value: "chamfer", label: "Chamfered" },
+    ],
+  },
+  num("tuckCornerCut", "Tuck corner size", "Flaps (advanced)", 0, 50, { optional: true }),
+  num("tuckSlitLength", "Tuck slit length", "Flaps (advanced)", 0, 50, { help: "0 = no slits." }),
+  num("dustFlapDepth", "Dust flap depth", "Flaps (advanced)", 2, 500, { optional: true }),
+  num("dustFlapInset", "Dust flap taper", "Flaps (advanced)", 0, 100, { optional: true }),
+  num("dustFlapCornerRadius", "Dust flap corner radius", "Flaps (advanced)", 0, 50, { optional: true }),
+];
+
 export const tuckEndDefinition: GeneratorDefinition = {
   id: TUCK_END_TEMPLATE_ID,
   name: "Tuck end carton",
   schemaVersion: 1,
   generate: generateTuckEndCarton,
   schemaKeys: Object.keys(tuckEndInputSchema.shape),
+  params: cartonBaseParams([variantParam]),
+};
+
+export const crashLockDefinition: GeneratorDefinition = {
+  id: CRASH_LOCK_TEMPLATE_ID,
+  name: "Crash-lock bottom carton",
+  schemaVersion: 1,
+  generate: generateCrashLockCarton,
+  schemaKeys: Object.keys(crashLockInputSchema.shape),
   params: [
-    num("width", "Width", "Dimensions", 10, 1000, { step: 1, help: "Front/back panel width." }),
-    num("depth", "Depth", "Dimensions", 10, 1000, { step: 1, help: "Side panel width." }),
-    num("height", "Height", "Dimensions", 10, 1000, { step: 1 }),
-    {
-      key: "variant",
-      kind: "enum",
-      label: "Tuck style",
-      group: "Structure",
-      options: [
-        { value: "straight", label: "Straight tuck end (both tucks on the same side)" },
-        { value: "reverse", label: "Reverse tuck end (tucks on opposite sides)" },
-      ],
-    },
-    {
-      key: "sizeMode",
-      kind: "enum",
-      label: "Size mode",
-      group: "Structure",
-      options: [
-        { value: "manufacture", label: "Manufacture (crease-to-crease)" },
-        { value: "inner", label: "Inner (inside of the box)" },
-      ],
-    },
-    num("thickness", "Board thickness", "Material", 0.05, 5, { step: 0.05 }),
-    num("allowanceFactor", "Allowance (x thickness)", "Material", 0, 5, {
-      step: 0.1,
-      unit: "factor",
+    ...cartonBaseParams([]),
+    num("lockFlapTaper", "Bottom side flap taper", "Flaps (advanced)", 0, 100, {
       optional: true,
-      help: "Added to each dimension in inner size mode. Confirm with your printer.",
-      showWhen: { key: "sizeMode", equals: "inner" },
+      help: "Cut-back of each bottom side flap's free end. Depth must not exceed width.",
     }),
-    num("bleed", "Bleed", "Print", 0, 20),
-    num("safeMargin", "Safe margin", "Print", 0, 20),
-    num("glueFlapWidth", "Glue flap width", "Flaps (advanced)", 2, 100, { optional: true }),
-    num("glueFlapBevel", "Glue flap bevel", "Flaps (advanced)", 0, 50, { optional: true }),
-    num("tuckDepth", "Tuck flap depth", "Flaps (advanced)", 2, 500, { optional: true }),
-    {
-      key: "tuckCornerStyle",
-      kind: "enum",
-      label: "Tuck corners",
-      group: "Flaps (advanced)",
-      options: [
-        { value: "round", label: "Rounded" },
-        { value: "chamfer", label: "Chamfered" },
-      ],
-    },
-    num("tuckCornerCut", "Tuck corner size", "Flaps (advanced)", 0, 50, { optional: true }),
-    num("tuckSlitLength", "Tuck slit length", "Flaps (advanced)", 0, 50, { help: "0 = no slits." }),
-    num("dustFlapDepth", "Dust flap depth", "Flaps (advanced)", 2, 500, { optional: true }),
-    num("dustFlapInset", "Dust flap taper", "Flaps (advanced)", 0, 100, { optional: true }),
-    num("dustFlapCornerRadius", "Dust flap corner radius", "Flaps (advanced)", 0, 50, { optional: true }),
   ],
 };
 
 export const generators: Readonly<Record<string, GeneratorDefinition>> = {
   [tuckEndDefinition.id]: tuckEndDefinition,
+  [crashLockDefinition.id]: crashLockDefinition,
 };
 
 export function getGenerator(id: string): GeneratorDefinition {
@@ -187,6 +210,16 @@ export const templateCatalog: readonly TemplatePreset[] = [
     description: "Straight tuck end box with slits at the tuck creases so the closed flaps hold more firmly.",
     defaults: { variant: "straight", width: 90, depth: 60, height: 90, tuckSlitLength: 3 },
     tags: ["tuck end", "slit lock"],
+  },
+  {
+    id: "crash-lock-bottom-box",
+    generatorId: CRASH_LOCK_TEMPLATE_ID,
+    name: "Crash-lock bottom box",
+    category: "folding-carton",
+    description:
+      "Tuck top with a pre-glued bottom that locks itself when the flat carton is opened. Also called auto-bottom. Fast to pack; good for heavier products.",
+    defaults: { width: 80, depth: 60, height: 120 },
+    tags: ["auto bottom", "crash lock", "pre-glued"],
   },
 ];
 

@@ -493,4 +493,12 @@ Reply with answers, or "go with your recommendations", to begin.
 - **Verified in browser:** library, live preview, invalid value blocks saving with a field error, create -> stored ProjectDoc v1, edit -> saved, delete. Second user cannot see or open another user's project (gets the not-found page; status 200 because the page streams).
 - Known limits: parameter input in mm only (inches later); 3D preview not yet in the app (Phase 5); templates require login.
 
-- **Next:** remaining Core 8 generators (crash-lock bottom, FEFCO 0201, FEFCO 0427 mailer, tray with lid, sleeve, pizza box), then Phase 4 (2D artwork editor).
+### Core 8: crash-lock bottom (done 2026-11-08)
+- Engine refactor: shared tube-carton module (`carton-common.ts`: base params, builder, finishing) and template-neutral checks (`CartonExpectations` + per-template extra checks). Tuck end unchanged in output; engine version 0.3.0.
+- New generator `crash-lock-carton` (own construction, documented in `docs/dieline-math.md`): 45 degree glue tabs folding 180 degrees, lock flaps, slits. 21 checks incl. closed-bottom coverage, no overlap, tab-on-flap and lock-engage areas (Clipper boolean areas).
+- New panel roles `bottom-flap`, `lock-flap`; 3D viewer stacks layers (outer flap < glue tab < lock flap).
+- Fix found by property test: a non-zero taper below the 0.1 micrometre grid made two edges coincide; now rejected (0 or >= 0.01 mm).
+- Fix: default tuck depth now also stays below 0.9 x height, so short boxes no longer fail on defaults alone.
+- **Verified:** 124 tests; dev viewer flat + closed + half fold; web library, designer (21/21 checks, depth > width error shown), project created and saved.
+
+- **Next:** remaining Core 8 generators (FEFCO 0201, FEFCO 0427 mailer, tray with lid, sleeve, pizza box), then Phase 4 (2D artwork editor).

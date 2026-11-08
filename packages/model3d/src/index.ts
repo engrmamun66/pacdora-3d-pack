@@ -30,8 +30,8 @@ export interface CartonModelOptions extends FoldOptions {
   readonly insideColor?: THREE.ColorRepresentation;
   readonly edgeColor?: THREE.ColorRepresentation;
   /**
-   * Visual-only gap (mm) that moves inner flaps (glue, tuck, dust) toward the
-   * box centre so they do not z-fight with the outer panel they rest against.
+   * Visual-only gap (mm) per layer that moves inner flaps (glue, tuck, dust,
+   * lock) toward the box centre so they do not z-fight with the panel below.
    * Not part of the engineering geometry.
    */
   readonly layerGap?: number;
@@ -44,7 +44,14 @@ export interface CartonModel {
   readonly size: THREE.Vector3;
 }
 
-const INNER_ROLES = new Set(["glue-flap", "tuck", "dust-flap"]);
+/** Visual stacking layer per role: 0 = outer skin, higher = further inside. */
+const LAYER: Readonly<Partial<Record<string, number>>> = {
+  "glue-flap": 1,
+  tuck: 1,
+  "dust-flap": 1,
+  // Crash-lock bottom: outer flap (0) < glue tab (1) < lock flap (2).
+  "lock-flap": 2,
+};
 
 function foldedBounds(geo: DielineGeometry, world: Map<string, Mat4>) {
   const box = new THREE.Box3();
@@ -116,7 +123,8 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
 
     const m = world.get(panel.id)!;
     const matrix = new THREE.Matrix4().fromArray(m as number[]);
-    if (INNER_ROLES.has(panel.role) && gap > 0) {
+    const layer = LAYER[panel.role] ?? 0;
+    if (layer > 0 && gap > 0) {
       // Push the flap toward the box centre along its own normal.
       const n: Vec3 = transformDirection(m, PRINTED_NORMAL);
       const c = panel.polygon.reduce<Vec3>(
@@ -128,7 +136,7 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
         { x: 0, y: 0, z: 0 },
       );
       const toCentre = (centre.x - c.x) * n.x + (centre.y - c.y) * n.y + (centre.z - c.z) * n.z;
-      const s = Math.sign(toCentre) * gap;
+      const s = Math.sign(toCentre) * gap * layer;
       matrix.premultiply(new THREE.Matrix4().makeTranslation(n.x * s, n.y * s, n.z * s));
     }
 

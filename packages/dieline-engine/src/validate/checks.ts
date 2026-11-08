@@ -5,34 +5,47 @@ import { dist } from "../primitives/vec2";
 import type { Bounds } from "../primitives/polygon";
 import type { Vec2 } from "../primitives/vec2";
 import type { ExtractedLines } from "../fold-tree/extract";
-import type { FoldTree } from "../fold-tree/types";
+import type { FoldTree, PanelRole } from "../fold-tree/types";
 import type { CheckResult } from "../geometry-types";
-import { effectiveDims, sheetOrigin, type TuckEndParams } from "../templates/tuck-end-params";
 import { PRINTED_NORMAL, type Vec3, flatPoint, foldTree, transformDirection, transformPoint } from "../fold-tree/fold3d";
 
-interface CheckInput {
-  readonly params: TuckEndParams;
+/**
+ * Closed-form expectations a template computes from its parameters, NOT from
+ * the geometry builder, so a builder bug cannot hide itself.
+ */
+export interface CartonExpectations {
+  readonly sheetWidth: number;
+  readonly sheetHeight: number;
+  readonly creaseLength: number;
+  /** Bounds of the fully closed carton (flat-sheet frame, z toward the inside). */
+  readonly box: { readonly min: Vec3; readonly max: Vec3 };
+  /** Free edge (flat a-b) of `panelId` must land on `target` when closed. */
+  readonly seam?: { readonly panelId: string; readonly flatA: Vec2; readonly flatB: Vec2; readonly target: readonly [Vec3, Vec3] };
+  /** Closure panels whose far edge must land at (y, z) spanning xMin..xMax when closed. */
+  readonly lids: readonly { readonly closureId: string; readonly y: number; readonly z: number; readonly xMin: number; readonly xMax: number }[];
+  /** Roles whose printed side must face out of the closed carton. */
+  readonly outwardRoles: readonly PanelRole[];
+}
+
+export interface CheckInput {
   readonly tree: FoldTree;
   readonly lines: ExtractedLines;
+  readonly bleed: number;
   readonly bleedLoop: readonly Vec2[];
   readonly bleedPieces: number;
   readonly cutBounds: Bounds;
   readonly bleedBounds: Bounds;
+  readonly expect: CartonExpectations;
+  readonly extraChecks?: (world: Map<string, readonly number[]>) => CheckResult[];
 }
 
-/**
- * Independent invariants. Expected values come from closed-form formulas,
- * NOT from the geometry builder, so a builder bug cannot hide itself.
- */
+const near = (a: number, b: number, tol = 1e-6) => Math.abs(a - b) <= tol;
+
+/** Independent invariants on the flat sheet and the folded carton. */
 export function runChecks(input: CheckInput): CheckResult[] {
-  const { params: p, tree, lines, bleedLoop, bleedPieces, cutBounds, bleedBounds } = input;
-  const { L, W, H } = effectiveDims(p);
-  const g = p.glueFlapWidth;
-  const t = p.tuckDepth;
-  const d = p.dustFlapDepth;
+  const { tree, lines, bleed, bleedLoop, bleedPieces, cutBounds, bleedBounds, expect } = input;
   const results: CheckResult[] = [];
   const check = (name: string, pass: boolean, detail: string) => results.push({ name, pass, detail });
-  const near = (a: number, b: number, tol = 1e-6) => Math.abs(a - b) <= tol;
 
   check("single-cut-loop", lines.cutLoops.length === 1, `${lines.cutLoops.length} cut loop(s)`);
 
@@ -51,15 +64,15 @@ export function runChecks(input: CheckInput): CheckResult[] {
 
   const sheetW = cutBounds.max.x - cutBounds.min.x;
   const sheetH = cutBounds.max.y - cutBounds.min.y;
-  const expW = g + 2 * L + 2 * W;
-  const expH = H + 2 * Math.max(W + t, d);
-  check("sheet-width", near(sheetW, expW), `${sheetW.toFixed(4)} vs expected ${expW.toFixed(4)} mm`);
-  check("sheet-height", near(sheetH, expH), `${sheetH.toFixed(4)} vs expected ${expH.toFixed(4)} mm`);
+  check("sheet-width", near(sheetW, expect.sheetWidth), `${sheetW.toFixed(4)} vs expected ${expect.sheetWidth.toFixed(4)} mm`);
+  check("sheet-height", near(sheetH, expect.sheetHeight), `${sheetH.toFixed(4)} vs expected ${expect.sheetHeight.toFixed(4)} mm`);
 
   const creaseTotal = lines.creaseLines.reduce((s, c) => s + dist(c.a, c.b), 0);
-  // Tuck creases are shortened by a slit at each end.
-  const expCrease = 4 * H + 2 * L + 2 * (L - 2 * p.tuckSlitLength) + 4 * W;
-  check("total-crease-length", near(creaseTotal, expCrease), `${creaseTotal.toFixed(4)} vs expected ${expCrease.toFixed(4)} mm`);
+  check(
+    "total-crease-length",
+    near(creaseTotal, expect.creaseLength),
+    `${creaseTotal.toFixed(4)} vs expected ${expect.creaseLength.toFixed(4)} mm`,
+  );
 
   check(
     "tree-connected",
@@ -68,18 +81,18 @@ export function runChecks(input: CheckInput): CheckResult[] {
   );
 
   check("bleed-single-loop", bleedPieces === 1, `${bleedPieces} bleed polygon(s)`);
-  if (p.bleed > 0 && outer) {
+  if (bleed > 0 && outer) {
     check("bleed-grows-outline", area(bleedLoop) > outlineArea(outer), "bleed area larger than cut area");
     const tol = 1e-3;
     const okBounds =
-      near(bleedBounds.min.x, cutBounds.min.x - p.bleed, tol) &&
-      near(bleedBounds.min.y, cutBounds.min.y - p.bleed, tol) &&
-      near(bleedBounds.max.x, cutBounds.max.x + p.bleed, tol) &&
-      near(bleedBounds.max.y, cutBounds.max.y + p.bleed, tol);
-    check("bleed-bounds", okBounds, `bleed bounds are cut bounds expanded by ${p.bleed} mm`);
+      near(bleedBounds.min.x, cutBounds.min.x - bleed, tol) &&
+      near(bleedBounds.min.y, cutBounds.min.y - bleed, tol) &&
+      near(bleedBounds.max.x, cutBounds.max.x + bleed, tol) &&
+      near(bleedBounds.max.y, cutBounds.max.y + bleed, tol);
+    check("bleed-bounds", okBounds, `bleed bounds are cut bounds expanded by ${bleed} mm`);
   }
 
-  results.push(...foldedChecks(p, tree));
+  results.push(...foldedChecks(input));
   return results;
 }
 
@@ -87,17 +100,12 @@ const near3 = (a: Vec3, b: Vec3, tol = 1e-6) =>
   Math.abs(a.x - b.x) <= tol && Math.abs(a.y - b.y) <= tol && Math.abs(a.z - b.z) <= tol;
 const sameSegment = (a1: Vec3, a2: Vec3, b1: Vec3, b2: Vec3) =>
   (near3(a1, b1) && near3(a2, b2)) || (near3(a1, b2) && near3(a2, b1));
-const fmt3 = (v: Vec3) => `(${v.x.toFixed(3)}, ${v.y.toFixed(3)}, ${v.z.toFixed(3)})`;
+export const fmt3 = (v: Vec3) => `(${v.x.toFixed(3)}, ${v.y.toFixed(3)}, ${v.z.toFixed(3)})`;
 
-/**
- * Fold the carton fully closed and check it forms the intended box. Expected
- * positions come from L, W, H and the sheet origin, not from the fold result.
- */
-function foldedChecks(p: TuckEndParams, tree: FoldTree): CheckResult[] {
+/** Fold the carton fully closed and check it forms the intended box. */
+function foldedChecks({ tree, expect, extraChecks }: CheckInput): CheckResult[] {
   const out: CheckResult[] = [];
   const check = (name: string, pass: boolean, detail: string) => out.push({ name, pass, detail });
-  const { L, W, H } = effectiveDims(p);
-  const o = sheetOrigin(p);
   let world: Map<string, readonly number[]>;
   try {
     world = foldTree(tree);
@@ -106,9 +114,9 @@ function foldedChecks(p: TuckEndParams, tree: FoldTree): CheckResult[] {
     return out;
   }
   const M = (id: string) => world.get(id)!;
-  const hingeOf = (child: string) => tree.hinges.find((h) => h.childId === child)!;
+  const hingeOf = (child: string) => tree.hinges.find((h) => h.childId === child);
 
-  // 1. Closed box occupies exactly L x H x W (flaps all end up inside).
+  // 1. Closed box occupies exactly the expected volume (flaps all end up inside).
   let min = { x: Infinity, y: Infinity, z: Infinity };
   let max = { x: -Infinity, y: -Infinity, z: -Infinity };
   for (const panel of tree.panels) {
@@ -118,59 +126,65 @@ function foldedChecks(p: TuckEndParams, tree: FoldTree): CheckResult[] {
       max = { x: Math.max(max.x, q.x), y: Math.max(max.y, q.y), z: Math.max(max.z, q.z) };
     }
   }
-  const expMin = { x: o.x, y: o.y, z: 0 };
-  const expMax = { x: o.x + L, y: o.y + H, z: W };
   check(
     "folded-box-size",
-    near3(min, expMin) && near3(max, expMax),
-    `folded bounds ${fmt3(min)}-${fmt3(max)} vs expected ${fmt3(expMin)}-${fmt3(expMax)}`,
+    near3(min, expect.box.min) && near3(max, expect.box.max),
+    `folded bounds ${fmt3(min)}-${fmt3(max)} vs expected ${fmt3(expect.box.min)}-${fmt3(expect.box.max)}`,
   );
 
-  // 2. Side seam closes: free edge of the last side panel meets the front's glue edge.
-  const seamFlatX = o.x + 2 * L + 2 * W;
-  const s1 = transformPoint(M("left"), { x: seamFlatX, y: o.y, z: 0 });
-  const s2 = transformPoint(M("left"), { x: seamFlatX, y: o.y + H, z: 0 });
-  check(
-    "folded-seam-closes",
-    sameSegment(s1, s2, { x: o.x, y: o.y, z: 0 }, { x: o.x, y: o.y + H, z: 0 }),
-    `left panel free edge at ${fmt3(s1)}-${fmt3(s2)}`,
-  );
+  // 2. Side seam closes.
+  if (expect.seam) {
+    const { panelId, flatA, flatB, target } = expect.seam;
+    const s1 = transformPoint(M(panelId), flatPoint(flatA));
+    const s2 = transformPoint(M(panelId), flatPoint(flatB));
+    check("folded-seam-closes", sameSegment(s1, s2, target[0], target[1]), `${panelId} panel free edge at ${fmt3(s1)}-${fmt3(s2)}`);
+  }
 
-  // 3. Each closure's far edge lands on the top/bottom edge of the opposite panel.
-  const lid = (closureId: string, y: number, oppositeZ: number) => {
-    const h = hingeOf(closureId);
-    const panel = tree.panels.find((x) => x.id === closureId)!;
+  // 3. Each closure's far edge lands where expected.
+  for (const lid of expect.lids) {
+    const h = hingeOf(lid.closureId);
+    const panel = tree.panels.find((x) => x.id === lid.closureId);
+    if (!h || !panel) {
+      check(`folded-${lid.closureId}-closes`, false, "closure panel or hinge missing");
+      continue;
+    }
     const hx = h.b.x - h.a.x;
     const hy = h.b.y - h.a.y;
     const hl = Math.hypot(hx, hy);
     const far = panel.polygon
       .filter((v) => Math.abs((hx * (v.y - h.a.y) - hy * (v.x - h.a.x)) / hl) > 1e-6)
-      .map((v) => transformPoint(M(closureId), flatPoint(v)));
+      .map((v) => transformPoint(M(lid.closureId), flatPoint(v)));
     const xs = far.map((q) => q.x);
     const ok =
       far.length >= 2 &&
-      far.every((q) => Math.abs(q.y - y) <= 1e-6 && Math.abs(q.z - oppositeZ) <= 1e-6) &&
-      Math.abs(Math.min(...xs) - o.x) <= 1e-6 &&
-      Math.abs(Math.max(...xs) - (o.x + L)) <= 1e-6;
-    check(`folded-${closureId}-closes`, ok, `far edge at ${far.map(fmt3).join(", ")}`);
-  };
-  const opposite = (host: string) => (host === "back" ? 0 : W);
-  lid("top-closure", o.y, opposite(hingeOf("top-closure").parentId));
-  lid("bottom-closure", o.y + H, opposite(hingeOf("bottom-closure").parentId));
+      far.every((q) => near(q.y, lid.y) && near(q.z, lid.z)) &&
+      near(Math.min(...xs), lid.xMin) &&
+      near(Math.max(...xs), lid.xMax);
+    check(`folded-${lid.closureId}-closes`, ok, `far edge at ${far.map(fmt3).join(", ")}`);
+  }
 
-  // 4. Print faces outward on every outer panel (body + closures).
-  const centre = { x: o.x + L / 2, y: o.y + H / 2, z: W / 2 };
+  // 4. Print faces outward on every outer panel.
+  const { min: bmin, max: bmax } = expect.box;
+  const centre = { x: (bmin.x + bmax.x) / 2, y: (bmin.y + bmax.y) / 2, z: (bmin.z + bmax.z) / 2 };
   const inward = tree.panels
-    .filter((pa) => pa.role === "body" || pa.role === "closure")
+    .filter((pa) => expect.outwardRoles.includes(pa.role))
     .filter((pa) => {
       const n = transformDirection(M(pa.id), PRINTED_NORMAL);
-      const c = pa.polygon.reduce<Vec3>((acc, v) => {
-        const q = transformPoint(M(pa.id), flatPoint(v));
-        return { x: acc.x + q.x / pa.polygon.length, y: acc.y + q.y / pa.polygon.length, z: acc.z + q.z / pa.polygon.length };
-      }, { x: 0, y: 0, z: 0 });
+      const c = foldedCentroid(pa.polygon, M(pa.id));
       return n.x * (c.x - centre.x) + n.y * (c.y - centre.y) + n.z * (c.z - centre.z) <= 0;
     })
     .map((pa) => pa.id);
   check("folded-print-outside", inward.length === 0, inward.length ? `printed side faces inward on: ${inward.join(", ")}` : "all outer panels print outward");
+
+  if (extraChecks) out.push(...extraChecks(world));
   return out;
+}
+
+/** Vertex centroid of a panel after folding. */
+export function foldedCentroid(polygon: readonly Vec2[], m: readonly number[]): Vec3 {
+  const k = polygon.length;
+  return polygon.reduce<Vec3>((acc, v) => {
+    const q = transformPoint(m, flatPoint(v));
+    return { x: acc.x + q.x / k, y: acc.y + q.y / k, z: acc.z + q.z / k };
+  }, { x: 0, y: 0, z: 0 });
 }

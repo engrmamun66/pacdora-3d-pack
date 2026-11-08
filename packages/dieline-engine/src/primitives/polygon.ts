@@ -85,6 +85,30 @@ export function offsetPolygon(poly: readonly Vec2[], distance: number, miterLimi
   return solution.map(fromClipper);
 }
 
+/** Area (mm2) of a Clipper boolean result; holes count negative. */
+function solutionArea(solution: readonly IntPoint[][]): number {
+  return solution.reduce((s, path) => s + ClipperLib.Clipper.Area(path as IntPoint[]), 0) / (SCALE * SCALE);
+}
+
+function booleanArea(type: number, subjects: readonly (readonly Vec2[])[], clips: readonly (readonly Vec2[])[]): number {
+  const c = new ClipperLib.Clipper();
+  // Same winding for every input, so NonZero filling treats overlaps as filled.
+  const oriented = (p: readonly Vec2[]) => toClipper(signedArea(p) < 0 ? [...p].reverse() : p);
+  for (const s of subjects) c.AddPath(oriented(s), ClipperLib.PolyType.ptSubject, true);
+  for (const k of clips) c.AddPath(oriented(k), ClipperLib.PolyType.ptClip, true);
+  const solution: IntPoint[][] = [];
+  c.Execute(type, solution, ClipperLib.PolyFillType.pftNonZero, ClipperLib.PolyFillType.pftNonZero);
+  return Math.abs(solutionArea(solution));
+}
+
+/** Area of the union of polygons (overlaps counted once). */
+export const unionArea = (polys: readonly (readonly Vec2[])[]): number =>
+  booleanArea(ClipperLib.ClipType.ctUnion, polys, []);
+
+/** Area of the intersection of two polygons. */
+export const intersectionArea = (a: readonly Vec2[], b: readonly Vec2[]): number =>
+  booleanArea(ClipperLib.ClipType.ctIntersection, [a], [b]);
+
 // ---- Outlines with arc edges (bulges) ----
 
 /** Exact signed area of an outline with arc edges. */

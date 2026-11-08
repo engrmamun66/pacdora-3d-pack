@@ -1,6 +1,12 @@
 import type { Vec2 } from "../primitives/vec2";
 
-export type PanelRole = "body" | "closure" | "tuck" | "dust-flap" | "glue-flap";
+/**
+ * - closure: outer lid/bottom panel, printed side faces outward.
+ * - bottom-flap: outer layer of a glued (crash-lock) bottom, printed outward.
+ * - lock-flap: inner layer of a crash-lock bottom, rests on the other half.
+ * - glue-flap: any area that receives glue (side seam strip, crash-lock tabs).
+ */
+export type PanelRole = "body" | "closure" | "tuck" | "dust-flap" | "glue-flap" | "bottom-flap" | "lock-flap";
 
 /** A flat piece of board, polygon in flat sheet coordinates (mm, y down). */
 export interface Panel {

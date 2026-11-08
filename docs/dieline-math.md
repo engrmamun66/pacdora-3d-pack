@@ -17,7 +17,7 @@ Units: millimetres. Sheet coordinates: x right, y DOWN (SVG convention). Origin 
 | `safeMargin` | inset of printable safe area | 0 or 0.01 to 20 | 3 |
 | `glueFlapWidth` | glue flap width | 2 to 100 | **UNVERIFIED** `min(15, depth)` |
 | `glueFlapBevel` | slant at glue flap ends | 0 to 50 | **UNVERIFIED** `min(3, 0.4 x glueFlapWidth)` |
-| `tuckDepth` | tuck flap length | 2 to 500 | **UNVERIFIED** `min(0.6 x depth, 25)` |
+| `tuckDepth` | tuck flap length | 2 to 500 | **UNVERIFIED** `min(0.6 x depth, 25, 0.9 x height)` |
 | `tuckCornerCut` | radius (round) or chamfer size on the tuck flap's free corners | 0 to 50 | **UNVERIFIED** `min(4, tuckDepth / 3)` |
 | `tuckCornerStyle` | `round` (true arcs) or `chamfer` | enum | `round` |
 | `tuckSlitLength` | cut slit at each end of the tuck crease | 0 to 50 | 0 (no slits) |
@@ -69,5 +69,50 @@ Cross-field rules (rejected as parameter errors): glue flap no wider than depth;
 
 - Folding uses zero-thickness panels: flaps that rest against a panel are coincident with it (the 3D viewer separates them by 0.3 mm for display only). Tuck insertion clearance and collision during folding are not modelled.
 - Thickness compensation is only the simple allowance above. A real rule must come from your printer.
-- No perforation, no punched holes, no curved edges.
+- No perforation, no punched holes.
 - Geometry resolution is 0.1 micrometre (offset grid).
+
+---
+
+# Crash-lock bottom carton (template `crash-lock-carton`)
+
+Our own construction, derived from first principles and checked by the 3D fold. Top (tuck closure, tuck, top dust flaps), body, glue strip and all shared parameters are identical to the tuck-end carton above (no `variant`). The bottom replaces the bottom closure, tuck and dust flaps.
+
+## Extra parameter
+
+| Name | Meaning | Range | Default |
+|---|---|---|---|
+| `lockFlapTaper` | cut-back of each bottom side (lock) flap's free end | 0 or 0.01 to `W/2` | **UNVERIFIED** `min(3, 0.1 x depth)` |
+
+Extra rules: `W <= L` (the two lock flaps, each `W/2` deep, meet from opposite sides); `2 x safeMargin < W/2` (bottom flaps are printable).
+
+## Bottom layout (flat, below `y = H`)
+
+- `front` and `back` each carry a **bottom flap** `L x W/2`. A **45 degree crease** runs from the hinge corner next to the following side panel to the free edge, splitting off a right-triangle **glue tab** (legs `W/2`). The tab crease folds **180 degrees**.
+- `right` and `left` each carry a **lock flap** `W x W/2`, its far end cut back by `lockFlapTaper`. The edge between a lock flap and the preceding glue tab is a **slit** (cut on the continuation of the body crease). With taper 0, the edge between `lock-right` and `bottom-back` also becomes a slit.
+
+## How it works (closed state)
+
+1. Each tab folds onto its own bottom flap and is glued to the following lock flap, so `front + right` and `back + left` are two rigid glued halves.
+2. The outer bottom flaps butt at the centre line `z = W/2`.
+3. Each lock flap lies over the **other** half's outer flap. The halves hold each other shut: that is the lock.
+
+## Invariants (in addition to the shared ones)
+
+| Check | Expected |
+|---|---|
+| sheet height | `max(W + tuckDepth, dustFlapDepth) + H + W/2` |
+| total crease length | see formula below |
+| folded bottom flat | every bottom panel vertex on the bottom plane |
+| bottom covered | union of outer + lock flaps = `L x W` |
+| no overlap | front/back outer flaps do not overlap; lock flaps do not overlap |
+| glue tab on lock flap | folded tab lies completely on its lock flap (area `(W/2)^2 / 2`) |
+| lock engages | each lock flap overlaps the other half's outer flap (area > 0) |
+
+Total crease length = body `4H` + top `L + (L - 2 x tuckSlitLength) + 2W` + bottom hinges `2L + 2W` + tab creases `2 x (W/2) x sqrt(2)`.
+
+## Limits
+
+- The 3D view animates every hinge at the same rate; the real erecting motion (both halves swinging in together as the tube squares) is not simulated. Only the closed state is checked.
+- No interlocking hook or notch on the centre line; the lock is the overlap described above. Ask your printer whether they want a hook profile.
+- Board thickness at the glued layers (three layers near each tab) is not compensated.
