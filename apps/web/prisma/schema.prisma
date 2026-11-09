@@ -25,6 +25,7 @@ model User {
   accounts      Account[]
   projects      Project[]
   assets        Asset[]
+  aiRequests    AiRequest[]
 
   @@map("user")
 }
@@ -147,4 +148,18 @@ model Asset {
   @@index([userId, createdAt(sort: Desc)])
   @@index([projectId])
   @@map("asset")
+}
+
+/// One AI parameter-extraction request (for the per-user daily quota and auditing).
+model AiRequest {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// ok | needs_info | unsupported | invalid | error
+  outcome   String
+  inputChars Int
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("ai_request")
 }

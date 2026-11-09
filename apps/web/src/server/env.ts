@@ -20,6 +20,10 @@ const schema = z.object({
   // Google sign-in is optional: the button only appears when both are set.
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  /** Anthropic API key for "describe your box" (optional: the feature is hidden without it). */
+  ANTHROPIC_API_KEY: z.string().optional(),
+  /** AI requests allowed per user per 24 hours. */
+  AI_DAILY_LIMIT: z.coerce.number().int().min(0).max(10_000).default(20),
   /** Directory for uploaded files (default: ./storage relative to the app). */
   STORAGE_DIR: z.string().min(1).optional(),
 });
@@ -32,3 +36,4 @@ if (!parsed.success) {
 
 export const env = parsed.data;
 export const googleEnabled = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+export const aiEnabled = Boolean(env.ANTHROPIC_API_KEY);

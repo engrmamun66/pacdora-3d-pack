@@ -539,4 +539,12 @@ Reply with answers, or "go with your recommendations", to begin.
 - **Verified:** 186 tests incl. Ghostscript cross-checks (renders every AI profile and both EPS levels without errors; `tiffsep` shows CutContour and Crease as separate plates), page boxes in points, DPI metadata, ASCII85/RunLength round trips. All 9 formats downloaded through the dialog in the browser; PDF/AI/EPS have identical ink bounds in Ghostscript; 300 dpi PNG = 301 x 241 mm = bleed size; GLB valid glTF 2.0 with embedded texture and metre scale.
 - Known limits: profiles untested in real Illustrator; no PDF/X or ICC output intent yet; no live (editable) text in AI; RGB artwork colours (no CMYK conversion); latin-only font subsets (e.g. Bangla text is reported as missing).
 
-- **Next:** Phase 7, AI parameter extraction.
+### Phase 7: AI "describe your box" (built 2026-11-09; live API call not yet tested)
+- `packages/ai-contract`: Claude (`claude-opus-5-5`, low effort, structured output from a Zod schema, server-side refusal fallback `fallbacks: "default"`) returns only a catalogue preset id, three dimensions, size mode, optional board thickness, notes and a status (ok / needs_info / unsupported). The system prompt is built from the template catalogue; the customer text is treated as data.
+- `interpret()` (pure, deterministic): strict zod ranges, then the real dieline engine. Engine rule violations come back as issues; nothing from the model bypasses validation and no geometry comes from the model.
+- Web: "Describe your box" panel on the templates page (shown only when `ANTHROPIC_API_KEY` is set). Server action guards: signed in, length (1000 chars), per-user daily quota (`AI_DAILY_LIMIT`, default 20, table `ai_request`), Cloudflare Turnstile verified server-side (fails closed), typed API errors. "Open in designer" passes the parameters via `?p=`; the designer keeps only known keys and the engine re-validates.
+- **Bug found by tests and fixed:** a "needs_info" answer (0 for missing dimensions, as the prompt asks) was rejected by the range check.
+- **Verified:** 12 unit tests with a fake client (request shape: model, structured output, effort, fallbacks, no forced tool choice; refusal and unparseable answers; engine rejects bad combinations even when the model's JSON is well formed). In the browser: panel hidden without a key; prefill works; unknown keys dropped; bad JSON ignored.
+- **Not verified:** a real call to the Anthropic API (no key on this machine). To test: set `ANTHROPIC_API_KEY` in `apps/web/.env.local`, restart `npm run dev`, open Templates.
+
+- **Next:** Phase 8, security and production preparation.
