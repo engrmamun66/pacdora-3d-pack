@@ -5,6 +5,7 @@ import { getProject } from "@/server/projects";
 import { DielineWorkspace } from "@/components/dielines/workspace";
 import { IMPORTED_GENERATOR_ID } from "@packaging/dieline-engine";
 import { loadImportedSource } from "@/server/imported-templates";
+import { readViewSettings } from "@/lib/view-settings";
 
 async function ProjectView({ params }: { params: PageProps<"/projects/[id]">["params"] }) {
   const { id } = await params;
@@ -22,7 +23,8 @@ async function ProjectView({ params }: { params: PageProps<"/projects/[id]">["pa
     <DielineWorkspace
       mode={{ kind: "edit", projectId: project.id }}
       generatorId={project.doc.template.generatorId}
-      {...(imported ? { imported: { templateId: imported.templateId, flat: imported.flat } } : {})}
+      {...(imported ? { imported: { templateId: imported.templateId, flat: imported.flat, fold: imported.fold } } : {})}
+      initialView={readViewSettings(project.template.viewSettings)}
       title={project.name}
       description={`Last saved ${project.updatedAt.toISOString().replace("T", " ").slice(0, 16)} UTC`}
       initialName={project.name}

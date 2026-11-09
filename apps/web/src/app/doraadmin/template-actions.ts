@@ -3,7 +3,7 @@
 import { revalidatePath, updateTag } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
-import { ImportedDielineError, assertImportable, type FlatDieline } from "@packaging/dieline-engine";
+import { ImportedDielineError, assertImportable, createImportedGenerator, importedDefaults, validateFoldSetup, type FlatDieline, type FoldSetup } from "@packaging/dieline-engine";
 import { SvgImportError, importSvg, toFlatDieline, type ImportedDieline, type Role } from "@packaging/svg-import";
 import { MAX_SVG_CHARS, thumbnailSvg } from "@/lib/template-import";
 import { isValidSlug } from "@/lib/slug";
@@ -74,6 +74,8 @@ const saveSchema = z.object({
   scale: z.number().finite().min(0.001).max(1000).default(1),
   pxPerInch: z.number().finite().min(1).max(2400).default(96),
   roles: z.record(z.string().max(80), roleSchema).default({}),
+  /** How it folds in 3D (imported templates); null = flat only. Validated again here. */
+  fold: z.unknown().optional(),
 });
 
 export type SaveTemplateResult = ActionResult & { slug?: string };
@@ -83,7 +85,37 @@ interface StoredGeometry {
   dieline: ImportedDieline;
   roles: Record<string, Role>;
   options: { unit: string; scale: number; pxPerInch: number };
+  /** 3D fold setup, or null for flat only. */
+  fold: FoldSetup | null;
 }
+
+const foldSchema = z.object({
+  rootId: z.string().min(1).max(40),
+  panels: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(40),
+        label: z.string().trim().min(1).max(40),
+        role: z.enum(["body", "closure", "tuck", "dust-flap", "glue-flap", "bottom-flap", "lock-flap"]),
+        printable: z.boolean(),
+        polygon: z.array(z.number().finite().min(-100000).max(100000)).min(6).max(8000),
+      }),
+    )
+    .min(1)
+    .max(200),
+  hinges: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(40),
+        parentId: z.string().min(1).max(40),
+        childId: z.string().min(1).max(40),
+        line: z.tuple([z.number().finite(), z.number().finite(), z.number().finite(), z.number().finite()]),
+        angleDeg: z.number().finite().min(-180).max(180),
+        order: z.number().int().min(1).max(100),
+      }),
+    )
+    .max(400),
+});
 
 const MAX_GEOMETRY_JSON = 6_000_000;
 
@@ -161,7 +193,29 @@ export async function saveTemplate(input: unknown): Promise<SaveTemplateResult> 
     throw e;
   }
 
-  const geometry: StoredGeometry = { v: 1, dieline, roles, options };
+  // 3D fold: checked again here (shape, then the engine itself at the default, smallest and largest size).
+  let fold: FoldSetup | null = null;
+  if (v.fold !== undefined && v.fold !== null) {
+    const f = foldSchema.safeParse(v.fold);
+    if (!f.success) return { ok: false, message: "The 3D fold data is not valid. Detect the panels again." };
+    const problems = validateFoldSetup(f.data);
+    if (problems.length) return { ok: false, message: problems[0]! };
+    try {
+      const flat = toFlatDieline(dieline, roles) as FlatDieline;
+      const gen = createImportedGenerator("check", flat, f.data);
+      const width = gen.params.find((p) => p.key === "width");
+      gen.generate(importedDefaults(flat));
+      if (width && width.kind === "number") {
+        gen.generate({ width: width.min });
+        gen.generate({ width: width.max });
+      }
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : "This 3D fold does not work." };
+    }
+    fold = f.data;
+  }
+
+  const geometry: StoredGeometry = { v: 1, dieline, roles, options, fold };
   if (JSON.stringify(geometry).length > MAX_GEOMETRY_JSON) return { ok: false, message: "This dieline is too detailed to store. Simplify the SVG and try again." };
   const thumbnail = thumbnailSvg(dieline, roles);
   const data = {
@@ -169,6 +223,7 @@ export async function saveTemplate(input: unknown): Promise<SaveTemplateResult> 
     description: v.description,
     published: v.published,
     sortOrder: v.sortOrder,
+    hasFold: fold !== null,
     geometry: geometry as unknown as Prisma.InputJsonValue,
     widthMm: dieline.widthMm,
     heightMm: dieline.heightMm,

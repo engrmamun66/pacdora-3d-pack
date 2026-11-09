@@ -75,8 +75,26 @@ export const PRINTED_NORMAL: Vec3 = { x: 0, y: 0, z: -1 };
 export interface FoldOptions {
   /** 0 = flat, 1 = fully closed (each hinge at its foldAngleDeg). Default 1. */
   readonly progress?: number;
-  /** Optional per-hinge progress override (0..1), e.g. for staged animation. */
+  /** Optional per-hinge progress override (0..1). If absent and `progress` is given, hinges with a foldOrder are staged. */
   readonly hingeProgress?: Readonly<Record<string, number>>;
+}
+
+/**
+ * Per-hinge progress for a staged fold, or undefined if no hinge has a foldOrder.
+ * The distinct fold orders, ascending, are N steps; the hinge in step s (0-based)
+ * gets clamp(progress * N - s, 0, 1). Hinges without a foldOrder follow step 0.
+ */
+export function stagedHingeProgress(tree: FoldTree, progress: number): Record<string, number> | undefined {
+  const orders = [...new Set(tree.hinges.map((h) => h.foldOrder).filter((o): o is number => typeof o === "number" && Number.isFinite(o)))].sort((a, b) => a - b);
+  if (orders.length === 0) return undefined;
+  const stepOf = new Map(orders.map((o, i) => [o, i]));
+  const p = Math.min(1, Math.max(0, progress));
+  const out: Record<string, number> = {};
+  for (const h of tree.hinges) {
+    const s = h.foldOrder === undefined ? 0 : (stepOf.get(h.foldOrder) ?? 0);
+    out[h.id] = Math.min(1, Math.max(0, p * orders.length - s));
+  }
+  return out;
 }
 
 /**
@@ -86,6 +104,8 @@ export interface FoldOptions {
  */
 export function foldTree(tree: FoldTree, opts: FoldOptions = {}): Map<string, Mat4> {
   const progress = opts.progress ?? 1;
+  // Hinges with a foldOrder fold one step after another when only `progress` is given.
+  const hingeProgress = opts.hingeProgress ?? (opts.progress !== undefined ? stagedHingeProgress(tree, opts.progress) : undefined);
   const panelById = new Map(tree.panels.map((p) => [p.id, p]));
   const childrenOf = new Map<string, typeof tree.hinges[number][]>();
   for (const h of tree.hinges) {
@@ -116,7 +136,7 @@ export function foldTree(tree: FoldTree, opts: FoldOptions = {}): Map<string, Ma
       const side = u.x * cy - u.y * cx;
       if (Math.abs(side) < 1e-9) throw new Error(`Panel "${child.id}" lies on its own hinge line.`);
 
-      const p = opts.hingeProgress?.[h.id] ?? progress;
+      const p = hingeProgress?.[h.id] ?? progress;
       const angle = Math.sign(side) * p * (h.foldAngleDeg * Math.PI) / 180;
       const local = multiply(translation(h.a.x, h.a.y, 0), multiply(axisAngle(u, angle), translation(-h.a.x, -h.a.y, 0)));
       world.set(child.id, multiply(parentWorld, local));

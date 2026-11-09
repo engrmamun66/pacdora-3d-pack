@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { FoldSetup } from "@packaging/dieline-engine";
 import type { ImportedDieline, Role } from "@packaging/svg-import";
 import { TemplateWizard } from "@/components/templates-admin/template-wizard";
 import { db } from "@/server/db";
@@ -16,7 +17,7 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
     db.templateCategory.findMany({ orderBy: [{ kind: "asc" }, { sortOrder: "asc" }, { name: "asc" }], select: { id: true, kind: true, name: true } }),
   ]);
   if (!t) notFound();
-  const g = t.source === "svg" ? (t.geometry as unknown as { dieline: ImportedDieline; roles: Record<string, Role>; options: { unit: "auto" | "mm" | "cm" | "in" | "pt" | "px"; scale: number; pxPerInch: number } } | null) : null;
+  const g = t.source === "svg" ? (t.geometry as unknown as { dieline: ImportedDieline; roles: Record<string, Role>; options: { unit: "auto" | "mm" | "cm" | "in" | "pt" | "px"; scale: number; pxPerInch: number }; fold?: FoldSetup | null } | null) : null;
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -43,6 +44,7 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
           dieline: g?.dieline ?? null,
           roles: g?.roles ?? {},
           options: g?.options ?? { unit: "auto", scale: 1, pxPerInch: 96 },
+          fold: g?.fold ?? null,
         }}
       />
     </div>

@@ -6,6 +6,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 import type { DielineGeometry } from "@packaging/dieline-engine";
 import { buildCartonModel, disposeCartonModel, type CartonModel, type TextureRect } from "@packaging/model3d";
+import { cameraToView, viewToCamera, type ViewSettings } from "@/lib/view-settings";
 
 export interface CartonViewProps {
   geo: DielineGeometry;
@@ -30,12 +31,20 @@ export interface CartonViewProps {
   shadows?: boolean;
   /** Size (mm) the camera is framed for, instead of the folded carton's size. Use it when the fold animation opens the sheet wide. */
   frameMm?: number;
+  /** Camera the view starts with (and "reset view" returns to), e.g. set by an admin per template. Null = standard framing. */
+  initialView?: ViewSettings | null;
+  /** Called (at most once per frame) while the camera moves, with the current view. */
+  onViewChange?: (v: ViewSettings) => void;
 }
 
 export interface CartonViewHandle {
   /** The carton object currently shown (for GLB export). */
   getModelObject(): THREE.Object3D | null;
   resetView(): void;
+  /** The camera as a template view (rotation, zoom, pan) plus the current fold amount; null before the model exists. */
+  getView(): ViewSettings | null;
+  /** Move the camera to a view. */
+  setView(v: ViewSettings): void;
   /** PNG snapshot of the current view. */
   snapshot(): string | null;
   /**
@@ -49,13 +58,21 @@ export interface CartonViewHandle {
 
 /** Interactive 3D carton built from the engine's fold tree (three.js, no React renderer). */
 export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function CartonView(
-  { geo, texture, textureRect, progress, outsideColor, insideColor, className, autoRotate = false, transparent = false, shadows = true, frameMm, rotateOnly = false },
+  { geo, texture, textureRect, progress, outsideColor, insideColor, className, autoRotate = false, transparent = false, shadows = true, frameMm, rotateOnly = false, initialView = null, onViewChange },
   ref,
 ) {
   const host = useRef<HTMLDivElement>(null);
   const transparentAtStart = useRef(transparent);
   const shadowsAtStart = useRef(shadows);
   const rotateOnlyAtStart = useRef(rotateOnly);
+  const initialViewRef = useRef(initialView);
+  const onViewChangeRef = useRef(onViewChange);
+  const progressRef = useRef(progress);
+  useEffect(() => {
+    initialViewRef.current = initialView;
+    onViewChangeRef.current = onViewChange;
+    progressRef.current = progress;
+  });
   const rebuild = useRef<(p: number, hingeProgress?: Readonly<Record<string, number>>) => void>(() => {});
   const three = useRef<{
     renderer: THREE.WebGLRenderer;
@@ -69,6 +86,33 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   } | null>(null);
   /** Geometry the camera was last framed for (reset when the renderer is recreated). */
   const lastGeo = useRef<DielineGeometry | null>(null);
+
+  /** Reference size and centre the views are measured against. */
+  const frameBase = () => {
+    const t = three.current;
+    if (!t?.model) return null;
+    const r = frameMm ?? Math.max(t.model.size.x, t.model.size.y, t.model.size.z);
+    return { r, base: [0, t.model.size.y / 2, 0] as [number, number, number] };
+  };
+
+  const applyView = (v: ViewSettings) => {
+    const t = three.current;
+    const fb = frameBase();
+    if (!t || !fb) return;
+    const { position, target } = viewToCamera(v, fb.base, fb.r);
+    t.camera.position.set(...position);
+    t.controls.target.set(...target);
+    t.controls.update();
+  };
+
+  const getView = (): ViewSettings | null => {
+    const t = three.current;
+    const fb = frameBase();
+    if (!t || !fb) return null;
+    const p = t.camera.position;
+    const c = t.controls.target;
+    return cameraToView([p.x, p.y, p.z], [c.x, c.y, c.z], fb.base, fb.r, progressRef.current);
+  };
 
   const frame = () => {
     const t = three.current;
@@ -86,12 +130,15 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     sc.far = r * 10;
     sc.updateProjectionMatrix();
     t.controls.update();
+    if (initialViewRef.current) applyView(initialViewRef.current);
   };
 
   useImperativeHandle(ref, () => ({
     setProgress: (p, hingeProgress) => rebuild.current(p, hingeProgress),
     getModelObject: () => three.current?.model?.object ?? null,
     resetView: frame,
+    getView,
+    setView: applyView,
     exportGlb: async () => {
       const model = three.current?.model;
       if (!model) throw new Error("No 3D model to export.");
@@ -160,6 +207,17 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
     };
+    let notifyQueued = false;
+    const onChange = () => {
+      if (!onViewChangeRef.current || notifyQueued) return;
+      notifyQueued = true;
+      requestAnimationFrame(() => {
+        notifyQueued = false;
+        const v = getView();
+        if (v) onViewChangeRef.current?.(v);
+      });
+    };
+    controls.addEventListener("change", onChange);
     const ro = new ResizeObserver(resize);
     ro.observe(el);
     resize();
@@ -169,6 +227,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     });
     return () => {
       ro.disconnect();
+      controls.removeEventListener("change", onChange);
       renderer.setAnimationLoop(null);
       const t = three.current;
       if (t?.model) disposeCartonModel(t.model);
@@ -181,6 +240,8 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       three.current = null;
       lastGeo.current = null;
     };
+    // getView only reads refs and three.current, so the first render's copy stays correct.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

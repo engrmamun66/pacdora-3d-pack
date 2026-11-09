@@ -122,6 +122,10 @@ model Template {
   /// Optional box background picture set by an admin (file in storage). Default for new projects; fills the dieline on SVG template pages.
   backgroundKey     String?
   backgroundMime    String?
+  /// Camera and fold amount the 3D preview starts with (set by an admin). Null = standard view.
+  viewSettings      Json?     @db.JsonB
+  /// Imported templates only: true when an admin has set up the 3D fold (stored in geometry.fold).
+  hasFold           Boolean   @default(false)
   sortOrder         Int       @default(0)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt

@@ -4,7 +4,8 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, FileUp, ImagePlus, RotateCcw, Trash2, Wand2 } from "lucide-react";
-import { SvgImportError, importSvg, suggestRoles, type ImportedDieline, type Role } from "@packaging/svg-import";
+import { validateFoldSetup, type FoldSetup } from "@packaging/dieline-engine";
+import { SvgImportError, importSvg, suggestRoles, toFlatDieline, type ImportedDieline, type Role } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { saveTemplate } from "@/app/doraadmin/template-actions";
 import { notify } from "@/lib/notify";
@@ -13,6 +14,9 @@ import { MAX_SVG_CHARS, ROLE_COLOR, ROLE_HINTS, ROLE_LABELS, ROLE_ORDER } from "
 import { ImportedPreview } from "./imported-preview";
 import { RoleSampleButton } from "./role-sample";
 import { SvgPreviewButton } from "./svg-preview";
+import { FoldSetupEditor } from "./fold-setup-editor";
+import { ViewSettingsInline } from "./view-settings-dialog";
+import { linesKey } from "@/lib/fold-edit";
 
 type Unit = "auto" | "mm" | "cm" | "in" | "pt" | "px";
 interface Options {
@@ -34,6 +38,8 @@ export interface WizardInitial {
   dieline: ImportedDieline | null;
   roles: Record<string, Role>;
   options: Options;
+  /** How the template folds in 3D (imported templates), or null for flat only. */
+  fold: FoldSetup | null;
 }
 
 export interface WizardCategory {
@@ -62,7 +68,7 @@ const mmToIn = (mm: number) => (mm / 25.4).toFixed(2);
 export function TemplateWizard({ mode, categories, initial }: { mode: "create" | "edit"; categories: WizardCategory[]; initial: WizardInitial }) {
   const router = useRouter();
   const builtin = initial.source === "builtin";
-  const steps = builtin ? ["Categories", "Details"] : ["Categories", "SVG file", "Customize", "Details & publish"];
+  const steps = builtin ? ["Categories", "Details"] : ["Categories", "SVG file", "Customize", "3D fold", "Details & publish"];
 
   const [step, setStep] = useState(0);
   const [categoryIds, setCategoryIds] = useState<string[]>(initial.categoryIds);
@@ -106,18 +112,27 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
     return r;
   }, [roles, dieline, showBleed, showGuides]);
 
+  // 3D fold: the lines it was set up for are remembered, so a change to them is noticed.
+  const flat = useMemo(() => (dieline ? toFlatDieline(dieline, roles) : null), [dieline, roles]);
+  const flatKey = flat ? linesKey(flat) : "";
+  const [fold, setFold] = useState<FoldSetup | null>(initial.fold);
+  const [foldKey, setFoldKey] = useState(() => (initial.dieline && initial.fold ? linesKey(toFlatDieline(initial.dieline, initial.roles)) : ""));
+  const foldStale = fold !== null && foldKey !== flatKey;
+  const foldProblems = fold && !foldStale ? validateFoldSetup(fold) : [];
+  const foldOk = !foldStale && foldProblems.length === 0;
+
   // Edit mode: has anything changed since the page loaded? (Compared as plain data.)
   const sortedRoles = (r: Record<string, Role>) => Object.fromEntries(Object.entries(r).sort(([a], [b]) => a.localeCompare(b)));
   const snapshot = JSON.stringify({
     name: name.trim(), slug, description: description.trim(), published, sortOrder,
     cats: [...categoryIds].sort(), roles: sortedRoles(roles), opts,
-    newSvg: text !== null, bg: bgFile ? "new" : bgRemoved ? "removed" : "same",
+    newSvg: text !== null, bg: bgFile ? "new" : bgRemoved ? "removed" : "same", fold,
   });
   const [baseline] = useState(() =>
     JSON.stringify({
       name: initial.name.trim(), slug: initial.slug, description: initial.description.trim(), published: initial.published, sortOrder: initial.sortOrder,
       cats: [...initial.categoryIds].sort(), roles: sortedRoles(initial.roles), opts: initial.options,
-      newSvg: false, bg: "same",
+      newSvg: false, bg: "same", fold: initial.fold,
     }),
   );
   const dirty = mode === "create" || snapshot !== baseline;
@@ -125,7 +140,7 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
   const [activeSection, setActiveSection] = useState("sec-details");
   useEffect(() => {
     if (mode !== "edit") return;
-    const ids = ["sec-details", "sec-categories", "sec-background", "sec-dieline", "sec-lines"];
+    const ids = ["sec-details", "sec-categories", "sec-background", "sec-dieline", "sec-lines", "sec-fold", "sec-view"];
     const els = ids.map((id) => document.getElementById(id)).filter((e): e is HTMLElement => e !== null);
     // The section crossing the upper third of the screen is the current one.
     const io = new IntersectionObserver(
@@ -150,12 +165,14 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
     stepName === "Categories" ? categoryIds.length > 0 :
     stepName === "SVG file" ? dieline !== null :
     stepName === "Customize" ? dieline !== null && hasCut && hasClosedCut :
+    stepName === "3D fold" ? foldOk :
     true;
   const blocker =
     stepName === "Categories" && categoryIds.length === 0 ? "Choose at least one category." :
     stepName === "SVG file" && dieline === null ? "Upload an SVG file to continue." :
     stepName === "Customize" && !hasCut ? "Mark at least one line style as Cut." :
-    stepName === "Customize" && !hasClosedCut ? "The Cut lines must include a closed outline." : null;
+    stepName === "Customize" && !hasClosedCut ? "The Cut lines must include a closed outline." :
+    stepName === "3D fold" && !foldOk ? (foldStale ? "Detect the panels again, or make the template flat only." : "Fix the problems in the 3D fold.") : null;
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -210,6 +227,7 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
         ...(text ? { svg: text } : {}),
         unit: opts.unit, scale: opts.scale, pxPerInch: opts.pxPerInch,
         roles,
+        fold: foldOk ? fold : null,
       });
       if (r.ok) {
         const finalSlug = r.slug ?? slug;
@@ -231,7 +249,7 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
   }
 
   const saveShortcut = useEffectEvent(() => {
-    if (!saving && dirty && nameOk && slugOk && categoryIds.length > 0 && (builtin || (hasCut && hasClosedCut))) void save();
+    if (!saving && dirty && nameOk && slugOk && categoryIds.length > 0 && (builtin || (hasCut && hasClosedCut && foldOk))) void save();
   });
   useEffect(() => {
     if (mode !== "edit") return;
@@ -406,10 +424,19 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
               <div className="rounded-xl border bg-white p-3">
                 <ImportedPreview dieline={dieline} roles={previewRoles} animate replayKey={replay} className="mx-auto max-h-[60vh] w-full" />
               </div>
-              <p className="text-xs text-muted-foreground">Customers can resize this sheet, add artwork, and export it. Folding it into a 3D box is not available for imported dielines yet.</p>
+              <p className="text-xs text-muted-foreground">Customers can resize this sheet, add artwork, and export it. The 3D fold is set up in its own step (create) or section (edit).</p>
             </div>
           </div>
         </section>
+  ) : null;
+  const foldSection = flat ? (
+    <section aria-labelledby="s-fold" className="flex flex-col gap-4">
+      <div>
+        <h2 id="s-fold" className="text-lg font-semibold">3D fold</h2>
+        <p className="text-sm text-muted-foreground">Tell us how the sheet folds into a box: which panel stays flat, which fold goes first, in which direction and by how many degrees. This is optional; without it the template is flat only.</p>
+      </div>
+      <FoldSetupEditor flat={flat} fold={fold} stale={foldStale} onChange={(f) => { setFold(f); setFoldKey(flatKey); }} />
+    </section>
   ) : null;
   const detailsFields = (
     <>
@@ -518,13 +545,16 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
       categoryIds.length === 0 ? "Choose at least one category." : null,
       !builtin && !hasCut ? "Mark at least one line style as Cut." : null,
       !builtin && hasCut && !hasClosedCut ? "The Cut lines must include a closed outline." : null,
+      !builtin && foldStale ? "The lines changed: detect the 3D fold again, or make the template flat only." : null,
+      !builtin && !foldStale && foldProblems.length ? "Fix the problems in the 3D fold." : null,
     ].filter((x): x is string => x !== null);
     const canSave = dirty && problems.length === 0 && !saving;
     const sections = [
       { id: "sec-details", label: "Details" },
       { id: "sec-categories", label: "Categories" },
       { id: "sec-background", label: "Background image" },
-      ...(builtin ? [] : [{ id: "sec-dieline", label: "Dieline file" }, ...(dieline ? [{ id: "sec-lines", label: "Line roles" }] : [])]),
+      ...(builtin ? [] : [{ id: "sec-dieline", label: "Dieline file" }, ...(dieline ? [{ id: "sec-lines", label: "Line roles" }, { id: "sec-fold", label: "3D fold" }] : [])]),
+      ...(builtin || initial.fold ? [{ id: "sec-view", label: "Starting 3D view" }] : []),
     ];
     const card = "scroll-mt-24 rounded-2xl border bg-card p-5";
     return (
@@ -562,6 +592,14 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
             <div id="sec-background" className={card}>{backgroundFieldset}</div>
             {!builtin ? <div id="sec-dieline" className={card}>{svgSection}</div> : null}
             {!builtin && customizeSection ? <div id="sec-lines" className={card}>{customizeSection}</div> : null}
+            {!builtin && foldSection ? <div id="sec-fold" className={card}>{foldSection}</div> : null}
+            {builtin || initial.fold ? (
+              <section id="sec-view" aria-labelledby="s-view" className={card}>
+                <h2 id="s-view" className="mb-1 text-lg font-semibold">Starting 3D view</h2>
+                <p className="mb-4 text-sm text-muted-foreground">Set how the 3D preview looks when a customer opens this template. It is saved on its own, not with the Save button below.{!builtin && !foldOk ? " Save the 3D fold first." : ""}</p>
+                <ViewSettingsInline slug={initial.slug} />
+              </section>
+            ) : null}
           </div>
         </div>
 
@@ -603,6 +641,7 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
       {stepName === "Categories" ? categoriesSection : null}
       {stepName === "SVG file" ? svgSection : null}
       {stepName === "Customize" ? customizeSection : null}
+      {stepName === "3D fold" ? foldSection : null}
       {stepName === "Details" || stepName === "Details & publish" ? (
         <section aria-labelledby="s-det" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="flex max-w-xl flex-col gap-4">

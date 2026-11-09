@@ -26,8 +26,9 @@ import {
   Undo2,
   Unlock,
 } from "lucide-react";
-import { createImportedGenerator, generateDieline, type FlatDieline } from "@packaging/dieline-engine";
+import { createImportedGenerator, generateDieline, type FlatDieline, type FoldSetup } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
+import type { ViewSettings } from "@/lib/view-settings";
 import type { Artwork, ArtworkObject, BoxBackground } from "@packaging/schema";
 import { saveArtwork, saveThreeD } from "@/app/editor/[id]/actions";
 import { Preview3D, type ThreeDSettings } from "@/components/viewer3d/preview-3d";
@@ -67,6 +68,7 @@ export function ArtworkEditor({
   name,
   generatorId,
   imported,
+  initialView = null,
   params,
   artwork: initialArtwork,
   assets: initialAssets,
@@ -76,7 +78,9 @@ export function ArtworkEditor({
   name: string;
   generatorId: string;
   /** Imported (SVG) template: its lines, to rebuild the dieline here. */
-  imported?: { templateId: string; flat: FlatDielineData };
+  imported?: { templateId: string; flat: FlatDielineData; fold?: FoldSetup | null };
+  /** Camera the 3D preview starts with (set per template by an admin). */
+  initialView?: ViewSettings | null;
   params: Record<string, unknown>;
   artwork: Artwork;
   assets: Asset[];
@@ -86,7 +90,7 @@ export function ArtworkEditor({
   const paramsKey = JSON.stringify(params);
   const geo = useMemo(() => {
     try {
-      return imported ? createImportedGenerator(imported.templateId, imported.flat as FlatDieline).generate(JSON.parse(paramsKey)) : generateDieline(generatorId, JSON.parse(paramsKey));
+      return imported ? createImportedGenerator(imported.templateId, imported.flat as FlatDieline, imported.fold ?? null).generate(JSON.parse(paramsKey)) : generateDieline(generatorId, JSON.parse(paramsKey));
     } catch {
       return null;
     }
@@ -402,7 +406,7 @@ export function ArtworkEditor({
 
         {show3d && foldable ? (
           <section className="min-h-0 min-w-0 border-l" aria-label="3D preview">
-            <Preview3D geo={geo} artwork={artworkForPreview} settings={threeD} onSettings={updateThreeD} viewRef={view3d} />
+            <Preview3D initialView={initialView} geo={geo} artwork={artworkForPreview} settings={threeD} onSettings={updateThreeD} viewRef={view3d} />
           </section>
         ) : null}
 

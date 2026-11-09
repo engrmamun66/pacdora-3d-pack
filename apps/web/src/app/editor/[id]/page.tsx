@@ -6,6 +6,7 @@ import { requireUser } from "@/server/session";
 import { EditorLoader } from "@/components/editor/editor-loader";
 import { IMPORTED_GENERATOR_ID } from "@packaging/dieline-engine";
 import { loadImportedSource } from "@/server/imported-templates";
+import { readViewSettings } from "@/lib/view-settings";
 
 async function EditorView({ params }: { params: PageProps<"/editor/[id]">["params"] }) {
   const { id } = await params;
@@ -28,7 +29,8 @@ async function EditorView({ params }: { params: PageProps<"/editor/[id]">["param
       projectId={project.id}
       name={project.name}
       generatorId={project.doc.template.generatorId}
-      {...(imported ? { imported: { templateId: imported.templateId, flat: imported.flat } } : {})}
+      {...(imported ? { imported: { templateId: imported.templateId, flat: imported.flat, fold: imported.fold } } : {})}
+      initialView={readViewSettings(project.template.viewSettings)}
       params={project.doc.template.params}
       artwork={project.doc.artwork}
       assets={assets}

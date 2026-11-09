@@ -5,6 +5,7 @@ import { Play, RotateCcw } from "lucide-react";
 import type { DielineGeometry } from "@packaging/dieline-engine";
 import type { Artwork, ProjectDoc } from "@packaging/schema";
 import { renderArtwork, type RasterRect } from "@/components/editor/artwork-raster";
+import type { ViewSettings } from "@/lib/view-settings";
 import { CartonView, type CartonViewHandle } from "./carton-view";
 
 export type ThreeDSettings = ProjectDoc["threeD"];
@@ -19,7 +20,9 @@ export function Preview3D({
   settings,
   onSettings,
   viewRef,
+  initialView = null,
 }: {
+  initialView?: ViewSettings | null;
   geo: DielineGeometry;
   artwork: Artwork;
   settings: ThreeDSettings;
@@ -65,6 +68,7 @@ export function Preview3D({
     <div className="flex h-full min-h-0 flex-col">
       <CartonView
         ref={inner}
+        initialView={initialView}
         className="min-h-0 flex-1"
         geo={geo}
         texture={raster?.canvas ?? null}

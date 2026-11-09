@@ -15,6 +15,7 @@ export * from "./templates/slotted-box";
 
 export * from "./templates/registry";
 export * from "./templates/imported";
+export * from "./templates/imported-fold";
 
 import { type DielineGeometry } from "./geometry-types";
 import { getGenerator } from "./templates/registry";

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { generateDieline } from "@packaging/dieline-engine";
+import { createImportedGenerator, detectFoldSetup, generateDieline, type FlatDieline } from "@packaging/dieline-engine";
 import { buildCartonModel } from "../src";
 
 const geo = generateDieline("tuck-end-carton", { width: 100, depth: 50, height: 150 });
@@ -72,5 +72,38 @@ describe("buildCartonModel", () => {
     expect(s.x).toBeCloseTo(315, 4);
     expect(s.y).toBeCloseTo(300, 4);
     expect(s.z).toBeCloseTo(0, 4);
+  });
+});
+
+describe("buildCartonModel with an imported dieline folded in stages", () => {
+  const closed = (...xy: number[]) => ({ pts: xy, closed: true });
+  const line = (...xy: number[]) => ({ pts: xy, closed: false });
+  // Cube net of six 50 mm squares.
+  const flat: FlatDieline = {
+    cut: [closed(50, 0, 100, 0, 100, 50, 150, 50, 150, 100, 100, 100, 100, 200, 50, 200, 50, 100, 0, 100, 0, 50, 50, 50)],
+    crease: [line(50, 50, 100, 50), line(50, 100, 100, 100), line(50, 150, 100, 150), line(50, 50, 50, 100), line(100, 50, 100, 100)],
+    bleed: [],
+    guide: [],
+  };
+  const detected = detectFoldSetup(flat).setup;
+  const setup = { ...detected, hinges: detected.hinges.map((h) => ({ ...h, order: h.parentId === detected.rootId ? 1 : 2 })) };
+  const cube = createImportedGenerator("cube", flat, setup).generate({});
+
+  it("closes to a 50 mm cube", () => {
+    const { size } = buildCartonModel(cube, { progress: 1, layerGap: 0 });
+    for (const d of [size.x, size.y, size.z]) expect(d).toBeCloseTo(50, 6);
+  });
+
+  it("animates the second step only after the first is done", () => {
+    const mid = buildCartonModel(cube, { progress: 0.5, layerGap: 0 });
+    const matrixOf = (id: string) => mid.object.getObjectByName(id)!.matrix.elements;
+    for (const h of cube.foldTree.hinges.filter((x) => x.foldOrder === 2)) {
+      const parent = matrixOf(h.parentId);
+      matrixOf(h.childId).forEach((v, i) => expect(v).toBeCloseTo(parent[i]!, 6));
+    }
+    const done = buildCartonModel(cube, { progress: 0.5, layerGap: 0, hingeProgress: Object.fromEntries(cube.foldTree.hinges.map((h) => [h.id, 0.5])) });
+    expect(done.object.getObjectByName(cube.foldTree.hinges[0]!.childId)!.matrix.elements).not.toEqual(
+      mid.object.getObjectByName(cube.foldTree.hinges[0]!.childId)!.matrix.elements,
+    );
   });
 });

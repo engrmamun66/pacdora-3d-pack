@@ -17,7 +17,7 @@ export default async function NewTemplatePage() {
       <TemplateWizard
         mode="create"
         categories={categories.map((c) => ({ id: c.id, kind: c.kind as "use" | "model", name: c.name }))}
-        initial={{ slug: "", name: "", description: "", published: true, sortOrder: 0, backgroundUrl: null, categoryIds: [], source: null, dieline: null, roles: {}, options: { unit: "auto", scale: 1, pxPerInch: 96 } }}
+        initial={{ slug: "", name: "", description: "", published: true, sortOrder: 0, backgroundUrl: null, categoryIds: [], source: null, dieline: null, roles: {}, options: { unit: "auto", scale: 1, pxPerInch: 96 }, fold: null }}
       />
     </div>
   );

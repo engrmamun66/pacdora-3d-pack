@@ -37,6 +37,11 @@ export interface Hinge {
   readonly b: Vec2;
   /** Target fold angle when closed, in degrees (90 = right angle). */
   readonly foldAngleDeg: number;
+  /**
+   * Optional 1-based fold step for staged animation. Hinges with the same
+   * number fold together; lower numbers fold first. See stagedHingeProgress().
+   */
+  readonly foldOrder?: number;
 }
 
 /** Panels joined by hinges. Single source for flat layout (2D) and folding (3D). */

@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "dev": "npm run dev -w web",
+    "kill": "lsof -ti :3100 | xargs kill",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p scripts/viewer/tsconfig.json",
     "demo": "tsx scripts/demo.ts",

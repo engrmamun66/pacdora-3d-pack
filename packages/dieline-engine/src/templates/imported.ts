@@ -1,17 +1,19 @@
 import type { CreaseLine, CutSegment } from "../fold-tree/extract";
-import type { LinearAnnotation, Panel } from "../fold-tree/types";
+import type { Hinge, LinearAnnotation, Panel } from "../fold-tree/types";
 import type { CheckResult, DielineGeometry, SafeArea } from "../geometry-types";
 import type { Outline } from "../primitives/arc";
 import { area, bounds, offsetPolygon } from "../primitives/polygon";
 import { type Vec2, vec } from "../primitives/vec2";
 import { ENGINE_VERSION, ParamValidationError } from "./carton-common";
+import { type FoldSetup, validateFoldSetup } from "./imported-fold";
 import type { GeneratorDefinition } from "./registry";
 
 /**
  * Dielines that were drawn elsewhere (imported from an SVG) as a generator.
  *
- * The shape is fixed: there are no panels or fold hinges to rebuild, so these
- * dielines have a flat sheet only (artwork, exports) and no 3D fold. The only
+ * The shape is fixed. Without a fold setup these dielines have one flat sheet
+ * panel (artwork, exports) and no 3D fold. With a FoldSetup (see imported-fold.ts)
+ * the panels and hinges come from it and the dieline folds in 3D. The only
  * dimension is the overall width; the whole sheet is scaled uniformly.
  */
 
@@ -70,6 +72,17 @@ export function assertImportable(flat: FlatDieline): void {
   }
 }
 
+/** Ray-cast containment test (points exactly on the edge may go either way). */
+function pointInPolygon(p: Vec2, poly: readonly Vec2[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i]!;
+    const b = poly[j]!;
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
 const round1 = (v: number) => Math.round(v * 10) / 10;
 
 /** Width (mm) of the outer cut outline, as imported. */
@@ -99,8 +112,12 @@ export function importedDefaults(flat: FlatDieline): { width: number; bleed: num
 const MAX_SEGMENTS = 60_000;
 
 /** Generator for one imported dieline. `id` is only used as the geometry's template id. */
-export function createImportedGenerator(templateId: string, flat: FlatDieline): GeneratorDefinition {
+export function createImportedGenerator(templateId: string, flat: FlatDieline, fold?: FoldSetup | null): GeneratorDefinition {
   assertImportable(flat);
+  if (fold) {
+    const problems = validateFoldSetup(fold);
+    if (problems.length > 0) throw new ImportedDielineError(problems[0]!);
+  }
   const { width: baseW } = importedCutSize(flat);
   const defaults = importedDefaults(flat);
   const minW = Math.max(10, round1(baseW * 0.05));
@@ -161,13 +178,43 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline): 
       if (largest) bleedLoop = largest;
     }
 
-    const safeAreas: SafeArea[] = flat.guide
+    const guides = flat.guide
       .filter((p) => p.closed)
       .map((p) => mapAll(toPoints(p)))
-      .filter((pts) => pts.length >= 3)
-      .map((polygon) => ({ panelId: "sheet", polygon }));
+      .filter((pts) => pts.length >= 3);
 
-    const sheet: Panel = { id: "sheet", role: "body", label: "Sheet", polygon: outer, printable: true };
+    let panels: Panel[];
+    let hinges: Hinge[];
+    let rootId: string;
+    let safeAreas: SafeArea[];
+    if (fold) {
+      panels = fold.panels.map((p) => {
+        const polygon: Vec2[] = [];
+        for (let i = 0; i + 1 < p.polygon.length; i += 2) polygon.push(map(vec(p.polygon[i]!, p.polygon[i + 1]!)));
+        return { id: p.id, role: p.role, label: p.label, polygon, printable: p.printable };
+      });
+      hinges = fold.hinges.map((h) => ({
+        id: h.id,
+        parentId: h.parentId,
+        childId: h.childId,
+        a: map(vec(h.line[0], h.line[1])),
+        b: map(vec(h.line[2], h.line[3])),
+        foldAngleDeg: h.angleDeg,
+        foldOrder: h.order,
+      }));
+      rootId = fold.rootId;
+      // A guide belongs to the panel that contains its first point (else its centre, else the root panel).
+      safeAreas = guides.map((polygon) => {
+        const centre = vec(polygon.reduce((a, v) => a + v.x, 0) / polygon.length, polygon.reduce((a, v) => a + v.y, 0) / polygon.length);
+        const host = panels.find((p) => pointInPolygon(polygon[0]!, p.polygon)) ?? panels.find((p) => pointInPolygon(centre, p.polygon));
+        return { panelId: host?.id ?? rootId, polygon };
+      });
+    } else {
+      panels = [{ id: "sheet", role: "body", label: "Sheet", polygon: outer, printable: true }];
+      hinges = [];
+      rootId = "sheet";
+      safeAreas = guides.map((polygon) => ({ panelId: "sheet", polygon }));
+    }
     const cutBounds = bounds(outer);
     const bleedBounds = bounds(bleedLoop);
     const w = cutBounds.max.x - cutBounds.min.x;
@@ -179,8 +226,11 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline): 
     const checks: CheckResult[] = [
       { name: "Closed cut outline", pass: true, detail: `${cutLoops.length} closed ${cutLoops.length === 1 ? "shape" : "shapes"}, ${slitLines.length} open cut ${slitLines.length === 1 ? "segment" : "segments"}` },
       { name: "Fold lines", pass: true, detail: `${creaseLines.length} ${creaseLines.length === 1 ? "segment" : "segments"}` },
-      { name: "Imported shape", pass: true, detail: "Fixed shape from an SVG file: only the overall size can change. No 3D fold." },
+      fold
+        ? { name: "Imported shape", pass: true, detail: "Fixed shape from an SVG file: only the overall size can change." }
+        : { name: "Imported shape", pass: true, detail: "Fixed shape from an SVG file: only the overall size can change. No 3D fold." },
     ];
+    if (fold) checks.push({ name: "Folds into 3D", pass: true, detail: `${panels.length} ${panels.length === 1 ? "panel" : "panels"}, ${hinges.length} ${hinges.length === 1 ? "hinge" : "hinges"}` });
 
     return {
       unit: "mm",
@@ -188,7 +238,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline): 
       engineVersion: ENGINE_VERSION,
       params: { width, bleed },
       unverifiedDefaultsUsed: [],
-      foldTree: { rootId: "sheet", panels: [sheet], hinges: [] },
+      foldTree: { rootId, panels, hinges },
       cutLoops,
       slitLines,
       creaseLines,

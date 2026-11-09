@@ -34,7 +34,7 @@ export default async function AdminTemplates({ searchParams }: PageProps<"/doraa
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       select: {
-        id: true, name: true, source: true, published: true, updatedAt: true, generatorId: true, defaultParameters: true, thumbnail: true, widthMm: true, heightMm: true,
+        id: true, name: true, source: true, published: true, updatedAt: true, generatorId: true, hasFold: true, defaultParameters: true, thumbnail: true, widthMm: true, heightMm: true,
         categories: { select: { id: true, name: true, kind: true }, orderBy: [{ kind: "asc" }, { sortOrder: "asc" }] },
         _count: { select: { projects: true } },
       },
@@ -126,7 +126,7 @@ export default async function AdminTemplates({ searchParams }: PageProps<"/doraa
                   <td className="px-3 py-2 text-xs">{t.source === "svg" ? "Imported SVG" : "Built-in"}</td>
                   <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs ${t.published ? "bg-green-100 text-green-800" : "bg-muted text-muted-foreground"}`}>{t.published ? "Published" : "Hidden"}</span></td>
                   <td className="px-3 py-2 whitespace-nowrap text-xs">{date(t.updatedAt)}</td>
-                  <td className="px-3 py-2"><TemplateRowActions slug={t.id} name={t.name} source={t.source} published={t.published} /></td>
+                  <td className="px-3 py-2"><TemplateRowActions slug={t.id} name={t.name} source={t.source} published={t.published} has3d={t.source === "builtin" || t.hasFold} /></td>
                 </tr>
               );
             })}

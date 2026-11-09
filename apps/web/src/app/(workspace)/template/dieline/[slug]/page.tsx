@@ -5,6 +5,7 @@ import { IMPORTED_GENERATOR_ID, getGenerator, getPreset } from "@packaging/dieli
 import { DielineWorkspace } from "@/components/dielines/workspace";
 import { db } from "@/server/db";
 import { importedStartParams, loadImportedSource } from "@/server/imported-templates";
+import { readViewSettings } from "@/lib/view-settings";
 
 const prefillSchema = z.record(z.string().max(60), z.union([z.number().finite(), z.string().max(100), z.boolean()]));
 
@@ -24,7 +25,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
   if (slug.length > 80) notFound();
   const row = await db.template.findUnique({
     where: { id: slug },
-    select: { id: true, name: true, description: true, source: true, published: true, categories: { where: { active: true }, select: { name: true } } },
+    select: { id: true, name: true, description: true, source: true, published: true, viewSettings: true, categories: { where: { active: true }, select: { name: true } } },
   });
   if (!row || !row.published) notFound();
 
@@ -36,7 +37,8 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
       <DielineWorkspace
         mode={{ kind: "create", presetId: row.id }}
         generatorId={IMPORTED_GENERATOR_ID}
-        imported={{ templateId: imported.templateId, flat: imported.flat }}
+        imported={{ templateId: imported.templateId, flat: imported.flat, fold: imported.fold }}
+        initialView={readViewSettings(row.viewSettings)}
         title={row.name}
         description={row.description}
         initialName={row.name}
@@ -55,6 +57,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
     <DielineWorkspace
       mode={{ kind: "create", presetId: preset.id }}
       generatorId={preset.generatorId}
+      initialView={readViewSettings(row.viewSettings)}
       title={row.name}
       description={row.description}
       initialName={row.name}

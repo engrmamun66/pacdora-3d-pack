@@ -4,11 +4,12 @@ import { useActionState, useDeferredValue, useEffect, useMemo, useRef, useState 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, Info, Layers, Printer, Ruler, SlidersHorizontal, type LucideIcon } from "lucide-react";
-import { ParamValidationError, createImportedGenerator, getGenerator, type DielineGeometry, type FlatDieline, type ParamDescriptor, type ParamGroup } from "@packaging/dieline-engine";
+import { ParamValidationError, createImportedGenerator, getGenerator, type DielineGeometry, type FlatDieline, type FoldSetup, type ParamDescriptor, type ParamGroup } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { STYLE, dielineViewBox, renderDielineSvg } from "@packaging/render-svg";
 import { DeleteProjectButton } from "@/components/projects/delete-project-button";
 import { notify } from "@/lib/notify";
+import type { ViewSettings } from "@/lib/view-settings";
 import { svgDataUrl } from "@/lib/dieline-preview";
 import { createProject, createProjectDraft, updateProject, type DesignState } from "@/app/(app)/projects/actions";
 import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
@@ -25,7 +26,9 @@ interface Props {
   mode: Mode;
   generatorId: string;
   /** For an imported (SVG) template: its lines, so the generator can be rebuilt here. */
-  imported?: { templateId: string; flat: FlatDielineData };
+  imported?: { templateId: string; flat: FlatDielineData; fold?: FoldSetup | null };
+  /** Camera and fold amount the 3D preview starts with (set per template by an admin). */
+  initialView?: ViewSettings | null;
   title: string;
   description: string;
   initialName: string;
@@ -72,9 +75,9 @@ function saveBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-export function DielineWorkspace({ mode, generatorId, imported, title, description, initialName, initialParams, backHref, backLabel }: Props) {
+export function DielineWorkspace({ mode, generatorId, imported, initialView = null, title, description, initialName, initialParams, backHref, backLabel }: Props) {
   const router = useRouter();
-  const gen = useMemo(() => (imported ? createImportedGenerator(imported.templateId, imported.flat as FlatDieline) : getGenerator(generatorId)), [generatorId, imported]);
+  const gen = useMemo(() => (imported ? createImportedGenerator(imported.templateId, imported.flat as FlatDieline, imported.fold ?? null) : getGenerator(generatorId)), [generatorId, imported]);
   const [values, setValues] = useState<Values>(() =>
     Object.fromEntries(gen.params.map((p) => [p.key, initialParams[p.key] === undefined ? "" : String(initialParams[p.key])])),
   );
@@ -82,7 +85,7 @@ export function DielineWorkspace({ mode, generatorId, imported, title, descripti
   const [unit, setUnit] = useState<Unit>("mm");
   const [tab, setTab] = useState<TabId>("Dimensions");
   const [toggles, setToggles] = useState<ViewToggles>({ bleed: true, safe: false, glue: true, dimensions: true, labels: false });
-  const [progress, setProgress] = useState(1);
+  const [progress, setProgress] = useState(initialView?.progress ?? 1);
   const [material, setMaterial] = useState(() => {
     const t = Number(initialParams.thickness);
     return materialFor(Number.isFinite(t) && t > 0 ? t : 0.5);
@@ -401,7 +404,7 @@ export function DielineWorkspace({ mode, generatorId, imported, title, descripti
 
         {/* Right: 3D + download */}
         <aside className="flex min-h-0 flex-col gap-4 overflow-y-auto border-t p-4 lg:border-t-0 lg:border-l">
-          {shown && foldable ? <FoldPreview geo={shown} progress={progress} onProgress={setProgress} color={materialType.color} viewRef={viewRef} /> : null}
+          {shown && foldable ? <FoldPreview initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={materialType.color} viewRef={viewRef} /> : null}
           {shown && !foldable ? (
             <section aria-label="Imported dieline" className="rounded-2xl border p-4 text-sm">
               <h2 className="font-semibold">Imported dieline</h2>

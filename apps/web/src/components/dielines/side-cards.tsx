@@ -5,6 +5,7 @@ import { Play, RotateCcw } from "lucide-react";
 import type { DielineGeometry } from "@packaging/dieline-engine";
 import { ILLUSTRATOR_PROFILES } from "@packaging/render-print/profiles";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
+import type { ViewSettings } from "@/lib/view-settings";
 
 export type DownloadFormat = "ai" | "pdf" | "dxf" | "svg" | "glb";
 
@@ -23,7 +24,9 @@ export function FoldPreview({
   onProgress,
   color,
   viewRef,
+  initialView = null,
 }: {
+  initialView?: ViewSettings | null;
   geo: DielineGeometry;
   progress: number;
   onProgress: (p: number) => void;
@@ -45,7 +48,7 @@ export function FoldPreview({
   };
   return (
     <section aria-label="3D preview" className="overflow-hidden rounded-2xl border bg-muted/40">
-      <CartonView ref={viewRef} className="h-56 w-full" geo={geo} texture={null} textureRect={null} progress={progress} outsideColor={color} insideColor="#c8a97e" />
+      <CartonView ref={viewRef} className="h-56 w-full" geo={geo} texture={null} textureRect={null} progress={progress} outsideColor={color} insideColor="#c8a97e" initialView={initialView} />
       <div className="flex items-center gap-2 border-t bg-background px-3 py-2 text-xs">
         <label className="flex flex-1 items-center gap-2">
           Open

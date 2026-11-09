@@ -15,7 +15,7 @@ export async function listProjects(userId: string) {
 
 /** One project if it belongs to the user, otherwise null (never leaks other users' data). */
 export async function getProject(userId: string, id: string) {
-  const row = await db.project.findFirst({ where: { id, userId } });
+  const row = await db.project.findFirst({ where: { id, userId }, include: { template: { select: { viewSettings: true } } } });
   if (!row) return null;
   return { ...row, doc: safeDoc(row.projectData) };
 }
