@@ -25,7 +25,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
   if (slug.length > 80) notFound();
   const row = await db.template.findUnique({
     where: { id: slug },
-    select: { id: true, name: true, description: true, source: true, published: true, geometry: true, categories: { where: { active: true }, select: { name: true } } },
+    select: { id: true, name: true, description: true, source: true, published: true, geometry: true, backgroundKey: true, categories: { where: { active: true }, select: { name: true } } },
   });
   if (!row || !row.published) notFound();
 
@@ -33,7 +33,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
   if (row.source === "svg") {
     const g = row.geometry as unknown as { dieline?: ImportedDieline; roles?: Record<string, Role> } | null;
     if (!g?.dieline || !g.roles) notFound();
-    return <SvgTemplateViewer slug={row.id} title={row.name} description={row.description} dieline={g.dieline} roles={g.roles} categories={row.categories.map((c) => c.name)} />;
+    return <SvgTemplateViewer slug={row.id} title={row.name} description={row.description} dieline={g.dieline} roles={g.roles} categories={row.categories.map((c) => c.name)} backgroundUrl={row.backgroundKey ? `/api/templates/${encodeURIComponent(row.id)}/background?v=${encodeURIComponent(row.backgroundKey.slice("templates/".length, -4))}` : null} />;
   }
 
   // Built-in (parametric) template: the generator lives in code, name and description come from the database.

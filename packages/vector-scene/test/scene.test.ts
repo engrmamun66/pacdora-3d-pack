@@ -141,3 +141,33 @@ describe("DXF export", () => {
     expect(Math.max(...ys)).toBeCloseTo(geo.cutBounds.max.y - geo.cutBounds.min.y, 6);
   });
 });
+
+describe("box background", () => {
+  const bg = { assetId: "img1", fit: "cover", scale: 1, dx: 0, dy: 0, opacity: 0.8 } as const;
+
+  it("is the first artwork item, clipped to the print area, and appears in the SVG", async () => {
+    const s = await buildScene(geo, { objects: [text()], background: bg }, src);
+    const items = s.layers[0]!.items;
+    expect(items).toHaveLength(2);
+    const first = items[0]!;
+    expect(first.kind).toBe("image");
+    if (first.kind === "image") {
+      expect(first.opacity).toBe(0.8);
+      expect(first.clip).toEqual({ minX: s.bleedBox.minX, minY: s.bleedBox.minY, width: s.bleedBox.width, height: s.bleedBox.height });
+      // cover: at least as large as the print area on both axes
+      expect(first.matrix[0]).toBeGreaterThanOrEqual(s.bleedBox.width - 1e-6);
+      expect(Math.abs(first.matrix[3])).toBeGreaterThanOrEqual(s.bleedBox.height - 1e-6);
+    }
+    const svg = sceneToSvg(s);
+    expect(svg).toContain('<clipPath id="clip-image">');
+    expect(svg.indexOf("<image")).toBeLessThan(svg.indexOf("<path"));
+  });
+
+  it("is skipped with a note when the file is missing, and with artwork off", async () => {
+    const miss = await buildScene(geo, { objects: [], background: { ...bg, assetId: "gone" } }, src);
+    expect(miss.layers[0]!.items).toHaveLength(0);
+    expect(miss.losses.join(" ")).toMatch(/box background/i);
+    const off = await buildScene(geo, { objects: [], background: bg }, src, { artwork: false });
+    expect(off.layers.find((l) => l.id === "artwork")).toBeUndefined();
+  });
+});

@@ -3,6 +3,7 @@ import { STYLE, outlinePathD } from "@packaging/render-svg";
 import { anchorIndex } from "@packaging/artwork";
 import type { DielineGeometry } from "@packaging/dieline-engine";
 import type { Artwork } from "@packaging/schema";
+import { loadBackgroundImage, paintBackground } from "./background";
 import { ensureFont } from "./editor-controller";
 import { toFabric } from "./fabric-map";
 
@@ -42,8 +43,9 @@ export async function renderArtwork(
   await Promise.all(visible.map((o) => (o.type === "text" ? ensureFont(o.fontFamily, o.fontWeight, o.fontStyle) : null)));
   const objects = (await Promise.allSettled(visible.map((o) => toFabric(o, idx)))).flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
 
+  // Objects render on a transparent canvas, so the board colour and the box background can sit under them.
   const el = document.createElement("canvas");
-  const sc = new StaticCanvas(el, { width: w, height: h, enableRetinaScaling: false, renderOnAddRemove: false, backgroundColor: opts.background });
+  const sc = new StaticCanvas(el, { width: w, height: h, enableRetinaScaling: false, renderOnAddRemove: false });
   sc.setViewportTransform([s, 0, 0, s, -rect.minX * s, -rect.minY * s]);
   if (objects.length) sc.add(...objects);
   sc.renderAll();
@@ -51,7 +53,20 @@ export async function renderArtwork(
   const out = document.createElement("canvas");
   out.width = w;
   out.height = h;
-  out.getContext("2d")!.drawImage(sc.lowerCanvasEl, 0, 0);
+  const octx = out.getContext("2d")!;
+  octx.fillStyle = opts.background;
+  octx.fillRect(0, 0, w, h);
+  if (artwork.background) {
+    // A background that cannot be loaded is left out, like an image object that fails.
+    const img = await loadBackgroundImage(artwork.background.assetId).catch(() => null);
+    if (img) {
+      octx.save();
+      octx.setTransform(s, 0, 0, s, -rect.minX * s, -rect.minY * s);
+      paintBackground(octx, geo, artwork.background, img);
+      octx.restore();
+    }
+  }
+  octx.drawImage(sc.lowerCanvasEl, 0, 0);
   await sc.dispose();
   return { canvas: out, rect, pxPerMm: s };
 }

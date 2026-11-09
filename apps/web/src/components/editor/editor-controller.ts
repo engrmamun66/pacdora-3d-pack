@@ -2,7 +2,8 @@ import { ActiveSelection, Canvas, Ellipse, type FabricObject, FabricImage, Line,
 import { type AnchorIndex, anchorIndex } from "@packaging/artwork";
 import { type DielineGeometry, flattenOutline, panelOutline } from "@packaging/dieline-engine";
 import { STYLE, outlinePathD } from "@packaging/render-svg";
-import { type Artwork, type ArtworkObject, artworkObject, MM_PER_PT } from "@packaging/schema";
+import { type Artwork, type ArtworkObject, type BoxBackground, artworkObject, boxBackground, MM_PER_PT } from "@packaging/schema";
+import { loadBackgroundImage, paintBackground } from "./background";
 import { applyLock, assetUrl, fromFabric, metaOf, retag, toFabric } from "./fabric-map";
 
 export interface Viewport {
@@ -64,6 +65,8 @@ export class EditorController {
   private history: string[] = [];
   private hpos = -1;
   private busy = false;
+  private bg: BoxBackground | null = null;
+  private bgImg: HTMLImageElement | null = null;
   private textTimer: ReturnType<typeof setTimeout> | null = null;
   private panning: { x: number; y: number } | null = null;
   spaceDown = false;
@@ -169,6 +172,7 @@ export class EditorController {
     ctx.fillStyle = "#ffffff";
     ctx.fill(this.paths.sheet, "nonzero");
     ctx.shadowBlur = 0;
+    if (this.bg && this.bgImg) paintBackground(ctx, this.geo, this.bg, this.bgImg);
     ctx.fillStyle = "rgba(245,185,66,0.25)";
     ctx.fill(this.paths.glue);
     if (this.overlay.showGrid) this.drawGrid(ctx, z);
@@ -289,6 +293,7 @@ export class EditorController {
         artwork.objects.filter((o) => o.type === "text").map((o) => o.type === "text" && ensureFont(o.fontFamily, o.fontWeight, o.fontStyle)),
       );
       const objs = await Promise.all(artwork.objects.map((o) => this.create(o)));
+      await this.applyBackground(artwork.background ?? null);
       this.canvas.discardActiveObject();
       this.canvas.remove(...this.canvas.getObjects());
       if (objs.length) this.canvas.add(...objs);
@@ -296,6 +301,39 @@ export class EditorController {
     } finally {
       this.busy = false;
     }
+  }
+
+  /** Use `bg` as the box background; a failed image load keeps the data (so saving does not lose it). */
+  private async applyBackground(bg: BoxBackground | null) {
+    this.bg = bg;
+    this.bgImg = null;
+    if (!bg) return;
+    try {
+      this.bgImg = await loadBackgroundImage(bg.assetId);
+    } catch {
+      this.cb.onError("The box background image could not be loaded.");
+    }
+  }
+
+  getBackground(): BoxBackground | null {
+    return this.bg;
+  }
+
+  /** Set, change (partial patch) or clear (null) the box background. One undo step. */
+  async setBackground(patch: BoxBackground | Partial<BoxBackground> | null) {
+    if (patch === null) {
+      await this.applyBackground(null);
+    } else {
+      const parsed = boxBackground.safeParse({ ...this.bg, ...patch });
+      if (!parsed.success) {
+        this.cb.onError(parsed.error.issues[0]?.message ?? "Invalid value.");
+        return;
+      }
+      if (parsed.data.assetId !== this.bg?.assetId || !this.bgImg) await this.applyBackground(parsed.data);
+      else this.bg = parsed.data;
+    }
+    this.canvas.requestRenderAll();
+    this.commit();
   }
 
   /** Fabric object for data; a missing image becomes a grey placeholder that keeps its data. */
@@ -326,7 +364,7 @@ export class EditorController {
       const a = fromFabric(o, this.idx);
       if (a) objects.push(a);
     }
-    return { objects };
+    return this.bg ? { objects, background: this.bg } : { objects };
   }
 
   /** Record the current state as one undo step and notify. */

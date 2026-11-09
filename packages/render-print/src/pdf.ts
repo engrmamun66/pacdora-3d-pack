@@ -125,7 +125,8 @@ export async function sceneToPdf(scene: Scene, opts: PdfOptions): Promise<PdfRes
       }
       // PDF images fill the unit square with their top row at v = 1; ours has v down.
       const m: Matrix = mul(it.matrix, [1, 0, 0, -1, 0, 1]);
-      return `q\n${opacityOp(it.opacity)}${m.map(num).join(" ")} cm\n/${name} Do\nQ`;
+      const clip = it.clip ? `${num(it.clip.minX)} ${num(it.clip.minY)} ${num(it.clip.width)} ${num(it.clip.height)} re W n\n` : "";
+      return `q\n${clip}${opacityOp(it.opacity)}${m.map(num).join(" ")} cm\n/${name} Do\nQ`;
     }
     const parts = ["q", opacityOp(it.opacity)];
     if (it.stroke?.kind === "spot") parts.push(`/${gs("overprint", { OP: true, op: true, OPM: 1 })} gs`);

@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, FileUp, RotateCcw, Wand2 } from "lucide-react";
+import { Check, FileUp, ImagePlus, RotateCcw, Trash2, Wand2 } from "lucide-react";
 import { SvgImportError, importSvg, suggestRoles, type ImportedDieline, type Role } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { saveTemplate } from "@/app/doraadmin/template-actions";
@@ -24,6 +24,9 @@ export interface WizardInitial {
   name: string;
   description: string;
   published: boolean;
+  sortOrder: number;
+  /** URL of the current box background picture, or null. */
+  backgroundUrl: string | null;
   categoryIds: string[];
   source: "builtin" | "svg" | null;
   dieline: ImportedDieline | null;
@@ -73,8 +76,16 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
   const [slugTouched, setSlugTouched] = useState(mode === "edit");
   const [description, setDescription] = useState(initial.description);
   const [published, setPublished] = useState(initial.published);
+  const [sortOrder, setSortOrder] = useState(initial.sortOrder);
+  const [bgFile, setBgFile] = useState<File | null>(null);
+  const [bgRemoved, setBgRemoved] = useState(false);
   const [saving, setSaving] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const bgInput = useRef<HTMLInputElement>(null);
+  // Preview of a newly chosen picture; revoked when replaced or on unmount.
+  const bgPreview = useMemo(() => (bgFile ? URL.createObjectURL(bgFile) : null), [bgFile]);
+  useEffect(() => () => { if (bgPreview) URL.revokeObjectURL(bgPreview); }, [bgPreview]);
+  const bgShown = bgPreview ?? (bgRemoved ? null : initial.backgroundUrl);
 
   const parsed = useMemo<Parsed | null>(() => (text ? tryImport(text, opts) : null), [text, opts]);
   const dieline: ImportedDieline | null = parsed?.ok ? parsed.dieline : parsed ? null : initial.dieline;
@@ -123,19 +134,51 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
     }
   }
 
+  function onBgFile(file: File | undefined) {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) return notify.error("That image is too large", { description: "Images up to 10 MB are accepted." });
+    if (file.type !== "image/png" && file.type !== "image/jpeg") return notify.error("Please choose a PNG or JPEG image");
+    setBgFile(file);
+    setBgRemoved(false);
+  }
+
+  /** The picture goes up after the template is saved (it needs the final address). Returns false if it failed. */
+  async function syncBackground(finalSlug: string): Promise<boolean> {
+    try {
+      if (bgFile) {
+        const body = new FormData();
+        body.set("slug", finalSlug);
+        body.set("file", bgFile);
+        const res = await fetch("/api/doraadmin/template-background", { method: "POST", body });
+        if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `Upload failed (${res.status}).`);
+      } else if (bgRemoved && initial.backgroundUrl) {
+        const res = await fetch(`/api/doraadmin/template-background?slug=${encodeURIComponent(finalSlug)}`, { method: "DELETE" });
+        if (!res.ok) throw new Error("Could not remove the background image.");
+      }
+      return true;
+    } catch (e) {
+      notify.error((e as Error).message, { description: "The template was saved. Edit it to try the background image again." });
+      return false;
+    }
+  }
+
   async function save() {
     if (!nameOk || !slugOk) return;
     setSaving(true);
     try {
       const r = await saveTemplate({
-        mode, slug, name, description, published, categoryIds,
+        mode, slug, name, description, published, categoryIds, sortOrder,
+        ...(mode === "edit" ? { originalSlug: initial.slug } : {}),
         ...(text ? { svg: text } : {}),
         unit: opts.unit, scale: opts.scale, pxPerInch: opts.pxPerInch,
         roles,
       });
       if (r.ok) {
-        notify.success(r.message);
-        router.push("/doraadmin/templates");
+        const bgOk = await syncBackground(r.slug ?? slug);
+        if (bgOk) notify.success(r.message);
+        // On a failed picture upload stay on the edit page of the saved template so it can be retried.
+        if (!bgOk && mode === "create") router.push(`/doraadmin/templates/${r.slug ?? slug}/edit`);
+        else if (bgOk) router.push("/doraadmin/templates");
         router.refresh();
       } else notify.error(r.message);
     } catch {
@@ -346,7 +389,7 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
                 className={`${field} font-mono`}
                 value={slug}
                 maxLength={80}
-                disabled={mode === "edit"}
+                disabled={mode === "edit" && builtin}
                 aria-invalid={!slugOk}
                 aria-describedby="slug-hint"
                 onChange={(e) => {
@@ -355,17 +398,54 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
                 }}
               />
               <span id="slug-hint" className="text-xs font-normal text-muted-foreground">
-                {mode === "edit" ? "The address cannot change after creation." : slugOk ? `Page: /template/dieline/${slug}` : "Lowercase letters, digits and single dashes, 2 to 80 characters."}
+                {!slugOk
+                  ? "Lowercase letters, digits and single dashes, 2 to 80 characters."
+                  : mode === "edit" && builtin
+                    ? "A built-in template keeps its address."
+                    : mode === "edit" && slug !== initial.slug
+                      ? `New page: /template/dieline/${slug}. The old address will stop working.`
+                      : `Page: /template/dieline/${slug}`}
               </span>
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium">
               Description
               <textarea className={`${field} h-24 py-2`} value={description} maxLength={500} onChange={(e) => setDescription(e.target.value)} />
             </label>
+            <label className="flex flex-col gap-1 text-sm font-medium">
+              Display order
+              <input className={`${field} w-32`} type="number" min={0} max={100000} step={1} value={sortOrder} onChange={(e) => setSortOrder(Math.max(0, Math.min(100000, Math.trunc(Number(e.target.value)) || 0)))} />
+              <span className="text-xs font-normal text-muted-foreground">Lower numbers come first in the template library.</span>
+            </label>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={published} onChange={(e) => setPublished(e.target.checked)} />
               Published (visible on the public site)
             </label>
+            <fieldset className="flex flex-col gap-2 rounded-xl border p-3">
+              <legend className="px-1 text-sm font-medium">Box background image</legend>
+              <p className="text-xs text-muted-foreground">
+                {builtin
+                  ? "A starting picture for the box: new projects from this template begin with it as their box background (customers can change or remove it)."
+                  : "A picture that fills the box on this template's page, inside the cut outline."}
+              </p>
+              <div className="flex items-center gap-3">
+                <div className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-lg border bg-muted">
+                  {bgShown ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- admin preview (object URL or private route)
+                    <img src={bgShown} alt="Box background preview" className="h-full w-full object-cover" />
+                  ) : (
+                    <ImagePlus className="size-6 text-muted-foreground" aria-hidden />
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <input ref={bgInput} type="file" accept="image/png,image/jpeg" className="sr-only" aria-label="Choose background image" onChange={(e) => { onBgFile(e.target.files?.[0]); e.target.value = ""; }} />
+                  <Button type="button" variant="outline" onClick={() => bgInput.current?.click()}><ImagePlus className="size-4" aria-hidden /> {bgShown ? "Replace" : "Upload image"}</Button>
+                  {bgShown ? (
+                    <Button type="button" variant="outline" onClick={() => { setBgFile(null); setBgRemoved(true); }}><Trash2 className="size-4" aria-hidden /> Remove</Button>
+                  ) : null}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">PNG or JPEG, up to 10 MB. {bgFile ? "It is uploaded when you save." : ""}</p>
+            </fieldset>
           </div>
           <aside className="flex flex-col gap-3 rounded-xl border p-4 text-sm">
             <h3 className="font-medium">Summary</h3>

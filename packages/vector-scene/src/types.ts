@@ -51,6 +51,8 @@ export interface ImageItem {
   /** Maps the unit square (u, v in 0..1, v DOWN) onto the sheet (mm). */
   readonly matrix: Matrix;
   readonly opacity: number;
+  /** Visible region (mm, sheet frame): the image is cut off outside it. Used by the box background. */
+  readonly clip?: Box;
 }
 
 export type SceneItem = PathItem | ImageItem;

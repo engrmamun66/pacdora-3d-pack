@@ -12,7 +12,7 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
   const { slug } = await params;
   if (slug.length > 80) notFound();
   const [t, categories] = await Promise.all([
-    db.template.findUnique({ where: { id: slug }, select: { id: true, name: true, description: true, published: true, source: true, geometry: true, categories: { select: { id: true } } } }),
+    db.template.findUnique({ where: { id: slug }, select: { id: true, name: true, description: true, published: true, sortOrder: true, backgroundKey: true, source: true, geometry: true, categories: { select: { id: true } } } }),
     db.templateCategory.findMany({ orderBy: [{ kind: "asc" }, { sortOrder: "asc" }, { name: "asc" }], select: { id: true, kind: true, name: true } }),
   ]);
   if (!t) notFound();
@@ -22,7 +22,7 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
       <div>
         <Link href="/doraadmin/templates" className="text-sm text-muted-foreground hover:underline">← Templates</Link>
         <h1 className="text-2xl font-semibold">Edit {t.name}</h1>
-        {t.source === "builtin" ? <p className="text-sm text-muted-foreground">Built-in parametric template: you can change its name, description, categories and visibility.</p> : null}
+        {t.source === "builtin" ? <p className="text-sm text-muted-foreground">Built-in parametric template: you can change its name, description, categories, order, background image and visibility. Its shape comes from the dieline generator in code.</p> : null}
       </div>
       <TemplateWizard
         mode="edit"
@@ -32,6 +32,8 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
           name: t.name,
           description: t.description,
           published: t.published,
+          sortOrder: t.sortOrder,
+          backgroundUrl: t.backgroundKey ? `/api/templates/${encodeURIComponent(t.id)}/background?v=${encodeURIComponent(t.backgroundKey.slice("templates/".length, -4))}` : null,
           categoryIds: t.categories.map((c) => c.id),
           source: t.source === "svg" ? "svg" : "builtin",
           dieline: g?.dieline ?? null,

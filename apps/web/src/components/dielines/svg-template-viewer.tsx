@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Download } from "lucide-react";
 import { toCleanSvg, toDxf, type ImportedDieline, type Role } from "@packaging/svg-import";
@@ -10,11 +10,22 @@ import { ROLE_COLOR } from "@/lib/template-import";
 import { SheetCanvas, type ToggleDef } from "./sheet-canvas";
 
 const MARGIN = 8;
-type Toggles = { bleed: boolean; guides: boolean };
+type Toggles = { background: boolean; bleed: boolean; guides: boolean };
 const DEFS: ToggleDef<keyof Toggles>[] = [
+  { key: "background", label: "Background" },
   { key: "bleed", label: "Bleed" },
   { key: "guides", label: "Guides" },
 ];
+
+/** The picture as a data: URL (an SVG shown as an image cannot load other files itself). */
+function toDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
 
 function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -35,7 +46,9 @@ export function SvgTemplateViewer({
   dieline,
   roles,
   categories,
+  backgroundUrl,
 }: {
+  backgroundUrl: string | null;
   slug: string;
   title: string;
   description: string;
@@ -43,13 +56,29 @@ export function SvgTemplateViewer({
   roles: Record<string, Role>;
   categories: string[];
 }) {
-  const [toggles, setToggles] = useState<Toggles>({ bleed: true, guides: false });
+  const [toggles, setToggles] = useState<Toggles>({ background: true, bleed: true, guides: false });
+  const [bgData, setBgData] = useState<string | null>(null);
   const has = (r: Role) => Object.values(roles).includes(r);
+
+  useEffect(() => {
+    if (!backgroundUrl) return;
+    let live = true;
+    fetch(backgroundUrl)
+      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error("bad status"))))
+      .then(toDataUrl)
+      .then((d) => live && setBgData(d))
+      .catch(() => live && notify.error("The background image could not be loaded."));
+    return () => {
+      live = false;
+    };
+  }, [backgroundUrl]);
+
+  const bg = useMemo(() => (toggles.background && bgData ? { href: bgData } : undefined), [toggles.background, bgData]);
   const src = useMemo(
-    () => svgDataUrl(toCleanSvg(dieline, roles, { margin: MARGIN, showBleed: toggles.bleed, showGuides: toggles.guides })),
-    [dieline, roles, toggles],
+    () => svgDataUrl(toCleanSvg(dieline, roles, { margin: MARGIN, showBleed: toggles.bleed, showGuides: toggles.guides, background: bg })),
+    [dieline, roles, toggles.bleed, toggles.guides, bg],
   );
-  const defs = DEFS.filter((d) => (d.key === "bleed" ? has("bleed") : has("guide")));
+  const defs = DEFS.filter((d) => (d.key === "background" ? Boolean(backgroundUrl) : d.key === "bleed" ? has("bleed") : has("guide")));
   const legend = [
     { label: "Cut", color: ROLE_COLOR.cut },
     ...(has("crease") ? [{ label: "Crease", color: ROLE_COLOR.crease, dashed: true }] : []),
@@ -59,7 +88,7 @@ export function SvgTemplateViewer({
 
   const download = (kind: "svg" | "dxf") => {
     try {
-      if (kind === "svg") saveBlob(new Blob([toCleanSvg(dieline, roles, { margin: 0, showBleed: toggles.bleed, showGuides: toggles.guides })], { type: "image/svg+xml" }), `${slug}.svg`);
+      if (kind === "svg") saveBlob(new Blob([toCleanSvg(dieline, roles, { margin: 0, showBleed: toggles.bleed, showGuides: toggles.guides, background: bg })], { type: "image/svg+xml" }), `${slug}.svg`);
       else saveBlob(new Blob([toDxf(dieline, roles)], { type: "application/dxf" }), `${slug}.dxf`);
       notify.success(`Downloaded ${slug}.${kind}`);
     } catch {

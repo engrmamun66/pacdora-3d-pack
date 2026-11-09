@@ -1,7 +1,7 @@
 import * as fontkit from "fontkit";
-import { anchorIndex, objectCentre } from "@packaging/artwork";
+import { anchorIndex, backgroundPlacement, objectCentre } from "@packaging/artwork";
 import { type DielineGeometry, flattenOutline } from "@packaging/dieline-engine";
-import { type Artwork, type ArtworkFont, type ArtworkObject, MM_PER_PT } from "@packaging/schema";
+import { type Artwork, type ArtworkFont, type ArtworkObject, type BoxBackground, MM_PER_PT } from "@packaging/schema";
 import { ellipsePath, linePath, mul, outlinePath, pathBounds, polygonPath, rectPath, rotate, scale, transformPath, translate } from "./geometry";
 import { imageSize, imageSizeProblem } from "./images";
 import { layoutTextbox, lineOutlines, measureWith } from "./text";
@@ -98,6 +98,8 @@ export async function buildScene(
     const idx = anchorIndex(geo);
     const budget = { bytes: 0, warned: false };
     const items: SceneItem[] = [];
+    // Box background first: it sits under every other artwork item.
+    if (artwork.background) items.push(...(await backgroundItems(geo, artwork.background, { images: src.images, losses, budget })));
     for (const a of artwork.objects) {
       if (!a.visible) continue;
       items.push(...(await artworkItems(a, objectCentre(idx, a), { fontFor, images: src.images, losses, budget })));
@@ -167,6 +169,35 @@ export async function buildScene(
   }
 
   return { unit: "mm", mediaBox, trimBox, bleedBox, layers, losses };
+}
+
+/** The box background as one image item, cut off at the print area (bleed bounds). */
+async function backgroundItems(
+  geo: DielineGeometry,
+  bg: BoxBackground,
+  ctx: { images: ImageSource; losses: string[]; budget: { bytes: number; warned: boolean } },
+): Promise<SceneItem[]> {
+  const img = await ctx.images.load(bg.assetId);
+  const size = img && (img.mime === "image/png" || img.mime === "image/jpeg") ? imageSize(img.bytes, img.mime) : null;
+  if (!img || !size) {
+    ctx.losses.push("The box background image is missing or unsupported and was left out.");
+    return [];
+  }
+  const problem = imageSizeProblem(size);
+  if (problem) {
+    ctx.losses.push(`The box background image was left out: ${problem}.`);
+    return [];
+  }
+  ctx.budget.bytes += img.bytes.length;
+  if (ctx.budget.bytes > MAX_EMBEDDED_IMAGE_BYTES) {
+    ctx.losses.push("The box background image was left out: the total image data in this export is too large.");
+    ctx.budget.warned = true;
+    return [];
+  }
+  const p = backgroundPlacement(geo, bg, size.width, size.height);
+  if (!p) return [];
+  const m = mul(translate(p.cx, p.cy), mul(scale(p.width, p.height), translate(-0.5, -0.5)));
+  return [{ kind: "image", name: "Box background", opacity: bg.opacity, mime: img.mime as "image/png" | "image/jpeg", bytes: img.bytes, pxWidth: size.width, pxHeight: size.height, matrix: m, clip: p.clip }];
 }
 
 async function artworkItems(

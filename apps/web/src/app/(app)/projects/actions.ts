@@ -7,6 +7,7 @@ import { ENGINE_VERSION, ParamValidationError, getGenerator, getPreset } from "@
 import { newProjectDoc, parseProjectDoc } from "@packaging/schema";
 import { db } from "@/server/db";
 import { requireUser } from "@/server/session";
+import { copyTemplateBackground } from "@/server/template-background";
 
 export type DesignState = { ok: boolean; message: string | null; issues: { path: string; message: string }[] };
 
@@ -75,6 +76,11 @@ async function insertProject(formData: FormData): Promise<{ id: string } | Desig
     data: { userId: user.id, name: name.data, templateId: preset.id, projectData: doc },
     select: { id: true },
   });
+  // A template's box background (set by an admin) becomes the project's starting background.
+  const bg = await copyTemplateBackground(preset.id, user.id, project.id);
+  if (bg) {
+    await db.project.update({ where: { id: project.id }, data: { projectData: parseProjectDoc({ ...doc, artwork: { objects: [], background: bg } }) } });
+  }
   revalidatePath("/projects");
   return { id: project.id };
 }

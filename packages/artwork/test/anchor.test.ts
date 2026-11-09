@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { generateDieline, outlineBounds, panelOutline } from "@packaging/dieline-engine";
 import { artworkSchema, type ArtworkObject } from "@packaging/schema";
-import { anchorFor, anchorIndex, objectCentre, orphanedObjects, panelAt, pointInPolygon } from "../src";
+import { anchorFor, anchorIndex, backgroundPlacement, objectCentre, orphanedObjects, panelAt, pointInPolygon } from "../src";
 
 const geo = (dims: { width: number; depth: number; height: number }) => generateDieline("tuck-end-carton", dims);
 
@@ -105,5 +105,49 @@ describe("artwork schema", () => {
         objects: [{ id: "t", name: "T", type: "text", panelId: null, dx: 0, dy: 0, angle: 0, opacity: 1, visible: true, locked: false, text: "x", fontFamily: "Comic Sans", fontSizePt: 12, fontWeight: "normal", fontStyle: "normal", textAlign: "left", lineHeight: 1, width: 10, fill: "#000000" }],
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("box background placement", () => {
+  const g = geo({ width: 100, depth: 50, height: 150 });
+  const b = g.bleedBounds;
+  const w = b.max.x - b.min.x;
+  const h = b.max.y - b.min.y;
+  const base = { scale: 1, dx: 0, dy: 0 };
+
+  it("cover fills the print area and keeps the image ratio", () => {
+    const p = backgroundPlacement(g, { ...base, fit: "cover" }, 400, 200)!;
+    expect(p.width).toBeGreaterThanOrEqual(w - 1e-9);
+    expect(p.height).toBeGreaterThanOrEqual(h - 1e-9);
+    expect(p.width / p.height).toBeCloseTo(2, 9);
+    expect(p.cx).toBeCloseTo((b.min.x + b.max.x) / 2, 9);
+    expect(p.clip).toEqual({ minX: b.min.x, minY: b.min.y, width: w, height: h });
+  });
+
+  it("contain fits inside the print area", () => {
+    const p = backgroundPlacement(g, { ...base, fit: "contain" }, 400, 200)!;
+    expect(p.width).toBeLessThanOrEqual(w + 1e-9);
+    expect(p.height).toBeLessThanOrEqual(h + 1e-9);
+    expect(p.width / p.height).toBeCloseTo(2, 9);
+  });
+
+  it("stretch matches the print area; scale and offset apply", () => {
+    const p = backgroundPlacement(g, { fit: "stretch", scale: 2, dx: 5, dy: -3 }, 10, 10)!;
+    expect(p.width).toBeCloseTo(2 * w, 9);
+    expect(p.height).toBeCloseTo(2 * h, 9);
+    expect(p.cx).toBeCloseTo((b.min.x + b.max.x) / 2 + 5, 9);
+    expect(p.cy).toBeCloseTo((b.min.y + b.max.y) / 2 - 3, 9);
+  });
+
+  it("rejects an unusable image size", () => {
+    expect(backgroundPlacement(g, { ...base, fit: "cover" }, 0, 10)).toBeNull();
+  });
+
+  it("schema: background is optional, validated when present", () => {
+    expect(artworkSchema.safeParse({ objects: [] }).success).toBe(true);
+    expect(artworkSchema.safeParse({ objects: [], background: null }).success).toBe(true);
+    expect(artworkSchema.safeParse({ objects: [], background: { assetId: "a", fit: "cover", scale: 1, dx: 0, dy: 0, opacity: 1 } }).success).toBe(true);
+    expect(artworkSchema.safeParse({ objects: [], background: { assetId: "a", fit: "zoom", scale: 1, dx: 0, dy: 0, opacity: 1 } }).success).toBe(false);
+    expect(artworkSchema.safeParse({ objects: [], background: { assetId: "a", fit: "cover", scale: 99, dx: 0, dy: 0, opacity: 1 } }).success).toBe(false);
   });
 });

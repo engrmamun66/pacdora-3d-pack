@@ -119,6 +119,9 @@ model Template {
   heightMm          Float?
   /// Small SVG (as text) for lists; built when the template is saved. Keeps list pages light.
   thumbnail         String?
+  /// Optional box background picture set by an admin (file in storage). Default for new projects; fills the dieline on SVG template pages.
+  backgroundKey     String?
+  backgroundMime    String?
   sortOrder         Int       @default(0)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt

@@ -126,3 +126,20 @@ describe("EPS export", () => {
     expect(files).toMatch(/l3-1\(Crease\)/);
   });
 });
+
+describe("box background in EPS", () => {
+  it("is clipped to the print area", async () => {
+    const bgScene = await buildScene(geo, { objects: [], background: { assetId: "img", fit: "cover", scale: 1.5, dx: 0, dy: 0, opacity: 1 } }, { fonts: nodeFontSource, images: testImages({ img: makePng(32, 16) }) });
+    const { bytes } = sceneToEps(bgScene, { psLevel: 3, title: "Box" });
+    const text = Buffer.from(bytes).toString("latin1");
+    expect(text).toContain("closepath clip newpath");
+    expect(text.indexOf("closepath clip newpath")).toBeLessThan(text.indexOf("ImageType 1"));
+    if (gs) {
+      const dir = mkdtempSync(path.join(tmpdir(), "bg-eps-"));
+      const file = path.join(dir, "bg.eps");
+      writeFileSync(file, bytes);
+      execFileSync("gs", ["-q", "-dNOPAUSE", "-dBATCH", "-dSAFER", "-dEPSCrop", "-sDEVICE=png16m", "-r30", `-sOutputFile=${path.join(dir, "o.png")}`, file]);
+      expect(readdirSync(dir)).toContain("o.png");
+    }
+  });
+});

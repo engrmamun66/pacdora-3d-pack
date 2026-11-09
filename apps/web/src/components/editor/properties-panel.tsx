@@ -1,7 +1,8 @@
 "use client";
 
 import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical } from "lucide-react";
-import { ARTWORK_FONTS, type ArtworkObject } from "@packaging/schema";
+import { ARTWORK_FONTS, type ArtworkObject, type BoxBackground } from "@packaging/schema";
+import { BackgroundPanel } from "./background-panel";
 import type { AlignMode } from "./editor-controller";
 import { ColorField, NumberField, SelectField, TextField, ToggleField } from "./fields";
 
@@ -43,7 +44,16 @@ export function PropertiesPanel({
   onPatch,
   onAlign,
   onLock,
+  background,
 }: {
+  background: {
+    value: BoxBackground | null;
+    assets: { id: string; fileName: string }[];
+    uploading: boolean;
+    onPatch: (p: Partial<BoxBackground> | null) => void;
+    onPick: (assetId: string) => void;
+    onUpload: () => void;
+  };
   object: ArtworkObject | null;
   selectionCount: number;
   onPatch: (p: Patch) => void;
@@ -51,7 +61,12 @@ export function PropertiesPanel({
   onLock: (locked: boolean) => void;
 }) {
   if (selectionCount === 0) {
-    return <p className="px-3 py-4 text-xs text-muted-foreground">Select an object to edit it, or add text, shapes and images from the toolbar.</p>;
+    return (
+      <>
+        <BackgroundPanel background={background.value} assets={background.assets} uploading={background.uploading} onPatch={background.onPatch} onPick={background.onPick} onUpload={background.onUpload} />
+        <p className="px-3 py-4 text-xs text-muted-foreground">Select an object to edit it, or add text, shapes and images from the toolbar.</p>
+      </>
+    );
   }
   if (selectionCount > 1 || !object) {
     return (

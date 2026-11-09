@@ -28,7 +28,9 @@ export async function saveArtwork(projectId: string, artwork: unknown): Promise<
   }
 
   // Every referenced image must belong to this user.
-  const assetIds = [...new Set(parsed.data.objects.flatMap((o) => (o.type === "image" ? [o.assetId] : [])))];
+  const assetIds = [
+    ...new Set([...parsed.data.objects.flatMap((o) => (o.type === "image" ? [o.assetId] : [])), ...(parsed.data.background ? [parsed.data.background.assetId] : [])]),
+  ];
   if (assetIds.length) {
     const owned = await db.asset.count({ where: { id: { in: assetIds }, userId: user.id } });
     if (owned !== assetIds.length) return { ok: false, message: "Artwork references an image you do not own." };

@@ -23,7 +23,11 @@ function item(it: SceneItem): string {
   const title = it.name ? `<title>${esc(it.name)}</title>` : "";
   if (it.kind === "image") {
     const m = it.matrix.map(n).join(" ");
-    return `<image href="data:${it.mime};base64,${base64(it.bytes)}" x="0" y="0" width="1" height="1" preserveAspectRatio="none" transform="matrix(${m})"${op}>${title}</image>`;
+    const img = `<image href="data:${it.mime};base64,${base64(it.bytes)}" x="0" y="0" width="1" height="1" preserveAspectRatio="none" transform="matrix(${m})"${op}>${title}</image>`;
+    if (!it.clip) return img;
+    // The clip lives on a wrapper so it is measured in sheet millimetres, not in the image's unit square.
+    const c = it.clip;
+    return `<g clip-path="url(#clip-image)"><clipPath id="clip-image"><rect x="${n(c.minX)}" y="${n(c.minY)}" width="${n(c.width)}" height="${n(c.height)}"/></clipPath>${img}</g>`;
   }
   const stroke = it.stroke ? ` stroke="${paint(it.stroke)}" stroke-width="${n(it.strokeWidth)}"` : "";
   const rule = it.fillRule === "evenodd" ? ` fill-rule="evenodd"` : "";

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PDFDocument, PDFName } from "pdf-lib";
@@ -102,6 +102,39 @@ describe("PDF export", () => {
       writeFileSync(file, bytes);
       const out = execFileSync("gs", ["-dSAFER", "-dBATCH", "-dNOPAUSE", "-sDEVICE=bbox", file], { stdio: ["ignore", "pipe", "pipe"] }).toString();
       expect(out).not.toMatch(/Error/);
+    }
+  });
+});
+
+describe("box background in PDF", () => {
+  it.skipIf(!gs)("never paints outside the print area (dimension margin stays white)", async () => {
+    const bgScene = await buildScene(geo, { objects: [], background: { assetId: "img", fit: "stretch", scale: 4, dx: 0, dy: 0, opacity: 1 } }, { fonts: nodeFontSource, images: testImages({ img: makePng(64, 32) }) }, { dimensions: true, dieline: false });
+    const { bytes } = await sceneToPdf(bgScene, { pdfVersion: "1.7", layers: false, transparency: "live" });
+    const dir = mkdtempSync(path.join(tmpdir(), "bg-clip-"));
+    writeFileSync(path.join(dir, "c.pdf"), bytes);
+    execFileSync("gs", ["-q", "-dNOPAUSE", "-dBATCH", "-dSAFER", "-sDEVICE=ppmraw", "-r50", `-sOutputFile=${path.join(dir, "o.ppm")}`, path.join(dir, "c.pdf")]);
+    const ppm = readFileSync(path.join(dir, "o.ppm"));
+    const header = /^P6\s+(?:#[^\n]*\n\s*)?(\d+)\s+(\d+)\s+255\s/.exec(ppm.subarray(0, 120).toString("latin1"))!;
+    const w = Number(header[1]);
+    const h = Number(header[2]);
+    const px = (x: number, y: number) => [...ppm.subarray(header[0].length + (y * w + x) * 3, header[0].length + (y * w + x) * 3 + 3)];
+    expect(px(2, 2)).toEqual([255, 255, 255]); // inside the margin
+    const mid = px(Math.floor(w / 2), Math.floor(h / 2));
+    expect(mid[0]! > 150 || mid[2]! > 150).toBe(true); // image is painted inside
+  });
+
+  it("embeds the image once and renders", async () => {
+    const bgScene = await buildScene(geo, { objects: [], background: { assetId: "img", fit: "cover", scale: 1.5, dx: 0, dy: 0, opacity: 0.7 } }, { fonts: nodeFontSource, images: testImages({ img: makePng(64, 32) }) });
+    const { bytes } = await sceneToPdf(bgScene, { pdfVersion: "1.7", layers: true, transparency: "live" });
+    const pdf = await PDFDocument.load(bytes);
+    const xo = pdf.getPage(0).node.Resources()!.lookup(PDFName.of("XObject"));
+    expect(xo).toBeDefined();
+    if (gs) {
+      const dir = mkdtempSync(path.join(tmpdir(), "bg-pdf-"));
+      const file = path.join(dir, "bg.pdf");
+      writeFileSync(file, bytes);
+      execFileSync("gs", ["-q", "-dNOPAUSE", "-dBATCH", "-dSAFER", "-sDEVICE=png16m", "-r30", `-sOutputFile=${path.join(dir, "o.png")}`, file]);
+      expect(readdirSync(dir)).toContain("o.png");
     }
   });
 });

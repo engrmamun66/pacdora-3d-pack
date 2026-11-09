@@ -27,7 +27,7 @@ import {
   Unlock,
 } from "lucide-react";
 import { generateDieline } from "@packaging/dieline-engine";
-import type { Artwork, ArtworkObject } from "@packaging/schema";
+import type { Artwork, ArtworkObject, BoxBackground } from "@packaging/schema";
 import { saveArtwork, saveThreeD } from "@/app/editor/[id]/actions";
 import { Preview3D, type ThreeDSettings } from "@/components/viewer3d/preview-3d";
 import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
@@ -91,9 +91,11 @@ export function ArtworkEditor({
   const canvasEl = useRef<HTMLCanvasElement>(null);
   const hostEl = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const bgFileInput = useRef<HTMLInputElement>(null);
   const ctl = useRef<EditorController | null>(null);
 
   const [objects, setObjects] = useState<ArtworkObject[]>(initialArtwork.objects);
+  const [background, setBackground] = useState<BoxBackground | null>(initialArtwork.background ?? null);
   const [selected, setSelected] = useState<string[]>([]);
   const [selectedData, setSelectedData] = useState<ArtworkObject | null>(null);
   const [history, setHistory] = useState({ canUndo: false, canRedo: false });
@@ -106,7 +108,7 @@ export function ArtworkEditor({
   const [showExport, setShowExport] = useState(false);
   const [threeD, setThreeD] = useState<ThreeDSettings>(initialThreeD);
   const view3d = useRef<CartonViewHandle>(null);
-  const artworkForPreview = useMemo<Artwork>(() => ({ objects }), [objects]);
+  const artworkForPreview = useMemo<Artwork>(() => ({ objects, background }), [objects, background]);
   const updateThreeD = (s: ThreeDSettings) => {
     setThreeD(s);
     void saveThreeD(projectId, s).then((r) => {
@@ -150,6 +152,7 @@ export function ArtworkEditor({
     const c = new EditorController(canvasEl.current, geo, {
       onChange: (art) => {
         setObjects(art.objects);
+        setBackground(art.background ?? null);
         saver.schedule(art);
       },
       onSelection: refreshSelection,
@@ -231,7 +234,7 @@ export function ArtworkEditor({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ------------------------------------------------------------ uploads
-  const upload = async (file: File) => {
+  const upload = async (file: File, as: "layer" | "background" = "layer") => {
     setUploading(true);
     try {
       const body = new FormData();
@@ -241,7 +244,8 @@ export function ArtworkEditor({
       const json = (await res.json().catch(() => ({}))) as { asset?: Asset; error?: string };
       if (!res.ok || !json.asset) throw new Error(json.error ?? `Upload failed (${res.status}).`);
       setAssets((a) => [json.asset!, ...a]);
-      await ctl.current?.addImage(json.asset.id, json.asset.fileName);
+      if (as === "background") await ctl.current?.setBackground({ assetId: json.asset.id, fit: "cover", scale: 1, dx: 0, dy: 0, opacity: 1 });
+      else await ctl.current?.addImage(json.asset.id, json.asset.fileName);
     } catch (e) {
       notify.error((e as Error).message);
     } finally {
@@ -282,6 +286,17 @@ export function ArtworkEditor({
             const f = e.target.files?.[0];
             e.target.value = "";
             if (f) void upload(f);
+          }}
+        />
+        <input
+          ref={bgFileInput}
+          type="file"
+          accept="image/png,image/jpeg"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (f) void upload(f, "background");
           }}
         />
         <div className="mx-1 h-5 w-px bg-border" />
@@ -345,6 +360,16 @@ export function ArtworkEditor({
               );
             })}
           </ul>
+          <button
+            type="button"
+            onClick={() => c?.select([])}
+            className={`flex items-center gap-2 border-t px-3 py-1.5 text-left text-xs hover:bg-muted ${selected.length === 0 ? "bg-primary/10" : ""}`}
+            title="Edit the box background"
+          >
+            <ImagePlus className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate">Box background</span>
+            <span className="text-muted-foreground">{background ? "on" : "none"}</span>
+          </button>
           <h2 className="border-y px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Your images</h2>
           <div className="grid max-h-56 grid-cols-3 gap-1 overflow-auto p-2">
             {assets.length === 0 ? <p className="col-span-3 text-xs text-muted-foreground">Uploaded images appear here.</p> : null}
@@ -382,6 +407,14 @@ export function ArtworkEditor({
             onPatch={(p) => selected[0] && void c?.update(selected[0], p)}
             onAlign={(m) => c?.align(m)}
             onLock={(locked) => selected[0] && c?.setLocked(selected[0], locked)}
+            background={{
+              value: background,
+              assets,
+              uploading,
+              onPatch: (p) => void c?.setBackground(p),
+              onPick: (assetId) => void c?.setBackground({ assetId, ...(background ? {} : { fit: "cover", scale: 1, dx: 0, dy: 0, opacity: 1 }) }),
+              onUpload: () => bgFileInput.current?.click(),
+            }}
           />
         </aside>
       </div>
@@ -390,7 +423,7 @@ export function ArtworkEditor({
           projectId={projectId}
           name={name}
           geo={geo}
-          getArtwork={() => ctl.current?.toArtwork() ?? { objects }}
+          getArtwork={() => ctl.current?.toArtwork() ?? { objects, background }}
           boardColor={threeD.outsideColor}
           flushSave={() => saver.settle(ctl.current?.toArtwork())}
           getGlb={async () => {

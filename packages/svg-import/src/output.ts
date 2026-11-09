@@ -26,7 +26,13 @@ function roleOf(d: ImportedDieline, roles: Record<string, Role>, key: string): R
 export function toCleanSvg(
   d: ImportedDieline,
   roles: Record<string, Role>,
-  opts: { margin?: number; showBleed?: boolean; showGuides?: boolean } = {},
+  opts: {
+    margin?: number;
+    showBleed?: boolean;
+    showGuides?: boolean;
+    /** Picture drawn under the lines, cut off at the closed Cut outlines. `href` must be a data: URL (an SVG used as an image cannot load others). */
+    background?: { href: string; opacity?: number };
+  } = {},
 ): string {
   const margin = opts.margin !== undefined && Number.isFinite(opts.margin) && opts.margin >= 0 ? opts.margin : 2;
   const showBleed = opts.showBleed ?? true;
@@ -35,8 +41,14 @@ export function toCleanSvg(
   const h = d.heightMm + 2 * margin;
 
   const parts: Record<Drawn, string[]> = { cut: [], crease: [], bleed: [], guide: [] };
+  let cutShapes = "";
   for (const p of d.paths) {
     const role = roleOf(d, roles, p.style);
+    if (role === "cut" && p.closed) {
+      let c = `M${fmt(p.pts[0]! + margin)} ${fmt(p.pts[1]! + margin)}`;
+      for (let i = 2; i < p.pts.length; i += 2) c += ` L${fmt(p.pts[i]! + margin)} ${fmt(p.pts[i + 1]! + margin)}`;
+      cutShapes += `${c} Z `;
+    }
     if (role === "ignore") continue;
     if (role === "bleed" && !showBleed) continue;
     if (role === "guide" && !showGuides) continue;
@@ -56,8 +68,17 @@ export function toCleanSvg(
       const dash = look.dash ? ` stroke-dasharray="${look.dash}"` : "";
       return `<g id="${r}" fill="none" stroke="${look.color}" stroke-width="${STROKE_MM}"${dash}>\n${parts[r].join("\n")}\n</g>`;
     });
+  let picture = "";
+  const bg = opts.background;
+  if (bg && cutShapes && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(bg.href)) {
+    const op = bg.opacity !== undefined && bg.opacity < 1 ? ` opacity="${fmt(Math.max(0, bg.opacity))}"` : "";
+    picture =
+      `<defs><clipPath id="box-clip"><path d="${cutShapes.trim()}" clip-rule="evenodd"/></clipPath></defs>\n` +
+      `<g id="background" clip-path="url(#box-clip)"><image href="${bg.href}" x="${fmt(margin)}" y="${fmt(margin)}" width="${fmt(d.widthMm)}" height="${fmt(d.heightMm)}" preserveAspectRatio="xMidYMid slice"${op}/></g>\n`;
+  }
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(w)}mm" height="${fmt(h)}mm" viewBox="0 0 ${fmt(w)} ${fmt(h)}">\n` +
+    picture +
     groups.join("\n") +
     "\n</svg>\n"
   );

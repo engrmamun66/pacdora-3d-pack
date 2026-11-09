@@ -117,3 +117,19 @@ describe("toDxf", () => {
     expect(out.slice(i + 1, i + 7)).toEqual(["8", "CUT", "66", "1", "70", "0"]);
   });
 });
+
+describe("toCleanSvg background", () => {
+  const PNG = "data:image/png;base64,iVBORw0KGgo=";
+  it("draws the picture first, cut off at the closed cut outlines", () => {
+    const svg = toCleanSvg(d, roles, { margin: 2, background: { href: PNG, opacity: 0.5 } });
+    expect(svg.indexOf('id="background"')).toBeGreaterThan(-1);
+    expect(svg.indexOf('id="background"')).toBeLessThan(svg.indexOf('id="cut"'));
+    expect(svg).toContain('clip-rule="evenodd"');
+    expect(svg).toContain('opacity="0.5"');
+  });
+  it("ignores anything that is not a png/jpeg data URL, and leaves the old output unchanged without one", () => {
+    const evil = toCleanSvg(d, roles, { background: { href: 'https://x.test/a.png" onload="x' } });
+    expect(evil).not.toContain("<image");
+    expect(evil).toBe(toCleanSvg(d, roles));
+  });
+});

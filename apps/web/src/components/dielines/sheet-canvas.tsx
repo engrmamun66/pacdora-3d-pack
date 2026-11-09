@@ -115,6 +115,7 @@ export function SheetCanvas<T extends Record<string, boolean>>({
 
   const toggle = (key: Extract<keyof T, string>, label: string) => (
     <button
+      key={key}
       type="button"
       role="switch"
       aria-checked={toggles[key]}

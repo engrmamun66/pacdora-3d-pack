@@ -7,7 +7,7 @@ import {
   panelOutline,
   vec,
 } from "@packaging/dieline-engine";
-import type { Artwork, ArtworkObject } from "@packaging/schema";
+import type { Artwork, ArtworkObject, BoxBackground } from "@packaging/schema";
 
 /**
  * Artwork anchoring: converts between the stored form (centre offset from a
@@ -70,4 +70,44 @@ export function anchorFor(idx: AnchorIndex, centre: Vec2): { panelId: string | n
 /** Objects whose panel no longer exists (e.g. a template change); they are shown relative to the sheet. */
 export function orphanedObjects(idx: AnchorIndex, artwork: Artwork): ArtworkObject[] {
   return artwork.objects.filter((o) => o.panelId !== null && !idx.panels.has(o.panelId));
+}
+
+/** Where a box background image goes on the flat sheet (millimetres, y down). */
+export interface BackgroundPlacement {
+  /** Centre of the drawn image. */
+  readonly cx: number;
+  readonly cy: number;
+  readonly width: number;
+  readonly height: number;
+  /** The print area (bleed bounds): everything outside it is clipped. */
+  readonly clip: { readonly minX: number; readonly minY: number; readonly width: number; readonly height: number };
+}
+
+/**
+ * Pure placement of the box background for an image of `imgW` x `imgH` pixels.
+ * The editor, the 3D texture and every exporter call this, so they agree.
+ * Returns null for an unusable image size.
+ */
+export function backgroundPlacement(geo: DielineGeometry, bg: Pick<BoxBackground, "fit" | "scale" | "dx" | "dy">, imgW: number, imgH: number): BackgroundPlacement | null {
+  if (!(imgW > 0) || !(imgH > 0)) return null;
+  const b = geo.bleedBounds;
+  const w = b.max.x - b.min.x;
+  const h = b.max.y - b.min.y;
+  let bw: number;
+  let bh: number;
+  if (bg.fit === "stretch") {
+    bw = w;
+    bh = h;
+  } else {
+    const k = bg.fit === "cover" ? Math.max(w / imgW, h / imgH) : Math.min(w / imgW, h / imgH);
+    bw = imgW * k;
+    bh = imgH * k;
+  }
+  return {
+    cx: (b.min.x + b.max.x) / 2 + bg.dx,
+    cy: (b.min.y + b.max.y) / 2 + bg.dy,
+    width: bw * bg.scale,
+    height: bh * bg.scale,
+    clip: { minX: b.min.x, minY: b.min.y, width: w, height: h },
+  };
 }

@@ -74,10 +74,29 @@ export const artworkObject = z.discriminatedUnion("type", [textObject, imageObje
 export type ArtworkObject = z.infer<typeof artworkObject>;
 export type ArtworkType = ArtworkObject["type"];
 
+/**
+ * Box background: one uploaded image that fills the print area (bleed bounds)
+ * under all other artwork. Unlike an image object it is not anchored to a panel:
+ * `fit` decides the base size, `scale` zooms it, (dx, dy) shifts it from centre.
+ */
+export const BACKGROUND_FITS = ["cover", "contain", "stretch"] as const;
+export const boxBackground = z.object({
+  assetId: z.string().min(1).max(40),
+  fit: z.enum(BACKGROUND_FITS),
+  scale: finite.min(0.1).max(10),
+  dx: finite.min(-10000).max(10000),
+  dy: finite.min(-10000).max(10000),
+  opacity: finite.min(0).max(1),
+});
+export type BoxBackground = z.infer<typeof boxBackground>;
+export type BackgroundFit = (typeof BACKGROUND_FITS)[number];
+
 export const artworkSchema = z
   .object({
     /** Bottom to top. */
     objects: z.array(artworkObject).max(2000),
+    /** Optional image under everything else; absent or null = none. */
+    background: boxBackground.nullable().optional(),
   })
   .superRefine((a, ctx) => {
     const seen = new Set<string>();

@@ -146,7 +146,7 @@ export function sceneToEps(scene: Scene, opts: EpsOptions): { bytes: Uint8Array;
       }
       // Image space row 0 is the top row; our frame is y-down, so the scene matrix applies directly.
       body.push(
-        `gsave\n[${it.matrix.map(num).join(" ")}] concat\n${cs} setcolorspace\n<< /ImageType 1 /Width ${w} /Height ${h} /BitsPerComponent 8 /Decode ${decode} /ImageMatrix [${w} 0 0 ${h} 0 0] /DataSource currentfile ${filters} >> image\n${ascii85(data)}\ngrestore`,
+        `gsave\n${it.clip ? `newpath ${num(it.clip.minX)} ${num(it.clip.minY)} moveto ${num(it.clip.width)} 0 rlineto 0 ${num(it.clip.height)} rlineto ${num(-it.clip.width)} 0 rlineto closepath clip newpath\n` : ""}[${it.matrix.map(num).join(" ")}] concat\n${cs} setcolorspace\n<< /ImageType 1 /Width ${w} /Height ${h} /BitsPerComponent 8 /Decode ${decode} /ImageMatrix [${w} 0 0 ${h} 0 0] /DataSource currentfile ${filters} >> image\n${ascii85(data)}\ngrestore`,
       );
       return;
     }
