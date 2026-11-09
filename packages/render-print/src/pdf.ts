@@ -103,20 +103,26 @@ export async function sceneToPdf(scene: Scene, opts: PdfOptions): Promise<PdfRes
   const strokeOp = (p: Paint) => (p.kind === "rgb" ? `${hexRgb(p.hex).map(num).join(" ")} RG` : `/${spot(p)} CS 1 SCN`);
 
   let imageCount = 0;
+  // The same image placed many times is stored once in the file.
+  const embedded = new Map<Uint8Array, string>();
   const drawItem = async (it: SceneItem): Promise<string> => {
     if (it.kind === "image") {
-      let embedded;
-      if (it.mime === "image/jpeg") embedded = await doc.embedJpg(it.bytes);
-      else if (opts.transparency === "flatten") {
-        const flat = pngToRgbOnWhite(it.bytes);
-        if (flat.hadAlpha && !warnedAlpha) {
-          losses.push(`PDF ${opts.pdfVersion} has no transparency: transparent image areas are filled with white.`);
-          warnedAlpha = true;
-        }
-        embedded = await doc.embedPng(rgbToPng(flat));
-      } else embedded = await doc.embedPng(it.bytes);
-      const name = `Im${imageCount++}`;
-      xobjects.set(PDFName.of(name), embedded.ref);
+      let name = embedded.get(it.bytes);
+      if (!name) {
+        let img;
+        if (it.mime === "image/jpeg") img = await doc.embedJpg(it.bytes);
+        else if (opts.transparency === "flatten") {
+          const flat = pngToRgbOnWhite(it.bytes);
+          if (flat.hadAlpha && !warnedAlpha) {
+            losses.push(`PDF ${opts.pdfVersion} has no transparency: transparent image areas are filled with white.`);
+            warnedAlpha = true;
+          }
+          img = await doc.embedPng(rgbToPng(flat));
+        } else img = await doc.embedPng(it.bytes);
+        name = `Im${imageCount++}`;
+        xobjects.set(PDFName.of(name), img.ref);
+        embedded.set(it.bytes, name);
+      }
       // PDF images fill the unit square with their top row at v = 1; ours has v down.
       const m: Matrix = mul(it.matrix, [1, 0, 0, -1, 0, 1]);
       return `q\n${opacityOp(it.opacity)}${m.map(num).join(" ")} cm\n/${name} Do\nQ`;

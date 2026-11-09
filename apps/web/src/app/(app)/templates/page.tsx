@@ -3,6 +3,8 @@ import { TemplateLibrary, type LibraryItem } from "@/components/templates/templa
 import { tryThumbnail } from "@/lib/dieline-preview";
 import { AiDescribe } from "@/components/templates/ai-describe";
 import { aiEnabled } from "@/server/env";
+import { connection } from "next/server";
+import { Suspense } from "react";
 
 export const metadata = { title: "Templates" };
 
@@ -24,8 +26,16 @@ export default function TemplatesPage() {
         <h1 className="text-2xl font-semibold">Templates</h1>
         <p className="text-muted-foreground">Pick a structure, then set your exact dimensions.</p>
       </div>
-      {aiEnabled ? <AiDescribe /> : null}
+      <Suspense fallback={null}>
+        <AiPanel />
+      </Suspense>
       <TemplateLibrary items={items} categories={used.map((id) => ({ id, label: CATEGORY_LABELS[id] }))} />
     </div>
   );
+}
+
+/** Read at request time: the page itself is prerendered, the AI switch is a runtime setting. */
+async function AiPanel() {
+  await connection();
+  return aiEnabled ? <AiDescribe /> : null;
 }

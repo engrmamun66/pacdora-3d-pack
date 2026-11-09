@@ -3,7 +3,7 @@ import { anchorIndex, objectCentre } from "@packaging/artwork";
 import { type DielineGeometry, flattenOutline } from "@packaging/dieline-engine";
 import { type Artwork, type ArtworkFont, type ArtworkObject, MM_PER_PT } from "@packaging/schema";
 import { ellipsePath, linePath, mul, outlinePath, pathBounds, polygonPath, rectPath, rotate, scale, transformPath, translate } from "./geometry";
-import { imageSize } from "./images";
+import { imageSize, imageSizeProblem } from "./images";
 import { layoutTextbox, lineOutlines, measureWith } from "./text";
 import type { Box, Paint, PathCmd, PathItem, Scene, SceneItem, SceneLayer, SpotPaint } from "./types";
 
@@ -19,6 +19,9 @@ export interface ImageSource {
   /** Bytes of an uploaded image, or null if it no longer exists. */
   load(assetId: string): Promise<{ bytes: Uint8Array; mime: string } | null>;
 }
+
+/** Total bytes of image data (counted once per placement) one export may embed. */
+export const MAX_EMBEDDED_IMAGE_BYTES = 150 * 1024 * 1024;
 
 export interface SceneOptions {
   readonly artwork: boolean;
@@ -93,10 +96,11 @@ export async function buildScene(
 
   if (o.artwork) {
     const idx = anchorIndex(geo);
+    const budget = { bytes: 0, warned: false };
     const items: SceneItem[] = [];
     for (const a of artwork.objects) {
       if (!a.visible) continue;
-      items.push(...(await artworkItems(a, objectCentre(idx, a), { fontFor, images: src.images, losses })));
+      items.push(...(await artworkItems(a, objectCentre(idx, a), { fontFor, images: src.images, losses, budget })));
     }
     layers.push({ id: "artwork", name: "Artwork", printable: true, items });
   }
@@ -168,7 +172,12 @@ export async function buildScene(
 async function artworkItems(
   a: ArtworkObject,
   c: { x: number; y: number },
-  ctx: { fontFor: (f: ArtworkFont, w: "normal" | "bold", s: "normal" | "italic") => Promise<fontkit.Font>; images: ImageSource; losses: string[] },
+  ctx: {
+    fontFor: (f: ArtworkFont, w: "normal" | "bold", s: "normal" | "italic") => Promise<fontkit.Font>;
+    images: ImageSource;
+    losses: string[];
+    budget: { bytes: number; warned: boolean };
+  },
 ): Promise<SceneItem[]> {
   const place = mul(translate(c.x, c.y), rotate(a.angle));
   const base = { name: a.name, opacity: a.opacity };
@@ -200,6 +209,18 @@ async function artworkItems(
       const size = img && (img.mime === "image/png" || img.mime === "image/jpeg") ? imageSize(img.bytes, img.mime) : null;
       if (!img || !size) {
         ctx.losses.push(`Image "${a.name}" is missing or unsupported and was left out.`);
+        return [];
+      }
+      const problem = imageSizeProblem(size);
+      if (problem) {
+        ctx.losses.push(`Image "${a.name}" was left out: ${problem}.`);
+        return [];
+      }
+      // Budget for all placements together (each placement is written into the file).
+      ctx.budget.bytes += img.bytes.length;
+      if (ctx.budget.bytes > MAX_EMBEDDED_IMAGE_BYTES) {
+        if (!ctx.budget.warned) ctx.losses.push("Some images were left out: the total image data in this export is too large.");
+        ctx.budget.warned = true;
         return [];
       }
       // Unit square -> centred box of width x height mm, flipped as in the editor, then rotated and placed.

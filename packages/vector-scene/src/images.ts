@@ -20,3 +20,15 @@ export function imageSize(bytes: Uint8Array, mime: string): { width: number; hei
   }
   return null;
 }
+
+/** Largest image accepted (decoding allocates width x height x 4 bytes). */
+export const MAX_IMAGE_PIXELS = 40_000_000;
+export const MAX_IMAGE_SIDE = 12_000;
+
+/** Reason an image of this size is refused, or null if it is acceptable. */
+export function imageSizeProblem(size: { width: number; height: number } | null): string | null {
+  if (!size || size.width < 1 || size.height < 1) return "the image header is unreadable";
+  if (size.width > MAX_IMAGE_SIDE || size.height > MAX_IMAGE_SIDE) return `images may be at most ${MAX_IMAGE_SIDE} px on a side`;
+  if (size.width * size.height > MAX_IMAGE_PIXELS) return `images may have at most ${MAX_IMAGE_PIXELS / 1e6} megapixels`;
+  return null;
+}

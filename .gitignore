@@ -4,6 +4,7 @@ storage
 .env
 .env.*
 !.env.example
+!.env.prod.example
 .next
 dist
 coverage

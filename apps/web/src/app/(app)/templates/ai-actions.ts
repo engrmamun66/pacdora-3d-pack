@@ -7,6 +7,7 @@ import { getPreset } from "@packaging/dieline-engine";
 import { verifyCaptcha } from "@/server/captcha";
 import { db } from "@/server/db";
 import { aiEnabled, env } from "@/server/env";
+import { takeToken } from "@/server/limits";
 import { requireUser } from "@/server/session";
 import { tryThumbnail } from "@/lib/dieline-preview";
 
@@ -28,15 +29,17 @@ export async function suggestBox(description: string, captchaToken: string): Pro
   if (typeof description !== "string" || !description.trim()) return { ok: false, message: "Please describe the box." };
   if (description.length > MAX_DESCRIPTION_CHARS) return { ok: false, message: `Please keep the description under ${MAX_DESCRIPTION_CHARS} characters.` };
 
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const used = await db.aiRequest.count({ where: { userId: user.id, createdAt: { gte: since } } });
-  if (used >= env.AI_DAILY_LIMIT) return { ok: false, message: `Daily limit of ${env.AI_DAILY_LIMIT} AI suggestions reached. Try again tomorrow or set the dimensions by hand.` };
-
   const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
   if (!(await verifyCaptcha(typeof captchaToken === "string" ? captchaToken : null, ip))) {
     return { ok: false, message: "Please complete the human check and try again.", retryCaptcha: true };
   }
+
+  // Counted atomically (per-user lock) BEFORE the paid call, so parallel requests cannot exceed the limit.
+  if (!(await takeToken(user.id, "ai", env.AI_DAILY_LIMIT, 24 * 60 * 60))) {
+    return { ok: false, message: `Daily limit of ${env.AI_DAILY_LIMIT} AI suggestions reached. Try again tomorrow or set the dimensions by hand.` };
+  }
+  const used = await db.rateEvent.count({ where: { userId: user.id, kind: "ai", createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } } });
 
   const record = (outcome: string) => db.aiRequest.create({ data: { userId: user.id, outcome, inputChars: description.length } });
   try {
@@ -48,7 +51,7 @@ export async function suggestBox(description: string, captchaToken: string): Pro
       result,
       presetName: preset?.name ?? null,
       thumbnail: result.kind === "ok" ? tryThumbnail(result.generatorId, result.params) : null,
-      remaining: env.AI_DAILY_LIMIT - used - 1,
+      remaining: Math.max(0, env.AI_DAILY_LIMIT - used),
     };
   } catch (e) {
     await record("error");

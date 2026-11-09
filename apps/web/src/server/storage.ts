@@ -44,4 +44,4 @@ class LocalDiskStorage implements StorageProvider {
   }
 }
 
-export const storage: StorageProvider = new LocalDiskStorage(path.resolve(env.STORAGE_DIR ?? path.join(process.cwd(), "storage")));
+export const storage: StorageProvider = new LocalDiskStorage(path.resolve(env.STORAGE_DIR ?? path.join(/* turbopackIgnore: true */ process.cwd(), "storage")));

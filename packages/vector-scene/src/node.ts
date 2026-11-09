@@ -13,7 +13,7 @@ function packageDir(family: ArtworkFont): string {
   const name = `@fontsource/${slug(family)}`;
   const override = process.env.FONT_PACKAGES_DIR;
   if (override) return path.join(override, name);
-  let dir = process.cwd();
+  let dir = /* turbopackIgnore: true */ process.cwd();
   for (;;) {
     const candidate = path.join(dir, "node_modules", name);
     if (existsSync(path.join(candidate, "package.json"))) return candidate;

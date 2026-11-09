@@ -90,7 +90,12 @@ export async function updateProject(_prev: DesignState, formData: FormData): Pro
   const params = readParams(formData.get("params"));
   if (!params) return { ok: false, message: "Invalid parameters.", issues: [] };
 
-  const doc = parseProjectDoc(row.projectData);
+  let doc;
+  try {
+    doc = parseProjectDoc(row.projectData);
+  } catch {
+    return { ok: false, message: "This project file could not be read.", issues: [] };
+  }
   const invalid = validateWithEngine(doc.template.generatorId, params);
   if (invalid) return invalid;
 

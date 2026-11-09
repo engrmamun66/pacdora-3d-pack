@@ -26,6 +26,7 @@ model User {
   projects      Project[]
   assets        Asset[]
   aiRequests    AiRequest[]
+  rateEvents    RateEvent[]
 
   @@map("user")
 }
@@ -162,4 +163,16 @@ model AiRequest {
 
   @@index([userId, createdAt(sort: Desc)])
   @@map("ai_request")
+}
+
+/// One counted action for per-user rate limits (export, upload, save, AI). Old rows are pruned on use.
+model RateEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String
+  createdAt DateTime @default(now())
+
+  @@index([userId, kind, createdAt(sort: Desc)])
+  @@map("rate_event")
 }

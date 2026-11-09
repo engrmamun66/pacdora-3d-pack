@@ -2,6 +2,7 @@
 
 import { MAX_ARTWORK_JSON_BYTES, artworkSchema, parseProjectDoc, projectDocV1 } from "@packaging/schema";
 import { db } from "@/server/db";
+import { LIMITS, takeToken } from "@/server/limits";
 import { requireUser } from "@/server/session";
 
 export type SaveResult = { ok: true; savedAt: string } | { ok: false; message: string };
@@ -10,6 +11,9 @@ export type SaveResult = { ok: true; savedAt: string } | { ok: false; message: s
 export async function saveArtwork(projectId: string, artwork: unknown): Promise<SaveResult> {
   const user = await requireUser();
   if (typeof projectId !== "string" || projectId.length > 40) return { ok: false, message: "Invalid project." };
+  if (!(await takeToken(user.id, "saveArtwork", LIMITS.saveArtwork.max, LIMITS.saveArtwork.windowSec))) {
+    return { ok: false, message: "Saving too fast. Your changes are kept; they will be saved in a moment." };
+  }
   let size: number;
   try {
     size = new TextEncoder().encode(JSON.stringify(artwork)).length;
@@ -32,8 +36,12 @@ export async function saveArtwork(projectId: string, artwork: unknown): Promise<
 
   const row = await db.project.findFirst({ where: { id: projectId, userId: user.id } });
   if (!row) return { ok: false, message: "Project not found." };
-  const doc = parseProjectDoc(row.projectData);
-  const next = parseProjectDoc({ ...doc, artwork: parsed.data });
+  let next;
+  try {
+    next = parseProjectDoc({ ...parseProjectDoc(row.projectData), artwork: parsed.data });
+  } catch {
+    return { ok: false, message: "This project file could not be read." };
+  }
   // No revalidatePath: it would refresh the editor's props mid-session. Project pages read live data.
   const saved = await db.project.update({ where: { id: row.id }, data: { projectData: next }, select: { updatedAt: true } });
   return { ok: true, savedAt: saved.updatedAt.toISOString() };
@@ -45,14 +53,16 @@ const threeDSchema = projectDocV1.shape.threeD;
 export async function saveThreeD(projectId: string, settings: unknown): Promise<SaveResult> {
   const user = await requireUser();
   const parsed = threeDSchema.safeParse(settings);
-  if (!parsed.success || typeof projectId !== "string") return { ok: false, message: "Invalid 3D settings." };
+  if (!parsed.success || typeof projectId !== "string" || projectId.length > 40) return { ok: false, message: "Invalid 3D settings." };
+  if (!(await takeToken(user.id, "saveThreeD", LIMITS.saveThreeD.max, LIMITS.saveThreeD.windowSec))) return { ok: false, message: "Saving too fast. Please wait a moment." };
   const row = await db.project.findFirst({ where: { id: projectId, userId: user.id } });
   if (!row) return { ok: false, message: "Project not found." };
-  const doc = parseProjectDoc(row.projectData);
-  const saved = await db.project.update({
-    where: { id: row.id },
-    data: { projectData: parseProjectDoc({ ...doc, threeD: parsed.data }) },
-    select: { updatedAt: true },
-  });
+  let data;
+  try {
+    data = parseProjectDoc({ ...parseProjectDoc(row.projectData), threeD: parsed.data });
+  } catch {
+    return { ok: false, message: "This project file could not be read." };
+  }
+  const saved = await db.project.update({ where: { id: row.id }, data: { projectData: data }, select: { updatedAt: true } });
   return { ok: true, savedAt: saved.updatedAt.toISOString() };
 }

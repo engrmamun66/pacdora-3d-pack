@@ -6,7 +6,8 @@
   "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./node": "./src/node.ts"
+    "./node": "./src/node.ts",
+    "./images": "./src/images.ts"
   },
   "dependencies": {
     "@fontsource/inter": "5.3.0",

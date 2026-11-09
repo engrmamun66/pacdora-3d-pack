@@ -547,4 +547,25 @@ Reply with answers, or "go with your recommendations", to begin.
 - **Verified:** 12 unit tests with a fake client (request shape: model, structured output, effort, fallbacks, no forced tool choice; refusal and unparseable answers; engine rejects bad combinations even when the model's JSON is well formed). In the browser: panel hidden without a key; prefill works; unknown keys dropped; bad JSON ignored.
 - **Not verified:** a real call to the Anthropic API (no key on this machine). To test: set `ANTHROPIC_API_KEY` in `apps/web/.env.local`, restart `npm run dev`, open Templates.
 
-- **Next:** Phase 8, security and production preparation.
+### Phase 8: security and production preparation (done in code 2026-11-09; deployment itself not exercised)
+- **Independent security audit** (a separate reviewer agent read all routes, actions and exporters; I verified each finding against the code). No cross-user access found: every project and asset read or write is scoped by the signed-in user. Findings fixed:
+  - PNG decompression bomb and unbounded image work: upload checks the image header (max 12000 px per side, 40 megapixels); exports refuse oversized images before decoding, cap total embedded image data (150 MB per export), read each image once and store it once in the PDF.
+  - Upload body not bounded when sent chunked: now requires Content-Length (411) and 10 MB limit.
+  - No rate limits on expensive actions: per-user limits on export (10/min, plus max 3 running at once per server), upload (30/min), artwork save (120/min), 3D save (60/min), AI (daily). Counted under a per-user database lock; verified under parallel load (exactly 10 of 14 parallel exports and exactly 30 uploads/min allowed).
+  - AI daily quota race (parallel requests all passed the check): now reserved atomically before the paid call.
+  - Upload quota race: reserved atomically in one transaction with the database row.
+  - Security headers on every response: CSP limited to `frame-ancestors 'none'`, `base-uri`, `form-action`, `object-src 'none'`; plus X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy, HSTS (production), no X-Powered-By. **Not done:** a `script-src` CSP (needs per-request nonces with this framework).
+  - Export errors no longer leak internal paths/library messages (generic message + reference id, details in the server log); the `X-Export-Report` header is capped (15 notes, about 4 KB).
+  - Open redirect via tab/newline in `?next=` (e.g. `/%09/evil.com`): control characters and backslashes rejected (tests added).
+  - Production environment checks: `BETTER_AUTH_URL` must be https and the Turnstile secret must not be a Cloudflare test key (skipped for localhost and during build). The server now validates its environment at startup (instrumentation), so a bad deployment fails every request with a clear log message instead of half working.
+  - Stored project documents that cannot be parsed give a clean error instead of a 500; project id length checked.
+- **Trusted proxy:** client IP header configurable (`CLIENT_IP_HEADER`). Verified: with a consistent IP the sign-in limit is 5 per minute then 429; forged varying IPs bypass it, so the reverse proxy MUST overwrite the header (documented in `docs/deploy.md` for Caddy, nginx, Cloudflare).
+- **Production build:** `next build` passes with zero warnings; production server smoke-tested (routes, redirects, headers).
+- **Deployment files:** `Dockerfile`, `infra/docker-compose.prod.yml` (database not exposed, app bound to 127.0.0.1, uploads volume), `infra/.env.prod.example`, `scripts/backup.sh`, `scripts/restore.sh`, `docs/deploy.md`.
+- **Not verified (be aware):**
+  - The Docker image: inside the image `npm ci` and `next build` succeeded, but the final stage failed because the Mac's disk was 100% full (the Colima VM disk then reported I/O errors). The runtime stage, container start and the production compose stack have **not** been run.
+  - Backup and restore scripts have not been run. Test a restore before relying on them.
+  - A real AI call (no API key), real Turnstile/Google/SMTP production settings, and real Illustrator opening of `.ai`/`.eps` files.
+- **Known gaps left on purpose:** no uploaded-image delete screen (uploads are never removed; files of deleted accounts stay on disk); no script-src CSP; export runs inside the web process (limited by concurrency cap, not a separate worker); rate limits are per server process for concurrency and database-backed per user for rates; no automated browser end-to-end suite (checks were done by hand through the browser tool).
+
+- **Next:** free disk space on the Mac, restart Colima, re-run the Docker build and the compose stack (see docs/deploy.md), then decide the open questions (product name, SMTP provider, Illustrator versions, printer confirmation).

@@ -1,4 +1,5 @@
 import { PNG } from "pngjs";
+import { imageSize, imageSizeProblem } from "@packaging/vector-scene";
 
 export interface RgbImage {
   readonly width: number;
@@ -11,6 +12,9 @@ export interface RgbImage {
 
 /** Decode a PNG and composite it onto white (for formats without transparency). */
 export function pngToRgbOnWhite(bytes: Uint8Array): RgbImage {
+  // Check the header before decoding: a small PNG can declare billions of pixels.
+  const problem = imageSizeProblem(imageSize(bytes, "image/png"));
+  if (problem) throw new Error(`Image refused: ${problem}.`);
   const png = PNG.sync.read(Buffer.from(bytes));
   const { width, height, data } = png;
   const rgb = new Uint8Array(width * height * 3);

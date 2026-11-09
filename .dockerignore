@@ -1,0 +1,12 @@
+**/node_modules
+**/.next
+.git
+out
+storage
+apps/web/storage
+.playwright-mcp
+scripts/viewer/dist
+**/.env
+**/.env.*
+!**/.env.example
+coverage

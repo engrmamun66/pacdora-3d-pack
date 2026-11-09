@@ -60,6 +60,11 @@ export const auth = betterAuth({
     },
   },
 
+  advanced: {
+    // Rate limits are keyed by client IP: read it only from the header our proxy sets (see docs/deploy.md).
+    ipAddress: { ipAddressHeaders: [env.CLIENT_IP_HEADER] },
+  },
+
   rateLimit: {
     enabled: true, // Better Auth enables it only in production by default; we want it everywhere.
     storage: "database",
