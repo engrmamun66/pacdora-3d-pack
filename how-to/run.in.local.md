@@ -1,9 +1,14 @@
 
 
 ```bash
-colima start      # once after each Mac restart
-npm run db:up     # database + email catcher
-npm run dev       # the project: http://localhost:3100
+# colima start      # once after each Mac restart
+# npm run db:up     # database + email catcher
+# npm run dev       # the project: http://localhost:3100
+
+
+colima start 
+npm run db:up
+npm run dev 
 ```
 
 # npm run viewer is just a developer tool. It will be removed once the 3D preview moves into the real app's editor.
