@@ -72,7 +72,7 @@ export function AiDescribe() {
                 </p>
                 <Link
                   className="w-fit rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted"
-                  href={`/templates/${encodeURIComponent(result.presetId)}?p=${encodeURIComponent(JSON.stringify(result.params))}`}
+                  href={`/template/dieline/${encodeURIComponent(result.presetId)}?p=${encodeURIComponent(JSON.stringify(result.params))}`}
                 >
                   Open in designer
                 </Link>

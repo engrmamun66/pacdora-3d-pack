@@ -5,14 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, Info, Layers, Printer, Ruler, SlidersHorizontal, type LucideIcon } from "lucide-react";
 import { ParamValidationError, getGenerator, type DielineGeometry, type ParamDescriptor, type ParamGroup } from "@packaging/dieline-engine";
-import { STYLE, renderDielineSvg } from "@packaging/render-svg";
+import { STYLE, dielineViewBox, renderDielineSvg } from "@packaging/render-svg";
 import { DeleteProjectButton } from "@/components/projects/delete-project-button";
 import { notify } from "@/lib/notify";
 import { svgDataUrl } from "@/lib/dieline-preview";
 import { createProject, createProjectDraft, updateProject, type DesignState } from "@/app/(app)/projects/actions";
 import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { MaterialPicker, ParamField } from "./settings-fields";
-import { SheetCanvas, type ViewToggles } from "./sheet-canvas";
+import { DIELINE_TOGGLES, SheetCanvas, type ViewToggles } from "./sheet-canvas";
 import { FormatCard, FoldPreview, type DownloadFormat } from "./side-cards";
 import { CUSTOM_GRADE, MATERIAL_TYPES, materialFor, withUnitLabels, type Unit } from "./units";
 
@@ -384,7 +384,7 @@ export function DielineWorkspace({ mode, generatorId, title, description, initia
         {/* Centre: sheet */}
         <main className="flex min-h-[55vh] min-w-0 flex-col lg:min-h-0">
           {shown && src ? (
-            <SheetCanvas geo={shown} src={src} toggles={toggles} onToggles={setToggles} legend={legend} />
+            <SheetCanvas bounds={dielineViewBox(shown, 22)} src={src} toggles={toggles} toggleDefs={DIELINE_TOGGLES} onToggles={setToggles} legend={legend} />
           ) : (
             <p className="p-6 text-sm text-muted-foreground">Enter valid dimensions to see the dieline.</p>
           )}

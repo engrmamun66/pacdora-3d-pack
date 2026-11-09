@@ -22,5 +22,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/doraadmin/:path*", "/doraadmin", "/dashboard/:path*", "/projects/:path*", "/templates/:path*", "/settings/:path*", "/editor/:path*"],
+  matcher: ["/doraadmin/:path*", "/doraadmin", "/dashboard/:path*", "/projects/:path*", "/templates/:path*", "/template/:path*", "/settings/:path*", "/editor/:path*"],
 };

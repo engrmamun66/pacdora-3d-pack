@@ -18,10 +18,16 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Old template address -> new one (query string such as ?p= is kept by Next).
+  async redirects() {
+    return [{ source: "/templates/:slug", destination: "/template/dieline/:slug", permanent: false }];
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
   cacheComponents: true,
+  // The template import sends an SVG (up to 3 MB of text) to a server action.
+  experimental: { serverActions: { bodySizeLimit: "4mb" } },
   partialPrefetching: true,
   turbopack: {
     rules: {

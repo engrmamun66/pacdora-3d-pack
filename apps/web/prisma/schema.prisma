@@ -111,12 +111,23 @@ model Template {
   defaultParameters Json      @db.JsonB
   previewUrl        String?
   published         Boolean   @default(true)
+  /// "builtin" = parametric generator in code (seeded); "svg" = imported from an SVG by an admin.
+  source            String    @default("builtin")
+  /// For source "svg": the parsed dieline (millimetres) and the role chosen for each line style.
+  geometry          Json?     @db.JsonB
+  widthMm           Float?
+  heightMm          Float?
+  /// Small SVG (as text) for lists; built when the template is saved. Keeps list pages light.
+  thumbnail         String?
+  sortOrder         Int       @default(0)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   projects          Project[]
+  categories        TemplateCategory[]
 
   @@index([category])
   @@index([generatorId])
+  @@index([source, published])
   @@map("template")
 }
 
@@ -191,4 +202,22 @@ model SiteSetting {
   updatedById String?
 
   @@map("site_setting")
+}
+
+/// Browse groups for templates. kind "use" = By Uses (Gift Boxes, Food ...), "model" = By Models (FEFCO, Tuck End ...).
+/// "All" is not a row: it means no filter. A template may belong to several categories.
+model TemplateCategory {
+  id        String     @id @default(cuid())
+  kind      String
+  slug      String
+  name      String
+  sortOrder Int        @default(0)
+  active    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  templates Template[]
+
+  @@unique([kind, slug])
+  @@index([kind, sortOrder])
+  @@map("template_category")
 }

@@ -4,39 +4,59 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import type { PublicCategory, PublicTemplate } from "@/server/templates-public";
 
-export interface LibraryItem {
-  id: string;
-  name: string;
-  category: string;
-  categoryLabel: string;
-  description: string;
-  tags: string[];
-  thumbnail: string | null;
-}
+type Group = "use" | "model";
+const GROUPS: { kind: Group; label: string }[] = [
+  { kind: "use", label: "By uses" },
+  { kind: "model", label: "By models" },
+];
 
-/** Searchable, filterable template grid (catalogue is small, so filtering is client-side). */
-export function TemplateLibrary({ items, categories }: { items: LibraryItem[]; categories: { id: string; label: string }[] }) {
+/** Searchable template grid with two browse groups (by uses, by models). "All" means no category filter. */
+export function TemplateLibrary({ items, categories }: { items: PublicTemplate[]; categories: PublicCategory[] }) {
   const [q, setQ] = useState("");
+  const [group, setGroup] = useState<Group>("use");
   const [cat, setCat] = useState<string | null>(null);
+  const shown = categories.filter((c) => c.kind === group);
+  const byKey = useMemo(() => new Map(categories.map((c) => [c.key, c])), [categories]);
+
   const filtered = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     return items.filter((t) => {
-      if (cat && t.category !== cat) return false;
-      const hay = `${t.name} ${t.description} ${t.tags.join(" ")}`.toLowerCase();
+      if (cat && !t.categoryKeys.includes(cat)) return false;
+      const hay = `${t.name} ${t.description}`.toLowerCase();
       return words.every((w) => hay.includes(w));
     });
   }, [items, q, cat]);
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <Input placeholder="Search templates…" value={q} onChange={(e) => setQ(e.target.value)} className="sm:max-w-xs" aria-label="Search templates" />
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Input placeholder="Search templates…" value={q} onChange={(e) => setQ(e.target.value)} className="sm:max-w-xs" aria-label="Search templates" />
+          <div role="tablist" aria-label="Browse by" className="flex rounded-lg border p-0.5 text-sm">
+            {GROUPS.map((g) => (
+              <button
+                key={g.kind}
+                type="button"
+                role="tab"
+                aria-selected={group === g.kind}
+                onClick={() => {
+                  setGroup(g.kind);
+                  setCat(null);
+                }}
+                className={`rounded-md px-3 py-1 ${group === g.kind ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2">
           <Chip active={cat === null} onClick={() => setCat(null)}>All ({items.length})</Chip>
-          {categories.map((c) => (
-            <Chip key={c.id} active={cat === c.id} onClick={() => setCat(c.id)}>
-              {c.label} ({items.filter((i) => i.category === c.id).length})
+          {shown.map((c) => (
+            <Chip key={c.key} active={cat === c.key} onClick={() => setCat(c.key)}>
+              {c.name} ({c.count})
             </Chip>
           ))}
         </div>
@@ -47,7 +67,7 @@ export function TemplateLibrary({ items, categories }: { items: LibraryItem[]; c
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((t) => (
             <li key={t.id}>
-              <Link href={`/templates/${t.id}`} className="flex h-full flex-col overflow-hidden rounded-xl border transition hover:shadow-sm">
+              <Link href={`/template/dieline/${t.id}`} className="flex h-full flex-col overflow-hidden rounded-xl border transition hover:shadow-sm">
                 <div className="flex aspect-[4/3] items-center justify-center bg-muted/40 p-4">
                   {t.thumbnail ? (
                     // eslint-disable-next-line @next/next/no-img-element -- generated SVG data URL
@@ -55,11 +75,11 @@ export function TemplateLibrary({ items, categories }: { items: LibraryItem[]; c
                   ) : null}
                 </div>
                 <div className="flex flex-1 flex-col gap-1.5 p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <h2 className="font-medium">{t.name}</h2>
-                    <Badge variant="secondary">{t.categoryLabel}</Badge>
+                  <h2 className="font-medium">{t.name}</h2>
+                  <div className="flex flex-wrap gap-1">
+                    {t.categoryKeys.slice(0, 3).map((k) => (byKey.get(k) ? <Badge key={k} variant="secondary">{byKey.get(k)!.name}</Badge> : null))}
                   </div>
-                  <p className="text-sm text-muted-foreground">{t.description}</p>
+                  {t.description ? <p className="line-clamp-2 text-sm text-muted-foreground">{t.description}</p> : null}
                 </div>
               </Link>
             </li>

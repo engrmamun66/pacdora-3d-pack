@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Settings, Users } from "lucide-react";
+import { LayoutDashboard, Settings, Shapes, Tags, Users } from "lucide-react";
 
 const items = [
   { href: "/doraadmin", label: "Overview", icon: LayoutDashboard },
   { href: "/doraadmin/users", label: "Users", icon: Users },
+  { href: "/doraadmin/templates", label: "Templates", icon: Shapes },
+  { href: "/doraadmin/template-categories", label: "Template categories", icon: Tags },
   { href: "/doraadmin/settings", label: "Settings", icon: Settings },
 ];
 
