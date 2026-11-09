@@ -1,12 +1,13 @@
 "use client";
 
-import { useActionState, useDeferredValue, useMemo, useRef, useState } from "react";
+import { useActionState, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, Info, Layers, Printer, Ruler, SlidersHorizontal, type LucideIcon } from "lucide-react";
 import { ParamValidationError, getGenerator, type DielineGeometry, type ParamDescriptor, type ParamGroup } from "@packaging/dieline-engine";
 import { STYLE, renderDielineSvg } from "@packaging/render-svg";
 import { DeleteProjectButton } from "@/components/projects/delete-project-button";
+import { notify } from "@/lib/notify";
 import { svgDataUrl } from "@/lib/dieline-preview";
 import { createProject, createProjectDraft, updateProject, type DesignState } from "@/app/(app)/projects/actions";
 import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
@@ -124,6 +125,13 @@ export function DielineWorkspace({ mode, generatorId, title, description, initia
   const action = mode.kind === "create" ? createProject : updateProject;
   const [state, formAction, pending] = useActionState<DesignState, FormData>(action, IDLE);
 
+  // Tell the user how Save went (the inline banner stays for screen readers and long messages).
+  useEffect(() => {
+    if (!state.message) return;
+    if (state.ok) notify.success(state.message, { id: "project-save" });
+    else notify.error(state.message, { id: "project-save" });
+  }, [state]);
+
   const issueFor = (key: string) => [...(result.issues ?? []), ...state.issues].find((i) => i.path === key || i.path.startsWith(`${key}.`))?.message;
   const otherIssues = (result.issues ?? []).filter((i) => !gen.params.some((p) => i.path === p.key));
   const resolved = (shown?.params ?? {}) as Record<string, unknown>;
@@ -167,6 +175,7 @@ export function DielineWorkspace({ mode, generatorId, title, description, initia
         if (!glb) throw new Error("The 3D preview is not ready yet.");
         saveBlob(glb, `${fileBase(name)}.glb`);
         setDl({ ok: true, title: "Downloaded .glb", notes: ["Panels have zero thickness. The model shows the carton at the current fold amount."] });
+        notify.info("Downloaded .glb", { description: "Panels have zero thickness." });
         return;
       }
       // Server exports use the saved project, so save the current values first.
@@ -198,9 +207,12 @@ export function DielineWorkspace({ mode, generatorId, title, description, initia
       const report = JSON.parse(decodeURIComponent(res.headers.get("x-export-report") ?? "%7B%7D")) as { losses?: string[] };
       saveBlob(await res.blob(), `${fileBase(name)}.${format}`);
       setDl({ ok: true, title: `Downloaded .${format}`, notes: report.losses ?? [] });
+      if (report.losses?.length) notify.warning(`Downloaded .${format} with ${report.losses.length} limitation${report.losses.length === 1 ? "" : "s"}`, { description: report.losses[0] });
+      else notify.success(`Downloaded .${format}`);
       if (mode.kind === "create") router.replace(`/projects/${projectId}`);
     } catch (e) {
       setDl({ ok: false, title: "Download failed", notes: [(e as Error).message] });
+      notify.error("Download failed", { description: (e as Error).message });
     } finally {
       setBusy(false);
     }

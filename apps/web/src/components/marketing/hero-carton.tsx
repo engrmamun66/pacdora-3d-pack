@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { getGenerator, getPreset, type DielineGeometry } from "@packaging/dieline-engine";
 import { outlinePathD } from "@packaging/render-svg";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
-import { type HeroSettings } from "@/lib/hero-settings";
+import { DEFAULT_BOX_COLOR, luminance, type HeroSettings } from "@/lib/hero-settings";
 import { START_OFFSET, STILL_STAGE, stageAt, stagedHinges, type HingeInfo } from "@/lib/hero-fold";
 
 const PRESET = "straight-tuck-end-box";
@@ -42,7 +42,7 @@ function useWebGL() {
 }
 
 /** Printed look for the outside: a repeating pattern in flat-sheet space (it wraps around the folded box). */
-function makeTexture(geo: DielineGeometry): { canvas: HTMLCanvasElement; rect: { minX: number; minY: number; width: number; height: number } } {
+function makeTexture(geo: DielineGeometry, color: string): { canvas: HTMLCanvasElement; rect: { minX: number; minY: number; width: number; height: number } } {
   const b = geo.bleedBounds;
   const rect = { minX: b.min.x, minY: b.min.y, width: b.max.x - b.min.x, height: b.max.y - b.min.y };
   const k = 6; // px per mm
@@ -51,9 +51,10 @@ function makeTexture(geo: DielineGeometry): { canvas: HTMLCanvasElement; rect: {
   c.height = Math.round(rect.height * k);
   const g = c.getContext("2d")!;
   // Indigo board, a fine diamond lattice, one amber band: reads well on the light grid.
-  g.fillStyle = "#3f4fd0";
+  g.fillStyle = color;
   g.fillRect(0, 0, c.width, c.height);
-  g.strokeStyle = "rgb(255 255 255 / 0.28)";
+  // Light lattice on dark boxes, dark lattice on light boxes.
+  g.strokeStyle = luminance(color) < 0.45 ? "rgb(255 255 255 / 0.28)" : "rgb(0 0 0 / 0.16)";
   g.lineWidth = 1.2 * (k / 6);
   const step = 12 * k;
   for (let d = -c.height; d < c.width + c.height; d += step) {
@@ -88,11 +89,11 @@ export function DielineLines({ geo, className }: { geo: DielineGeometry; classNa
   );
 }
 
-export function HeroCarton({ initial = "closed" }: { initial?: HeroSettings["initial"] }) {
+export function HeroCarton({ initial = "closed", color = DEFAULT_BOX_COLOR }: { initial?: HeroSettings["initial"]; color?: string }) {
   const geo = useMemo(() => heroGeometry(), []);
   const reduced = useReducedMotion();
   const webgl = useWebGL();
-  const tex = useMemo(() => (webgl ? makeTexture(geo) : null), [geo, webgl]);
+  const tex = useMemo(() => (webgl ? makeTexture(geo, color) : null), [geo, webgl, color]);
   const view = useRef<CartonViewHandle>(null);
   const hinges = useMemo<HingeInfo[]>(() => {
     const role = new Map(geo.foldTree.panels.map((p) => [p.id, p.role as string]));
@@ -122,7 +123,7 @@ export function HeroCarton({ initial = "closed" }: { initial?: HeroSettings["ini
     };
     id = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(id);
-  }, [reduced, webgl, hinges, initial]);
+  }, [reduced, webgl, hinges, initial, tex]); // tex: a new texture rebuilds the model, so re-apply the current pose
 
   return (
     <div className="relative size-full">
@@ -138,10 +139,11 @@ export function HeroCarton({ initial = "closed" }: { initial?: HeroSettings["ini
             texture={tex.canvas}
             textureRect={tex.rect}
             progress={STILL_STAGE[initial]}
-            outsideColor="#3f4fd0"
+            outsideColor={color}
             insideColor="#d9b98a"
             autoRotate={!reduced}
             transparent
+            rotateOnly
             shadows={false}
             frameMm={150}
           />

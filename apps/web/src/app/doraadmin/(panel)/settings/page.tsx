@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ENGINE_VERSION } from "@packaging/dieline-engine";
 import { HeroSettingsForm } from "@/components/admin/hero-settings-form";
+import { ToastTester } from "@/components/admin/toast-tester";
 import { db } from "@/server/db";
 import { readHeroSettings } from "@/server/site-settings";
 import { env, aiEnabled, googleEnabled } from "@/server/env";
@@ -52,6 +53,14 @@ export default async function AdminSettings() {
           </p>
         </div>
         <HeroSettingsForm initial={hero.settings} />
+      </section>
+
+      <section aria-labelledby="h-notify" className="flex flex-col gap-3">
+        <div>
+          <h2 id="h-notify" className="font-medium">Notifications</h2>
+          <p className="text-sm text-muted-foreground">Messages appear at the bottom right: success, error, warning and info. Preview them here.</p>
+        </div>
+        <ToastTester />
       </section>
 
       <section aria-labelledby="h-system" className="flex flex-col gap-3">

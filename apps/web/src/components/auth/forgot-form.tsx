@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
+import { notify } from "@/lib/notify";
 import { authClient, captchaHeaders } from "@/lib/auth-client";
 import { Field, FormError } from "./field";
 import { Turnstile } from "./turnstile";
@@ -30,6 +31,7 @@ export function ForgotForm() {
     if (err && err.status !== 400 && err.status !== 404) return setError(err.message ?? "Request failed.");
     // Same message whether or not the account exists (no account enumeration).
     setDone(true);
+    notify.info("Check your inbox", { description: "If an account exists for that email, a reset link is on its way." });
   }
 
   if (done) return <p className="text-sm">If an account exists for that email, a reset link is on its way. It expires in 1 hour.</p>;

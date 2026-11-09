@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
+import { notify } from "@/lib/notify";
 import { authClient, captchaHeaders } from "@/lib/auth-client";
 import { confirmAdminSession } from "@/app/doraadmin/actions";
 import { Field, FormError } from "@/components/auth/field";
@@ -31,6 +32,7 @@ export function AdminLoginForm() {
     captcha.reset();
     if (err) {
       setBusy(false);
+      if (err.status === 429) notify.warning("Too many attempts", { description: "Wait a minute and try again." });
       return setError(err.status === 429 ? "Too many attempts. Please wait a minute and try again." : GENERIC);
     }
     const isAdmin = await confirmAdminSession().catch(() => false);

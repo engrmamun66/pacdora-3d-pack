@@ -6,13 +6,17 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { notify } from "@/lib/notify";
 import { updateProfile, type ProfileState } from "./profile-actions";
 
 export function ProfileForm({ name }: { name: string }) {
   const router = useRouter();
   const [state, action, pending] = useActionState<ProfileState, FormData>(updateProfile, { ok: false, message: null });
   useEffect(() => {
-    if (state.ok) router.refresh();
+    if (state.ok) {
+      router.refresh();
+      notify.success("Name saved", { id: "profile-save" });
+    } else if (state.message) notify.error(state.message, { id: "profile-save" });
   }, [state, router]);
   return (
     <form action={action} className="flex flex-col gap-3">

@@ -21,6 +21,11 @@ export interface CartonViewProps {
   autoRotate?: boolean;
   /** Transparent canvas instead of the grey studio background. Read once, when the view is created. */
   transparent?: boolean;
+  /**
+   * Rotate only: no wheel zoom, no panning, and vertical touch drags still scroll the page.
+   * For decorative views that sit inside a scrolling page. Read once, when the view is created.
+   */
+  rotateOnly?: boolean;
   /** Cast shadows. Read once, when the view is created. Default on. */
   shadows?: boolean;
   /** Size (mm) the camera is framed for, instead of the folded carton's size. Use it when the fold animation opens the sheet wide. */
@@ -44,12 +49,13 @@ export interface CartonViewHandle {
 
 /** Interactive 3D carton built from the engine's fold tree (three.js, no React renderer). */
 export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function CartonView(
-  { geo, texture, textureRect, progress, outsideColor, insideColor, className, autoRotate = false, transparent = false, shadows = true, frameMm },
+  { geo, texture, textureRect, progress, outsideColor, insideColor, className, autoRotate = false, transparent = false, shadows = true, frameMm, rotateOnly = false },
   ref,
 ) {
   const host = useRef<HTMLDivElement>(null);
   const transparentAtStart = useRef(transparent);
   const shadowsAtStart = useRef(shadows);
+  const rotateOnlyAtStart = useRef(rotateOnly);
   const rebuild = useRef<(p: number, hingeProgress?: Readonly<Record<string, number>>) => void>(() => {});
   const three = useRef<{
     renderer: THREE.WebGLRenderer;
@@ -126,6 +132,11 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     const camera = new THREE.PerspectiveCamera(35, 1, 1, 5000);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
+    if (rotateOnlyAtStart.current) {
+      controls.enableZoom = false; // the mouse wheel must keep scrolling the page
+      controls.enablePan = false;
+      renderer.domElement.style.touchAction = "pan-y"; // vertical swipes scroll the page, horizontal ones turn the box
+    }
     scene.add(new THREE.HemisphereLight(0xffffff, 0xc9c2b4, 2.0));
     const sun = new THREE.DirectionalLight(0xffffff, 1.8);
     sun.castShadow = shadowsAtStart.current;

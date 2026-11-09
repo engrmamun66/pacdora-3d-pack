@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { authClient, captchaHeaders } from "@/lib/auth-client";
+import { notify } from "@/lib/notify";
 import { Field, FormError } from "./field";
 import { GoogleButton, OrDivider } from "./google-button";
 import { Turnstile } from "./turnstile";
@@ -40,9 +41,11 @@ export function LoginForm({ next, googleEnabled, initialError }: { next: string;
       return;
     }
     if (err.code === "EMAIL_NOT_VERIFIED") {
+      notify.warning("Please confirm your email first");
       setUnverifiedEmail(email);
       setError("Please confirm your email first. Check your inbox for the link.");
     } else if (err.status === 429) {
+      notify.warning("Too many attempts", { description: "Wait a minute and try again." });
       setError("Too many attempts. Please wait a minute and try again.");
     } else {
       setError(err.code === "INVALID_EMAIL_OR_PASSWORD" ? "Email or password is incorrect." : (err.message ?? "Sign-in failed."));
@@ -58,7 +61,10 @@ export function LoginForm({ next, googleEnabled, initialError }: { next: string;
     });
     captcha.reset();
     if (err) setError(err.message ?? "Could not resend the email.");
-    else setNotice("Confirmation email sent again.");
+    else {
+      setNotice("Confirmation email sent again.");
+      notify.success("Confirmation email sent", { description: "Check your inbox." });
+    }
   }
 
   return (

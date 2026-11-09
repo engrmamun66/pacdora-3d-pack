@@ -1,5 +1,6 @@
 "use client";
 
+import { notify } from "@/lib/notify";
 import "./fonts";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -99,7 +100,6 @@ export function ArtworkEditor({
   const [viewport, setViewport] = useState<Viewport | null>(null);
   const [overlay, setOverlay] = useState<OverlayOptions>({ showGrid: true, showBleed: true, showSafe: true });
   const [saveState, setSaveState] = useState<SaveState>("saved");
-  const [message, setMessage] = useState<{ kind: "error" | "info"; text: string } | null>(null);
   const [assets, setAssets] = useState<Asset[]>(initialAssets);
   const [uploading, setUploading] = useState(false);
   const [show3d, setShow3d] = useState(true);
@@ -110,7 +110,7 @@ export function ArtworkEditor({
   const updateThreeD = (s: ThreeDSettings) => {
     setThreeD(s);
     void saveThreeD(projectId, s).then((r) => {
-      if (!r.ok) setMessage({ kind: "error", text: r.message });
+      if (!r.ok) notify.error(r.message, { id: "editor-save" });
     });
   };
 
@@ -121,7 +121,8 @@ export function ArtworkEditor({
         (art) => saveArtwork(projectId, art),
         (state, error) => {
           setSaveState(state);
-          if (error) setMessage({ kind: "error", text: error });
+          if (error) notify.error(error, { id: "editor-save" });
+          else if (state === "saved") notify.dismiss("editor-save"); // recovered after a failed save
         },
       ),
   );
@@ -154,7 +155,7 @@ export function ArtworkEditor({
       onSelection: refreshSelection,
       onViewport: setViewport,
       onHistory: setHistory,
-      onError: (text) => setMessage({ kind: "error", text }),
+      onError: (text) => notify.error(text),
     });
     ctl.current = c;
     if (process.env.NODE_ENV !== "production") Object.assign(window, { __editor: c });
@@ -232,7 +233,6 @@ export function ArtworkEditor({
   // ------------------------------------------------------------ uploads
   const upload = async (file: File) => {
     setUploading(true);
-    setMessage(null);
     try {
       const body = new FormData();
       body.set("file", file);
@@ -243,7 +243,7 @@ export function ArtworkEditor({
       setAssets((a) => [json.asset!, ...a]);
       await ctl.current?.addImage(json.asset.id, json.asset.fileName);
     } catch (e) {
-      setMessage({ kind: "error", text: (e as Error).message });
+      notify.error((e as Error).message);
     } finally {
       setUploading(false);
     }
@@ -364,12 +364,6 @@ export function ArtworkEditor({
           <div className="min-h-0 border-r"><Ruler orientation="vertical" viewport={viewport} /></div>
           <div ref={hostEl} className="relative min-h-0 min-w-0 overflow-hidden" data-testid="editor-canvas-host">
             <canvas ref={canvasEl} />
-            {message ? (
-              <div role={message.kind === "error" ? "alert" : "status"} className={`absolute bottom-3 left-1/2 flex max-w-lg -translate-x-1/2 items-center gap-3 rounded-md border px-3 py-2 text-xs shadow-sm ${message.kind === "error" ? "border-destructive/30 bg-destructive/10 text-destructive" : "bg-background"}`}>
-                {message.text}
-                <button type="button" className="underline" onClick={() => setMessage(null)}>Dismiss</button>
-              </div>
-            ) : null}
           </div>
         </div>
 

@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
+import { notify } from "@/lib/notify";
 import { Field, FormError } from "@/components/auth/field";
 
 const MIN = 10;
@@ -27,9 +28,14 @@ export function ChangePasswordForm() {
     setError(null);
     const { error: err } = await authClient.changePassword({ currentPassword: current, newPassword: next, revokeOtherSessions: true });
     setBusy(false);
-    if (err) return setError(err.status === 429 ? "Too many attempts. Please wait a minute." : "The current password is incorrect, or the new one was rejected.");
+    if (err) {
+      const msg = err.status === 429 ? "Too many attempts. Please wait a minute." : "The current password is incorrect, or the new one was rejected.";
+      notify.error("Password not changed", { description: msg });
+      return setError(msg);
+    }
     form.reset();
     setDone(true);
+    notify.success("Password changed", { description: "Other devices were signed out." });
   }
 
   return (

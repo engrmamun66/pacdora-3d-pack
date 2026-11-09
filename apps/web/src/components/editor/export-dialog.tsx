@@ -6,6 +6,7 @@ import type { DielineGeometry } from "@packaging/dieline-engine";
 import { ILLUSTRATOR_PROFILES } from "@packaging/render-print/profiles";
 import type { Artwork } from "@packaging/schema";
 import { setPngDpi } from "@/lib/png-dpi";
+import { notify } from "@/lib/notify";
 import { renderPng } from "./artwork-raster";
 
 type Format = "pdf" | "ai" | "eps" | "svg" | "dxf" | "png" | "png-hires" | "glb" | "json";
@@ -98,14 +99,19 @@ export function ExportDialog({
         const ext = format === "json" ? "json" : format;
         download(await res.blob(), `${fileBase(name)}.${ext}`);
         setResult({ ok: true, title: `Downloaded ${ext.toUpperCase()}`, notes: report.losses ?? [] });
+        if (report.losses?.length) notify.warning(`Downloaded ${ext.toUpperCase()} with ${report.losses.length} limitation${report.losses.length === 1 ? "" : "s"}`, { description: "See the notes in the export dialog." });
+        else notify.success(`Downloaded ${ext.toUpperCase()}`);
       } else if (format === "glb") {
         download(await getGlb(), `${fileBase(name)}.glb`);
         setResult({ ok: true, title: "Downloaded GLB", notes: ["The model shows the carton at the current fold amount. Panels have zero thickness."] });
+        notify.info("Downloaded GLB", { description: "Panels have zero thickness." });
       } else {
         const want = format === "png-hires" ? 300 : 150;
         const r = await renderPng(geo, getArtwork(), { dpi: want, background: boardColor, dieline: opts.dieline });
         const bytes = setPngDpi(new Uint8Array(await r.blob.arrayBuffer()), r.dpi);
         download(new Blob([bytes], { type: "image/png" }), `${fileBase(name)}-${r.dpi}dpi.png`);
+        if (r.dpi < want) notify.warning(`PNG saved at ${r.dpi} dpi, not ${want}`, { description: "The browser's canvas size limit was reached." });
+        else notify.success(`Downloaded PNG (${r.width} x ${r.height} px)`);
         setResult({
           ok: true,
           title: `Downloaded PNG (${r.width} x ${r.height} px)`,
@@ -117,6 +123,7 @@ export function ExportDialog({
       }
     } catch (e) {
       setResult({ ok: false, title: "Export failed", notes: [(e as Error).message] });
+      notify.error("Export failed", { description: (e as Error).message });
     } finally {
       setBusy(false);
     }

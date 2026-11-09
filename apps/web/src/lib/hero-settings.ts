@@ -13,10 +13,15 @@ export const heroSettingsSchema = z.object({
   background: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable(),
   /** Panel behind the animated box: #rrggbb, or null for none (the hero shows through). Old saved values lack it. */
   boxBackground: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().default(null),
+  /** Colour of the animated box itself (outside): #rrggbb, or null for the default indigo. */
+  boxColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().default(null),
 });
 export type HeroSettings = z.output<typeof heroSettingsSchema>;
 
-export const DEFAULT_HERO: HeroSettings = { initial: "closed", background: null, boxBackground: null };
+/** Default outside colour of the hero box. */
+export const DEFAULT_BOX_COLOR = "#3f4fd0";
+
+export const DEFAULT_HERO: HeroSettings = { initial: "closed", background: null, boxBackground: null, boxColor: null };
 
 /** Tolerant read of a stored value: anything unusable falls back to the defaults. */
 export function parseHeroSettings(raw: unknown): HeroSettings {

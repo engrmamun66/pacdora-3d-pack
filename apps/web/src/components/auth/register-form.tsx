@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { MailCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { notify } from "@/lib/notify";
 import { authClient, captchaHeaders } from "@/lib/auth-client";
 import { Field, FormError } from "./field";
 import { GoogleButton, OrDivider } from "./google-button";
@@ -64,7 +65,10 @@ export function RegisterForm({ googleEnabled }: { googleEnabled: boolean }) {
     });
     captcha.reset();
     setBusy(false);
-    if (!err) return setSentTo(email);
+    if (!err) {
+      notify.success("Account created", { description: "Check your inbox to confirm your email." });
+      return setSentTo(email);
+    }
     if (err.status === 429) setError("Too many attempts. Please wait a minute and try again.");
     else if (err.code?.startsWith("USER_ALREADY_EXISTS")) setError("An account with this email already exists. Try logging in.");
     else setError(err.message ?? "Registration failed.");

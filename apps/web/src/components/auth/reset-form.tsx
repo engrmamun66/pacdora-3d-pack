@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
+import { notify } from "@/lib/notify";
 import { authClient } from "@/lib/auth-client";
 import { Field, FormError } from "./field";
 
@@ -36,7 +37,10 @@ export function ResetForm() {
     const { error: err } = await authClient.resetPassword({ newPassword, token: token! });
     setBusy(false);
     if (err) setError(err.code === "INVALID_TOKEN" ? "This reset link is invalid or has expired." : (err.message ?? "Reset failed."));
-    else setDone(true);
+    else {
+      setDone(true);
+      notify.success("Password changed", { description: "All other sessions were signed out." });
+    }
   }
 
   if (done) {

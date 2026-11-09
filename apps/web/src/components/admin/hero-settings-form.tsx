@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { notify } from "@/lib/notify";
 import { saveHeroSettings, type HeroFormState } from "@/app/doraadmin/actions";
-import { HERO_POSITIONS, type HeroSettings } from "@/lib/hero-settings";
+import { DEFAULT_BOX_COLOR, HERO_POSITIONS, type HeroSettings } from "@/lib/hero-settings";
 
 const FALLBACK_COLOR = "#f4f4f2";
 const HEX = /^#[0-9a-fA-F]{6}$/;
@@ -69,9 +70,15 @@ function ColourField({
 /** Choose where the hero box starts and the hero background colour. */
 export function HeroSettingsForm({ initial }: { initial: HeroSettings }) {
   const [state, action, pending] = useActionState<HeroFormState, FormData>(saveHeroSettings, { ok: false, message: null });
+  useEffect(() => {
+    if (!state.message) return;
+    if (state.ok) notify.success(state.message, { id: "hero-save" });
+    else notify.error(state.message, { id: "hero-save" });
+  }, [state]);
   const [position, setPosition] = useState(initial.initial);
   const [bg, setBg] = useState<ColourValue>({ useDefault: initial.background === null, color: initial.background ?? FALLBACK_COLOR });
   const [panel, setPanel] = useState<ColourValue>({ useDefault: initial.boxBackground === null, color: initial.boxBackground ?? "#e9ecff" });
+  const [boxColor, setBoxColor] = useState<ColourValue>({ useDefault: initial.boxColor === null, color: initial.boxColor ?? DEFAULT_BOX_COLOR });
   const colourOk = (v: ColourValue) => v.useDefault || HEX.test(v.color);
 
   return (
@@ -106,6 +113,16 @@ export function HeroSettingsForm({ initial }: { initial: HeroSettings }) {
       />
 
       <ColourField
+        legend="Box colour"
+        hint="The colour of the animated box itself (its outside). Pick a colour that differs from the panel behind it."
+        defaultLabel={`Use the default indigo (${DEFAULT_BOX_COLOR})`}
+        name="boxColor"
+        defaultName="useDefaultBoxColor"
+        value={boxColor}
+        onChange={setBoxColor}
+      />
+
+      <ColourField
         legend="Animation box background"
         hint="A rounded panel behind the animated box. Leave on default to let the hero background show through."
         defaultLabel="No panel (use the hero background)"
@@ -121,7 +138,7 @@ export function HeroSettingsForm({ initial }: { initial: HeroSettings }) {
         </p>
       ) : null}
       <div className="flex items-center gap-3">
-        <Button type="submit" className="h-10" disabled={pending || !colourOk(bg) || !colourOk(panel)}>{pending ? "Saving…" : "Save"}</Button>
+        <Button type="submit" className="h-10" disabled={pending || !colourOk(bg) || !colourOk(panel) || !colourOk(boxColor)}>{pending ? "Saving…" : "Save"}</Button>
         <a href="/" target="_blank" rel="noreferrer" className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">Open home page</a>
       </div>
     </form>

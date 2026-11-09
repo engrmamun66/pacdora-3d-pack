@@ -33,18 +33,19 @@ const banSchema = z.object({
 export type AdminActionResult = { ok: boolean; message: string };
 
 /** Suspend or restore a customer account. Super admins cannot be suspended here. */
-export async function setBanned(formData: FormData): Promise<void> {
+export async function setBanned(formData: FormData): Promise<AdminActionResult> {
   const admin = await requireSuperAdmin();
   const parsed = banSchema.safeParse({
     userId: formData.get("userId"),
     ban: formData.get("ban"),
     reason: (formData.get("reason") as string | null) || undefined,
   });
-  if (!parsed.success) return;
+  if (!parsed.success) return { ok: false, message: "Invalid request." };
   const { userId, ban, reason } = parsed.data;
-  if (userId === admin.id) return;
+  if (userId === admin.id) return { ok: false, message: "You cannot suspend your own account." };
   const target = await db.user.findUnique({ where: { id: userId }, select: { role: true } });
-  if (!target || target.role === SUPERADMIN) return;
+  if (!target) return { ok: false, message: "User not found." };
+  if (target.role === SUPERADMIN) return { ok: false, message: "Super admins cannot be suspended here." };
 
   if (ban === "1") {
     // Flag and end every session in one transaction: nobody stays signed in.
@@ -57,6 +58,7 @@ export async function setBanned(formData: FormData): Promise<void> {
   }
   revalidatePath("/doraadmin/users");
   revalidatePath("/doraadmin");
+  return { ok: true, message: ban === "1" ? "User suspended and signed out everywhere." : "User restored." };
 }
 
 export type HeroFormState = { ok: boolean; message: string | null };
@@ -69,6 +71,7 @@ export async function saveHeroSettings(_prev: HeroFormState, formData: FormData)
     initial: formData.get("initial"),
     background: useDefault ? null : formData.get("background"),
     boxBackground: formData.get("useDefaultBoxBackground") === "1" ? null : formData.get("boxBackground"),
+    boxColor: formData.get("useDefaultBoxColor") === "1" ? null : formData.get("boxColor"),
   });
   if (!parsed.success) return { ok: false, message: "Please choose a position and a colour like #1a2b3c." };
   await db.siteSetting.upsert({

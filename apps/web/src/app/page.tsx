@@ -4,7 +4,7 @@ import { ButtonLink } from "@/components/button-link";
 import { HeroCarton } from "@/components/marketing/hero-carton";
 import { SiteHeader } from "@/components/marketing/site-header";
 import { site } from "@/config/site";
-import { luminance } from "@/lib/hero-settings";
+import { DEFAULT_BOX_COLOR, luminance } from "@/lib/hero-settings";
 import { getHeroSettings } from "@/server/site-settings";
 
 const features = [
@@ -62,7 +62,7 @@ async function HomeTop() {
               role="img"
               aria-label="A carton box unfolding into its flat dieline and folding shut again, in a loop"
             >
-              <HeroCarton initial={hero.initial} />
+              <HeroCarton initial={hero.initial} color={hero.boxColor ?? DEFAULT_BOX_COLOR} />
               <p className="pointer-events-none absolute inset-x-0 bottom-0 text-center text-xs text-muted-foreground">
                 Generated live by the same engine you will use. Drag to turn it.
               </p>
