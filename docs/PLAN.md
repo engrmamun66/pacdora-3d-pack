@@ -529,4 +529,14 @@ Reply with answers, or "go with your recommendations", to begin.
 - **Verified in the browser:** artwork appears on the correct faces (front text/logo; circle and rectangle on the back), text reads unmirrored, a text change shows in 3D within about a second, 40% fold shows the kraft inside colour, fold setting survives reload. Folded size = L x W x H is enforced by the engine's folded checks on every generation.
 - Known limits: zero-thickness panels; the animation folds all hinges together (not a real erecting sequence); inside print not supported yet; no 3D on the project page (editor only).
 
-- **Next:** Phase 6, exports.
+### Phase 6: exports (done 2026-11-09)
+- **Vector scene** (`packages/vector-scene`): one neutral description (layers, paths, images, RGB and spot paints) built from geometry + artwork; SVG, PDF, AI and EPS are all written from it, so they agree. Arcs become cubic Béziers. Text is converted to outlines with fontkit from the same font files the editor uses, laid out with the editor's own text-box rules.
+- **Formats:** PDF (vector, MediaBox = bleed, TrimBox = cut size, BleedBox; die lines as Separation spot colours "CutContour"/"Crease" (names configurable) with overprint; optional-content layers), AI (PDF-compatible, per Illustrator profile), EPS (EPSF 3.0 / DSC, Level 2 or 3), SVG (mm, named layers), DXF R12 (CUT/CREASE layers, true arcs), PNG 150/300 dpi with pHYs DPI metadata (browser; reduced automatically below browser canvas limits and reported), GLB (browser, metres), JSON project file.
+- **Illustrator profiles** (`packages/render-print/src/profiles.ts`): CC = PDF 1.7 + layers; CS6..CS = PDF 1.5 + layers; 10 = PDF 1.4, no layers; 9 = PDF 1.3, transparency flattened; 8 = EPS only (8's .ai is PostScript-based). PDF-level facts (1.3 no transparency, 1.4 no layers, layers from 1.5) are from Acrobat/Adobe documentation; the per-version mapping is **unverified, so every profile is marked Untested** in the UI.
+- **Loss report** with every export: e.g. characters missing from the font, substituted styles (Oswald has no italic), no layers / no transparency in EPS and old PDF, SVG has no spot colours, DXF has no artwork.
+- **Export dialog** in the editor; server exports first wait until the latest edits are saved.
+- Uploads are now PNG/JPEG only (WebP removed: the print writers embed PNG/JPEG natively).
+- **Verified:** 186 tests incl. Ghostscript cross-checks (renders every AI profile and both EPS levels without errors; `tiffsep` shows CutContour and Crease as separate plates), page boxes in points, DPI metadata, ASCII85/RunLength round trips. All 9 formats downloaded through the dialog in the browser; PDF/AI/EPS have identical ink bounds in Ghostscript; 300 dpi PNG = 301 x 241 mm = bleed size; GLB valid glTF 2.0 with embedded texture and metre scale.
+- Known limits: profiles untested in real Illustrator; no PDF/X or ICC output intent yet; no live (editable) text in AI; RGB artwork colours (no CMYK conversion); latin-only font subsets (e.g. Bangla text is reported as missing).
+
+- **Next:** Phase 7, AI parameter extraction.

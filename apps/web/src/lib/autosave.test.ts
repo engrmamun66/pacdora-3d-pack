@@ -73,4 +73,13 @@ describe("AutoSaver", () => {
     expect(states.at(-1)).toBe("saved");
     vi.useRealTimers();
   });
+
+  it("settle() resolves once the latest state is stored, and throws if saving fails", async () => {
+    const ok = setup();
+    ok.s.schedule(art(1));
+    await ok.s.settle(art(9));
+    expect(ok.saved).toEqual([art(1)]);
+    const bad = setup(async () => ({ ok: false, message: "nope" }));
+    await expect(bad.s.settle(art(2))).rejects.toThrow(/could not be saved/);
+  });
 });

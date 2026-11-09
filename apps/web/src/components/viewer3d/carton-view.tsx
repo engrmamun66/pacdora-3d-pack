@@ -3,6 +3,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 import type { DielineGeometry } from "@packaging/dieline-engine";
 import { buildCartonModel, disposeCartonModel, type CartonModel, type TextureRect } from "@packaging/model3d";
 
@@ -24,6 +25,8 @@ export interface CartonViewHandle {
   resetView(): void;
   /** PNG snapshot of the current view. */
   snapshot(): string | null;
+  /** Binary glTF of the carton as shown (metres, y up). */
+  exportGlb(): Promise<Blob>;
 }
 
 /** Interactive 3D carton built from the engine's fold tree (three.js, no React renderer). */
@@ -66,6 +69,21 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   useImperativeHandle(ref, () => ({
     getModelObject: () => three.current?.model?.object ?? null,
     resetView: frame,
+    exportGlb: async () => {
+      const model = three.current?.model;
+      if (!model) throw new Error("No 3D model to export.");
+      // glTF uses metres; the scene is in millimetres. Export a scaled copy, standing on y = 0.
+      const root = new THREE.Group();
+      root.name = "carton";
+      root.scale.setScalar(0.001);
+      const copy = model.object.clone(true);
+      copy.position.set(0, model.size.y / 2, 0);
+      root.add(copy);
+      root.updateMatrixWorld(true);
+      const result = await new GLTFExporter().parseAsync(root, { binary: true, onlyVisible: true });
+      if (!(result instanceof ArrayBuffer)) throw new Error("GLB export failed.");
+      return new Blob([result], { type: "model/gltf-binary" });
+    },
     snapshot: () => {
       const t = three.current;
       if (!t) return null;

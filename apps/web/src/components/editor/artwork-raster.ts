@@ -1,4 +1,5 @@
 import { StaticCanvas } from "fabric";
+import { STYLE, outlinePathD } from "@packaging/render-svg";
 import { anchorIndex } from "@packaging/artwork";
 import type { DielineGeometry } from "@packaging/dieline-engine";
 import type { Artwork } from "@packaging/schema";
@@ -26,11 +27,13 @@ export function rasterRect(geo: DielineGeometry): RasterRect {
 export async function renderArtwork(
   geo: DielineGeometry,
   artwork: Artwork,
-  opts: { pxPerMm: number; background: string; maxPx?: number },
+  opts: { pxPerMm: number; background: string; maxPx?: number; maxArea?: number },
 ): Promise<{ canvas: HTMLCanvasElement; rect: RasterRect; pxPerMm: number }> {
   const rect = rasterRect(geo);
   const maxPx = opts.maxPx ?? 4096;
-  const s = Math.min(opts.pxPerMm, maxPx / Math.max(rect.width, rect.height));
+  // Browsers cap canvas size (Safari: about 16.7 million pixels); stay below it.
+  const maxArea = opts.maxArea ?? 16_000_000;
+  const s = Math.min(opts.pxPerMm, maxPx / Math.max(rect.width, rect.height), Math.sqrt(maxArea / (rect.width * rect.height)));
   const w = Math.max(1, Math.round(rect.width * s));
   const h = Math.max(1, Math.round(rect.height * s));
   const idx = anchorIndex(geo);
@@ -51,4 +54,44 @@ export async function renderArtwork(
   out.getContext("2d")!.drawImage(sc.lowerCanvasEl, 0, 0);
   await sc.dispose();
   return { canvas: out, rect, pxPerMm: s };
+}
+
+/**
+ * PNG of the flat artwork at a given resolution, optionally with the die lines
+ * drawn on top. Returns the effective DPI (lower than asked if the browser
+ * canvas limit was reached).
+ */
+export async function renderPng(
+  geo: DielineGeometry,
+  artwork: Artwork,
+  opts: { dpi: number; background: string; dieline: boolean },
+): Promise<{ blob: Blob; dpi: number; width: number; height: number }> {
+  const r = await renderArtwork(geo, artwork, { pxPerMm: opts.dpi / 25.4, background: opts.background, maxPx: 16384 });
+  if (opts.dieline) {
+    const ctx = r.canvas.getContext("2d")!;
+    const s = r.pxPerMm;
+    ctx.save();
+    ctx.setTransform(s, 0, 0, s, -r.rect.minX * s, -r.rect.minY * s);
+    ctx.lineWidth = Math.max(1 / s, 0.25);
+    ctx.strokeStyle = STYLE.crease.stroke;
+    ctx.setLineDash([3, 1.5]);
+    ctx.beginPath();
+    for (const c of geo.creaseLines) {
+      ctx.moveTo(c.a.x, c.a.y);
+      ctx.lineTo(c.b.x, c.b.y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = STYLE.cut.stroke;
+    for (const loop of geo.cutLoops) ctx.stroke(new Path2D(outlinePathD(loop)));
+    ctx.beginPath();
+    for (const sl of geo.slitLines) {
+      ctx.moveTo(sl.a.x, sl.a.y);
+      ctx.lineTo(sl.b.x, sl.b.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+  const blob = await new Promise<Blob>((res, rej) => r.canvas.toBlob((b) => (b ? res(b) : rej(new Error("PNG encoding failed."))), "image/png"));
+  return { blob, dpi: Math.round(r.pxPerMm * 25.4), width: r.canvas.width, height: r.canvas.height };
 }

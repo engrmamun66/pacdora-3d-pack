@@ -9,6 +9,7 @@ import {
   Box,
   Circle,
   Copy,
+  Download,
   Eye,
   EyeOff,
   ImagePlus,
@@ -32,6 +33,7 @@ import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { EditorController, type OverlayOptions, type Viewport } from "./editor-controller";
 import { assetUrl } from "./fabric-map";
 import { AutoSaver, type SaveState } from "@/lib/autosave";
+import { ExportDialog } from "./export-dialog";
 import { PropertiesPanel } from "./properties-panel";
 import { RULER_SIZE, Ruler } from "./rulers";
 
@@ -101,6 +103,7 @@ export function ArtworkEditor({
   const [assets, setAssets] = useState<Asset[]>(initialAssets);
   const [uploading, setUploading] = useState(false);
   const [show3d, setShow3d] = useState(true);
+  const [showExport, setShowExport] = useState(false);
   const [threeD, setThreeD] = useState<ThreeDSettings>(initialThreeD);
   const view3d = useRef<CartonViewHandle>(null);
   const artworkForPreview = useMemo<Artwork>(() => ({ objects }), [objects]);
@@ -303,6 +306,9 @@ export function ArtworkEditor({
           <Box className="size-4" /> 3D
         </ToolButton>
         <div className="ml-auto flex items-center gap-2">
+          <button type="button" onClick={() => setShowExport(true)} className="flex h-8 items-center gap-1 rounded-md border px-3 text-xs font-medium hover:bg-muted">
+            <Download className="size-3.5" /> Export
+          </button>
           <span className={`text-xs ${saveState === "error" ? "text-destructive" : "text-muted-foreground"}`} aria-live="polite">{saveLabel}</span>
           <button type="button" onClick={saveNow} className="h-8 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/80">Save</button>
         </div>
@@ -385,6 +391,26 @@ export function ArtworkEditor({
           />
         </aside>
       </div>
+      {showExport ? (
+        <ExportDialog
+          projectId={projectId}
+          name={name}
+          geo={geo}
+          getArtwork={() => ctl.current?.toArtwork() ?? { objects }}
+          boardColor={threeD.outsideColor}
+          flushSave={() => saver.settle(ctl.current?.toArtwork())}
+          getGlb={async () => {
+            if (!view3d.current) {
+              setShow3d(true);
+              for (let i = 0; i < 40 && !view3d.current; i++) await new Promise((r) => setTimeout(r, 100));
+              await new Promise((r) => setTimeout(r, 800)); // let the artwork texture render
+            }
+            if (!view3d.current) throw new Error("The 3D preview could not be opened.");
+            return view3d.current.exportGlb();
+          }}
+          onClose={() => setShowExport(false)}
+        />
+      ) : null}
     </div>
   );
 }
