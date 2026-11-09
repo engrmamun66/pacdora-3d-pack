@@ -8,12 +8,12 @@
     "apps/*"
   ],
   "scripts": {
+    "dev": "npm run dev -w web",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p scripts/viewer/tsconfig.json",
     "demo": "tsx scripts/demo.ts",
     "viewer": "esbuild scripts/viewer/main.ts --bundle --format=esm --target=es2022 --outdir=scripts/viewer/dist --servedir=scripts/viewer --serve=127.0.0.1:4310",
     "viewer:build": "esbuild scripts/viewer/main.ts --bundle --format=esm --target=es2022 --outdir=scripts/viewer/dist",
-    "dev": "npm run dev -w web",
     "db:up": "docker compose -f infra/docker-compose.yml up -d",
     "db:down": "docker compose -f infra/docker-compose.yml down",
     "db:migrate": "npm run db:migrate -w web",

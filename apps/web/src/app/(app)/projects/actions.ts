@@ -35,8 +35,8 @@ function validateWithEngine(generatorId: string, params: Record<string, unknown>
   }
 }
 
-/** Create a project from a catalogue preset. */
-export async function createProject(_prev: DesignState, formData: FormData): Promise<DesignState> {
+/** Shared by both create actions: validate everything, insert, return the new id (or a form state). */
+async function insertProject(formData: FormData): Promise<{ id: string } | DesignState> {
   const user = await requireUser();
   const preset = getPreset(String(formData.get("presetId") ?? ""));
   if (!preset) return { ok: false, message: "Unknown template.", issues: [] };
@@ -76,7 +76,20 @@ export async function createProject(_prev: DesignState, formData: FormData): Pro
     select: { id: true },
   });
   revalidatePath("/projects");
-  redirect(`/projects/${project.id}`);
+  return { id: project.id };
+}
+
+/** Create a project from a catalogue preset, then open it. */
+export async function createProject(_prev: DesignState, formData: FormData): Promise<DesignState> {
+  const r = await insertProject(formData);
+  if ("id" in r) redirect(`/projects/${r.id}`);
+  return r;
+}
+
+/** Create a project and return its id without redirecting (the workspace saves before a download). */
+export async function createProjectDraft(formData: FormData): Promise<DesignState & { id: string | null }> {
+  const r = await insertProject(formData);
+  return "id" in r ? { ok: true, message: "Saved.", issues: [], id: r.id } : { ...r, id: null };
 }
 
 /** Save new parameters (and name) for an existing project the user owns. */
