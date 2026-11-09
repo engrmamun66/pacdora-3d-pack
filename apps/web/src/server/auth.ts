@@ -1,5 +1,6 @@
 import "server-only";
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { captcha } from "better-auth/plugins";
@@ -63,6 +64,18 @@ export const auth = betterAuth({
   advanced: {
     // Rate limits are keyed by client IP: read it only from the header our proxy sets (see docs/deploy.md).
     ipAddress: { ipAddressHeaders: [env.CLIENT_IP_HEADER] },
+  },
+
+  databaseHooks: {
+    session: {
+      create: {
+        // Suspended accounts get no new session (email, Google or any other way in).
+        before: async (session) => {
+          const user = await db.user.findUnique({ where: { id: session.userId }, select: { banned: true } });
+          if (user?.banned) throw new APIError("FORBIDDEN", { message: "This account is suspended." });
+        },
+      },
+    },
   },
 
   rateLimit: {

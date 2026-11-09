@@ -19,6 +19,12 @@ model User {
   email         String    @unique
   emailVerified Boolean   @default(false)
   image         String?
+  /// "user" or "superadmin". Set only by the server-side CLI (npm run admin:create), never from the web.
+  role          String    @default("user")
+  /// Suspended accounts cannot sign in and lose their sessions.
+  banned        Boolean   @default(false)
+  bannedAt      DateTime?
+  banReason     String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   sessions      Session[]
@@ -175,4 +181,14 @@ model RateEvent {
 
   @@index([userId, kind, createdAt(sort: Desc)])
   @@map("rate_event")
+}
+
+/// Site-wide settings edited by super admins (e.g. key "hero" = home page hero options).
+model SiteSetting {
+  key         String   @id
+  value       Json     @db.JsonB
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  @@map("site_setting")
 }

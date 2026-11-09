@@ -17,6 +17,14 @@ export interface CartonViewProps {
   outsideColor: string;
   insideColor: string;
   className?: string;
+  /** Slowly orbit the camera (the user can still drag). Default off. */
+  autoRotate?: boolean;
+  /** Transparent canvas instead of the grey studio background. Read once, when the view is created. */
+  transparent?: boolean;
+  /** Cast shadows. Read once, when the view is created. Default on. */
+  shadows?: boolean;
+  /** Size (mm) the camera is framed for, instead of the folded carton's size. Use it when the fold animation opens the sheet wide. */
+  frameMm?: number;
 }
 
 export interface CartonViewHandle {
@@ -25,16 +33,24 @@ export interface CartonViewHandle {
   resetView(): void;
   /** PNG snapshot of the current view. */
   snapshot(): string | null;
+  /**
+   * Rebuild the model at this fold amount right now, without a React render (for smooth animation).
+   * `hingeProgress` (hinge id -> 0..1) overrides single hinges, for staged folds.
+   */
+  setProgress(p: number, hingeProgress?: Readonly<Record<string, number>>): void;
   /** Binary glTF of the carton as shown (metres, y up). */
   exportGlb(): Promise<Blob>;
 }
 
 /** Interactive 3D carton built from the engine's fold tree (three.js, no React renderer). */
 export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function CartonView(
-  { geo, texture, textureRect, progress, outsideColor, insideColor, className },
+  { geo, texture, textureRect, progress, outsideColor, insideColor, className, autoRotate = false, transparent = false, shadows = true, frameMm },
   ref,
 ) {
   const host = useRef<HTMLDivElement>(null);
+  const transparentAtStart = useRef(transparent);
+  const shadowsAtStart = useRef(shadows);
+  const rebuild = useRef<(p: number, hingeProgress?: Readonly<Record<string, number>>) => void>(() => {});
   const three = useRef<{
     renderer: THREE.WebGLRenderer;
     scene: THREE.Scene;
@@ -51,7 +67,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   const frame = () => {
     const t = three.current;
     if (!t?.model) return;
-    const r = Math.max(t.model.size.x, t.model.size.y, t.model.size.z);
+    const r = frameMm ?? Math.max(t.model.size.x, t.model.size.y, t.model.size.z);
     t.camera.position.set(r * 1.6, r * 1.3, r * 2.2);
     t.camera.near = r / 100;
     t.camera.far = r * 50;
@@ -67,6 +83,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   };
 
   useImperativeHandle(ref, () => ({
+    setProgress: (p, hingeProgress) => rebuild.current(p, hingeProgress),
     getModelObject: () => three.current?.model?.object ?? null,
     resetView: frame,
     exportGlb: async () => {
@@ -96,22 +113,22 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   useEffect(() => {
     const el = host.current;
     if (!el) return;
-    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: transparentAtStart.current });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = shadowsAtStart.current;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.toneMapping = THREE.NeutralToneMapping; // keeps print colours close to the artwork
     el.appendChild(renderer.domElement);
     renderer.domElement.style.display = "block";
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf4f4f2);
+    if (!transparentAtStart.current) scene.background = new THREE.Color(0xf4f4f2);
     const camera = new THREE.PerspectiveCamera(35, 1, 1, 5000);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     scene.add(new THREE.HemisphereLight(0xffffff, 0xc9c2b4, 2.0));
     const sun = new THREE.DirectionalLight(0xffffff, 1.8);
-    sun.castShadow = true;
+    sun.castShadow = shadowsAtStart.current;
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.bias = -0.0005; // scene units are mm
     sun.shadow.normalBias = 0.6;
@@ -119,6 +136,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(20000, 20000), new THREE.ShadowMaterial({ opacity: 0.18 }));
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
+    ground.visible = shadowsAtStart.current;
     scene.add(ground);
 
     three.current = { renderer, scene, camera, controls, sun, model: null, tex: null, texSource: null };
@@ -154,6 +172,13 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     };
   }, []);
 
+  useEffect(() => {
+    const c = three.current?.controls;
+    if (!c) return;
+    c.autoRotate = autoRotate;
+    c.autoRotateSpeed = 1.2;
+  }, [autoRotate]);
+
   // Model: rebuilt when geometry, artwork, fold or colours change.
   useEffect(() => {
     const t = three.current;
@@ -168,24 +193,31 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       }
       t.texSource = texture;
     }
-    if (t.model) {
-      t.scene.remove(t.model.object);
-      disposeCartonModel(t.model);
-    }
     const useTex = Boolean(t.tex && textureRect);
-    t.model = buildCartonModel(geo, {
-      progress,
-      outsideTexture: useTex ? t.tex : null,
-      ...(useTex && textureRect ? { textureRect } : {}),
-      outsideColor: useTex ? 0xffffff : outsideColor, // the texture already contains the board colour
-      insideColor,
-    });
-    t.model.object.position.y = t.model.size.y / 2 + 0.5;
-    t.scene.add(t.model.object);
+    const build = (p: number, hingeProgress?: Readonly<Record<string, number>>) => {
+      if (t.model) {
+        t.scene.remove(t.model.object);
+        disposeCartonModel(t.model);
+      }
+      t.model = buildCartonModel(geo, {
+        progress: p,
+        ...(hingeProgress ? { hingeProgress } : {}),
+        outsideTexture: useTex ? t.tex : null,
+        ...(useTex && textureRect ? { textureRect } : {}),
+        outsideColor: useTex ? 0xffffff : outsideColor, // the texture already contains the board colour
+        insideColor,
+      });
+      t.model.object.position.y = t.model.size.y / 2 + 0.5;
+      t.scene.add(t.model.object);
+    };
+    build(progress);
+    rebuild.current = build;
     if (lastGeo.current !== geo) {
       lastGeo.current = geo;
       frame();
     }
+  // `frame` only reads frameMm, which stays constant for the life of a view.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geo, texture, textureRect, progress, outsideColor, insideColor]);
 
   return <div ref={host} className={className} data-testid="carton-3d" />;

@@ -23,7 +23,8 @@ async function Form({ searchParams }: { searchParams: PageProps<"/login">["searc
 export default function LoginPage({ searchParams }: PageProps<"/login">) {
   return (
     <AuthShell
-      title="Log in"
+      title="Welcome back"
+      description="Log in to your workspace."
       footer={<>No account? <Link className="underline" href="/register">Create one</Link></>}
     >
       <Suspense>

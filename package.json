@@ -17,7 +17,9 @@
     "db:up": "docker compose -f infra/docker-compose.yml up -d",
     "db:down": "docker compose -f infra/docker-compose.yml down",
     "db:migrate": "npm run db:migrate -w web",
-    "db:seed": "npm run db:seed -w web"
+    "db:seed": "npm run db:seed -w web",
+    "admin:create": "npm run admin:create -w web --",
+    "db:seed:admins": "npm run db:seed:admins -w web"
   },
   "devDependencies": {
     "@types/clipper-lib": "^6.4.0",

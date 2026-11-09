@@ -39,7 +39,7 @@ export function ForgotForm() {
       <Field label="Email" id="email" type="email" autoComplete="email" required />
       <Turnstile resetKey={captcha.resetKey} siteKey={TURNSTILE_SITE_KEY} onToken={captcha.onToken} onError={captcha.onError} />
       <FormError message={error ?? captcha.error} />
-      <Button type="submit" disabled={busy || !captcha.token}>{busy ? "Sending…" : "Send reset link"}</Button>
+      <Button type="submit" className="h-10 w-full" disabled={busy || !captcha.token}>{busy ? "Sending…" : "Send reset link"}</Button>
     </form>
   );
 }

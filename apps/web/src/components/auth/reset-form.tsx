@@ -52,7 +52,7 @@ export function ResetForm() {
       <Field label={`New password (min. ${MIN_PASSWORD} characters)`} id="password" type="password" autoComplete="new-password" required />
       <Field label="Confirm new password" id="confirm" type="password" autoComplete="new-password" required />
       <FormError message={error} />
-      <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Set new password"}</Button>
+      <Button type="submit" className="h-10 w-full" disabled={busy}>{busy ? "Saving…" : "Set new password"}</Button>
     </form>
   );
 }

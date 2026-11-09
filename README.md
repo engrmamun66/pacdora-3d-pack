@@ -26,6 +26,7 @@ npm run dev                                 # web app: http://localhost:3100
 
 All emails (confirmation, password reset) appear in Mailpit at http://127.0.0.1:8025 during development.
 The captcha uses Cloudflare's public test keys locally (always passes); real keys are needed in production.
+Super admin: register and confirm an account on the site, then `npm run admin:create -- you@example.com` and sign in at http://localhost:3100/doraadmin/login.
 Google sign-in appears only after you set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET in apps/web/.env.local.
 
 Engine tools:

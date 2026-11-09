@@ -6,6 +6,13 @@ import { getSessionCookie } from "better-auth/cookies";
  * verification happens on the server in pages and actions (requireUser).
  */
 export function proxy(request: NextRequest) {
+  const path = request.nextUrl.pathname;
+  if (path.startsWith("/doraadmin")) {
+    // Admin area: the login page is public, everything else needs a session cookie (the real
+    // super-admin check happens on the server in requireSuperAdmin()).
+    if (path === "/doraadmin/login" || getSessionCookie(request)) return NextResponse.next();
+    return NextResponse.redirect(new URL("/doraadmin/login", request.url));
+  }
   if (!getSessionCookie(request)) {
     const url = new URL("/login", request.url);
     url.searchParams.set("next", request.nextUrl.pathname);
@@ -15,5 +22,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/projects/:path*", "/templates/:path*", "/settings/:path*", "/editor/:path*"],
+  matcher: ["/doraadmin/:path*", "/doraadmin", "/dashboard/:path*", "/projects/:path*", "/templates/:path*", "/settings/:path*", "/editor/:path*"],
 };

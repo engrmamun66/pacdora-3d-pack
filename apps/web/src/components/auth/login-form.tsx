@@ -77,11 +77,11 @@ export function LoginForm({ next, googleEnabled, initialError }: { next: string;
         </div>
         <Turnstile resetKey={captcha.resetKey} siteKey={TURNSTILE_SITE_KEY} onToken={captcha.onToken} onError={captcha.onError} />
         <FormError message={error ?? captcha.error} />
-        {notice ? <p className="text-sm text-green-700">{notice}</p> : null}
+        {notice ? <p role="status" className="rounded-lg border border-green-600/30 bg-green-50 px-3 py-2 text-sm text-green-800">{notice}</p> : null}
         {unverifiedEmail ? (
-          <Button type="button" variant="outline" onClick={resend}>Resend confirmation email</Button>
+          <Button type="button" variant="outline" className="h-10 w-full" onClick={resend}>Resend confirmation email</Button>
         ) : null}
-        <Button type="submit" disabled={busy || !captcha.token}>{busy ? "Signing in…" : "Log in"}</Button>
+        <Button type="submit" className="h-10 w-full" disabled={busy || !captcha.token}>{busy ? "Signing in…" : "Log in"}</Button>
       </form>
     </>
   );
