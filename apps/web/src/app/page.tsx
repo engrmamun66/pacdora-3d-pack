@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { Box, Download, Layers, Ruler, Sparkles, ShieldCheck } from "lucide-react";
 import { ButtonLink } from "@/components/button-link";
 import { HeroCarton } from "@/components/marketing/hero-carton";
@@ -36,7 +37,7 @@ async function HomeTop() {
         {/* Hero: fills the screen */}
         <section className={`relative isolate flex min-h-dvh items-center overflow-hidden pt-16 ${hero.background ? "" : "bg-[radial-gradient(60%_50%_at_75%_40%,color-mix(in_oklch,var(--primary)_10%,transparent),transparent)]"}`}>
           <div aria-hidden className="hero-grid-mask"><div className="hero-grid" /></div>
-          <div className="mx-auto grid w-full max-w-7xl items-center gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+          <div className="mx-auto grid w-full max-w-7xl items-center gap-6 px-4 py-6 sm:gap-8 sm:px-6 sm:py-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
             <div className="flex flex-col items-start gap-6">
               <p className="rounded-full border bg-background/70 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
                 Parametric packaging design
@@ -57,7 +58,7 @@ async function HomeTop() {
             </div>
 
             <div
-              className={`relative mx-auto aspect-square w-full max-w-[640px] lg:aspect-[4/5] ${hero.boxBackground ? `rounded-3xl text-foreground ${panelDark ? "dark" : ""}` : ""}`}
+              className={`relative order-first mx-auto aspect-[5/4] w-full max-w-[640px] sm:aspect-square lg:order-none lg:aspect-[4/5] ${hero.boxBackground ? `rounded-3xl text-foreground ${panelDark ? "dark" : ""}` : ""}`}
               style={hero.boxBackground ? { background: hero.boxBackground } : undefined}
               role="img"
               aria-label="A carton box unfolding into its flat dieline and folding shut again, in a loop"
@@ -77,7 +78,10 @@ async function HomeTop() {
 export default function Home() {
   return (
     <div className="flex flex-1 flex-col">
-      <HomeTop />
+      {/* The hero reads cached site settings; the fallback keeps the page shell instant while it resolves. */}
+      <Suspense fallback={<div className="min-h-dvh" aria-hidden />}>
+        <HomeTop />
+      </Suspense>
 
       <main className="flex flex-1 flex-col">
         <section id="features" className="mx-auto w-full max-w-7xl scroll-mt-16 px-4 py-24 sm:px-6">
