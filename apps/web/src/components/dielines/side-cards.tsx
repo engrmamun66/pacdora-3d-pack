@@ -72,6 +72,7 @@ export function FoldPreview({
 }
 
 export function FormatCard({
+  formats = DOWNLOAD_FORMATS,
   format,
   onFormat,
   profile,
@@ -82,6 +83,8 @@ export function FormatCard({
   onDownload,
   result,
 }: {
+  /** Formats offered (the 3D model is left out for flat-only dielines). */
+  formats?: typeof DOWNLOAD_FORMATS;
   format: DownloadFormat;
   onFormat: (f: DownloadFormat) => void;
   profile: string;
@@ -99,7 +102,7 @@ export function FormatCard({
     <section aria-label="Download" className="flex flex-col gap-4 rounded-2xl border p-4">
       <h2 className="font-semibold">File formats</h2>
       <div role="radiogroup" aria-label="File format" className="grid grid-cols-2 gap-2">
-        {DOWNLOAD_FORMATS.map((f) => (
+        {formats.map((f) => (
           <button
             key={f.value}
             type="button"

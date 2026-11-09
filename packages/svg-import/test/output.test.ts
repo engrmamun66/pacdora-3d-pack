@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { importSvg, toCleanSvg, toDxf, suggestRoles, type Role } from "../src";
+import { importSvg, toCleanSvg, toDxf, toFlatDieline, suggestRoles, type Role } from "../src";
 
 const NS = 'xmlns="http://www.w3.org/2000/svg"';
 const SRC = `<svg ${NS} width="100mm" height="60mm" viewBox="0 0 100 60">
@@ -131,5 +131,14 @@ describe("toCleanSvg background", () => {
     const evil = toCleanSvg(d, roles, { background: { href: 'https://x.test/a.png" onload="x' } });
     expect(evil).not.toContain("<image");
     expect(evil).toBe(toCleanSvg(d, roles));
+  });
+});
+
+describe("toFlatDieline", () => {
+  it("sorts paths by role and drops ignored ones", () => {
+    const f = toFlatDieline(d, roles);
+    expect(f.cut.length + f.crease.length + f.bleed.length + f.guide.length).toBe(d.paths.length - d.paths.filter((p) => roles[p.style] === "ignore").length);
+    expect(f.cut.some((p) => p.closed)).toBe(true);
+    expect(f.crease.length).toBeGreaterThan(0);
   });
 });

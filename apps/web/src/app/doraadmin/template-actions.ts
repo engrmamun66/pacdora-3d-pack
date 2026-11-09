@@ -3,7 +3,8 @@
 import { revalidatePath, updateTag } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
-import { SvgImportError, importSvg, type ImportedDieline, type Role } from "@packaging/svg-import";
+import { ImportedDielineError, assertImportable, type FlatDieline } from "@packaging/dieline-engine";
+import { SvgImportError, importSvg, toFlatDieline, type ImportedDieline, type Role } from "@packaging/svg-import";
 import { MAX_SVG_CHARS, thumbnailSvg } from "@/lib/template-import";
 import { isValidSlug } from "@/lib/slug";
 import { db } from "@/server/db";
@@ -152,6 +153,13 @@ export async function saveTemplate(input: unknown): Promise<SaveTemplateResult> 
 
   const roles = finalRoles(dieline, v.roles);
   if (typeof roles === "string") return { ok: false, message: roles };
+  // Customers get a resizable sheet from the Cut lines, so they must form a closed outline.
+  try {
+    assertImportable(toFlatDieline(dieline, roles) as FlatDieline);
+  } catch (e) {
+    if (e instanceof ImportedDielineError) return { ok: false, message: e.message };
+    throw e;
+  }
 
   const geometry: StoredGeometry = { v: 1, dieline, roles, options };
   if (JSON.stringify(geometry).length > MAX_GEOMETRY_JSON) return { ok: false, message: "This dieline is too detailed to store. Simplify the SVG and try again." };

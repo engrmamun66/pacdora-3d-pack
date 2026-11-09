@@ -156,7 +156,7 @@ export function ExportDialog({
         <div className="flex flex-col gap-1 text-sm">
           <label htmlFor="export-format">Format</label>
           <select id="export-format" aria-describedby="export-format-hint" className="h-9 rounded-md border bg-background px-2" value={format} onChange={(e) => setFormat(e.target.value as Format)}>
-            {FORMATS.map((f) => (
+            {FORMATS.filter((f) => f.value !== "glb" || geo.foldTree.hinges.length > 0).map((f) => (
               <option key={f.value} value={f.value}>
                 {f.label}
               </option>

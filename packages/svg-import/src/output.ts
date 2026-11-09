@@ -155,3 +155,22 @@ export function toDxf(d: ImportedDieline, roles: Record<string, Role>): string {
   g(0, "EOF");
   return out.join("\r\n") + "\r\n";
 }
+
+/** An imported dieline sorted by role, in the plain shape the dieline engine takes (no engine import needed). */
+export interface FlatDielineData {
+  cut: { pts: number[]; closed: boolean }[];
+  crease: { pts: number[]; closed: boolean }[];
+  bleed: { pts: number[]; closed: boolean }[];
+  guide: { pts: number[]; closed: boolean }[];
+}
+
+/** Group the paths by role. Paths with fewer than two points and "ignore" paths are dropped. */
+export function toFlatDieline(d: ImportedDieline, roles: Record<string, Role>): FlatDielineData {
+  const out: FlatDielineData = { cut: [], crease: [], bleed: [], guide: [] };
+  for (const p of d.paths) {
+    const role = roleOf(d, roles, p.style);
+    if (role === "ignore" || p.pts.length < 4) continue;
+    out[role].push({ pts: p.pts, closed: p.closed });
+  }
+  return out;
+}

@@ -14,6 +14,7 @@ export * from "./templates/crash-lock-carton";
 export * from "./templates/slotted-box";
 
 export * from "./templates/registry";
+export * from "./templates/imported";
 
 import { type DielineGeometry } from "./geometry-types";
 import { getGenerator } from "./templates/registry";

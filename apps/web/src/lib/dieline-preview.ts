@@ -17,3 +17,13 @@ export function tryThumbnail(generatorId: string, params: unknown): string | nul
     return null;
   }
 }
+
+/** Thumbnail for a project: imported templates use the small picture saved with the template; built-in ones are generated. */
+export function projectThumbnail(
+  template: { source: string; thumbnail: string | null },
+  generatorId: string,
+  params: unknown,
+): string | null {
+  if (template.source === "svg") return template.thumbnail ? svgDataUrl(template.thumbnail) : null;
+  return tryThumbnail(generatorId, params);
+}

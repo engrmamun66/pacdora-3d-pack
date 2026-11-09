@@ -1,9 +1,10 @@
 import "server-only";
-import { generateDieline } from "@packaging/dieline-engine";
+import type { DielineGeometry } from "@packaging/dieline-engine";
 import type { ProjectDoc } from "@packaging/schema";
 import { type ImageSource, type Scene, type SceneOptions, buildScene } from "@packaging/vector-scene";
 import { nodeFontSource } from "@packaging/vector-scene/node";
 import { db } from "./db";
+import { resolveGenerator } from "./imported-templates";
 import { storage } from "./storage";
 
 /** Images of one user only: an export can never read another user's upload. */
@@ -28,8 +29,10 @@ export function userImageSource(userId: string): ImageSource {
 }
 
 /** Regenerate geometry from the stored parameters (never trusts stored geometry) and build the scene. */
-export async function projectScene(userId: string, doc: ProjectDoc, options: Partial<SceneOptions>): Promise<{ scene: Scene; geo: ReturnType<typeof generateDieline> }> {
-  const geo = generateDieline(doc.template.generatorId, doc.template.params);
+export async function projectScene(userId: string, doc: ProjectDoc, options: Partial<SceneOptions>): Promise<{ scene: Scene; geo: DielineGeometry }> {
+  const gen = await resolveGenerator(doc.template.generatorId, doc.template.presetId);
+  if (!gen) throw new Error("This project's template is no longer available.");
+  const geo = gen.generate(doc.template.params);
   const scene = await buildScene(geo, doc.artwork, { fonts: nodeFontSource, images: userImageSource(userId) }, options);
   return { scene, geo };
 }

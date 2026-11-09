@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { getPreset } from "@packaging/dieline-engine";
 import { requireUser } from "@/server/session";
 import { listProjects } from "@/server/projects";
-import { tryThumbnail } from "@/lib/dieline-preview";
+import { projectThumbnail } from "@/lib/dieline-preview";
 import { ButtonLink } from "@/components/button-link";
 
 export const metadata = { title: "Projects" };
@@ -22,7 +21,7 @@ async function ProjectList() {
   return (
     <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {projects.map((p) => {
-        const thumb = p.doc ? tryThumbnail(p.doc.template.generatorId, p.doc.template.params) : null;
+        const thumb = p.doc ? projectThumbnail(p.template, p.doc.template.generatorId, p.doc.template.params) : null;
         return (
           <li key={p.id}>
             <Link href={`/projects/${p.id}`} className="flex flex-col overflow-hidden rounded-xl border transition hover:shadow-sm">
@@ -33,7 +32,7 @@ async function ProjectList() {
               <div className="p-4">
                 <h2 className="truncate font-medium">{p.name}</h2>
                 <p className="text-xs text-muted-foreground">
-                  {getPreset(p.templateId)?.name ?? p.templateId} · updated {p.updatedAt.toISOString().slice(0, 10)}
+                  {p.template.name} · updated {p.updatedAt.toISOString().slice(0, 10)}
                 </p>
               </div>
             </Link>

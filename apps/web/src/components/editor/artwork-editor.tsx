@@ -26,7 +26,8 @@ import {
   Undo2,
   Unlock,
 } from "lucide-react";
-import { generateDieline } from "@packaging/dieline-engine";
+import { createImportedGenerator, generateDieline, type FlatDieline } from "@packaging/dieline-engine";
+import type { FlatDielineData } from "@packaging/svg-import";
 import type { Artwork, ArtworkObject, BoxBackground } from "@packaging/schema";
 import { saveArtwork, saveThreeD } from "@/app/editor/[id]/actions";
 import { Preview3D, type ThreeDSettings } from "@/components/viewer3d/preview-3d";
@@ -65,6 +66,7 @@ export function ArtworkEditor({
   projectId,
   name,
   generatorId,
+  imported,
   params,
   artwork: initialArtwork,
   assets: initialAssets,
@@ -73,6 +75,8 @@ export function ArtworkEditor({
   projectId: string;
   name: string;
   generatorId: string;
+  /** Imported (SVG) template: its lines, to rebuild the dieline here. */
+  imported?: { templateId: string; flat: FlatDielineData };
   params: Record<string, unknown>;
   artwork: Artwork;
   assets: Asset[];
@@ -82,11 +86,13 @@ export function ArtworkEditor({
   const paramsKey = JSON.stringify(params);
   const geo = useMemo(() => {
     try {
-      return generateDieline(generatorId, JSON.parse(paramsKey));
+      return imported ? createImportedGenerator(imported.templateId, imported.flat as FlatDieline).generate(JSON.parse(paramsKey)) : generateDieline(generatorId, JSON.parse(paramsKey));
     } catch {
       return null;
     }
-  }, [generatorId, paramsKey]);
+  }, [generatorId, imported, paramsKey]);
+  // Imported dielines are flat: nothing to fold, so no 3D.
+  const foldable = (geo?.foldTree.hinges.length ?? 0) > 0;
 
   const canvasEl = useRef<HTMLCanvasElement>(null);
   const hostEl = useRef<HTMLDivElement>(null);
@@ -317,9 +323,11 @@ export function ArtworkEditor({
           </label>
         ))}
         <div className="mx-1 h-5 w-px bg-border" />
-        <ToolButton label={show3d ? "Hide 3D preview" : "Show 3D preview"} active={show3d} onClick={() => setShow3d((v) => !v)}>
-          <Box className="size-4" /> 3D
-        </ToolButton>
+        {foldable ? (
+          <ToolButton label={show3d ? "Hide 3D preview" : "Show 3D preview"} active={show3d} onClick={() => setShow3d((v) => !v)}>
+            <Box className="size-4" /> 3D
+          </ToolButton>
+        ) : null}
         <div className="ml-auto flex items-center gap-2">
           <button type="button" onClick={() => setShowExport(true)} className="flex h-8 items-center gap-1 rounded-md border px-3 text-xs font-medium hover:bg-muted">
             <Download className="size-3.5" /> Export
@@ -329,7 +337,7 @@ export function ArtworkEditor({
         </div>
       </header>
 
-      <div className={`grid min-h-0 ${show3d ? "grid-cols-[240px_1fr_minmax(280px,38%)_288px]" : "grid-cols-[240px_1fr_288px]"}`}>
+      <div className={`grid min-h-0 ${show3d && foldable ? "grid-cols-[240px_1fr_minmax(280px,38%)_288px]" : "grid-cols-[240px_1fr_288px]"}`}>
         {/* Left: layers + uploads */}
         <aside className="flex min-h-0 flex-col border-r">
           <h2 className="border-b px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Layers</h2>
@@ -392,7 +400,7 @@ export function ArtworkEditor({
           </div>
         </div>
 
-        {show3d ? (
+        {show3d && foldable ? (
           <section className="min-h-0 min-w-0 border-l" aria-label="3D preview">
             <Preview3D geo={geo} artwork={artworkForPreview} settings={threeD} onSettings={updateThreeD} viewRef={view3d} />
           </section>

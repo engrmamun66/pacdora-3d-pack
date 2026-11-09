@@ -1,11 +1,10 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { z } from "zod";
-import { getGenerator, getPreset } from "@packaging/dieline-engine";
-import type { ImportedDieline, Role } from "@packaging/svg-import";
+import { IMPORTED_GENERATOR_ID, getGenerator, getPreset } from "@packaging/dieline-engine";
 import { DielineWorkspace } from "@/components/dielines/workspace";
-import { SvgTemplateViewer } from "@/components/dielines/svg-template-viewer";
 import { db } from "@/server/db";
+import { importedStartParams, loadImportedSource } from "@/server/imported-templates";
 
 const prefillSchema = z.record(z.string().max(60), z.union([z.number().finite(), z.string().max(100), z.boolean()]));
 
@@ -25,15 +24,27 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
   if (slug.length > 80) notFound();
   const row = await db.template.findUnique({
     where: { id: slug },
-    select: { id: true, name: true, description: true, source: true, published: true, geometry: true, backgroundKey: true, categories: { where: { active: true }, select: { name: true } } },
+    select: { id: true, name: true, description: true, source: true, published: true, categories: { where: { active: true }, select: { name: true } } },
   });
   if (!row || !row.published) notFound();
 
-  // Imported SVG template: a fixed dieline (pan, zoom, download).
+  // Imported SVG template: a fixed shape you can resize, add artwork to and export (no 3D fold).
   if (row.source === "svg") {
-    const g = row.geometry as unknown as { dieline?: ImportedDieline; roles?: Record<string, Role> } | null;
-    if (!g?.dieline || !g.roles) notFound();
-    return <SvgTemplateViewer slug={row.id} title={row.name} description={row.description} dieline={g.dieline} roles={g.roles} categories={row.categories.map((c) => c.name)} backgroundUrl={row.backgroundKey ? `/api/templates/${encodeURIComponent(row.id)}/background?v=${encodeURIComponent(row.backgroundKey.slice("templates/".length, -4))}` : null} />;
+    const imported = await loadImportedSource(row.id);
+    if (!imported) notFound();
+    return (
+      <DielineWorkspace
+        mode={{ kind: "create", presetId: row.id }}
+        generatorId={IMPORTED_GENERATOR_ID}
+        imported={{ templateId: imported.templateId, flat: imported.flat }}
+        title={row.name}
+        description={row.description}
+        initialName={row.name}
+        initialParams={importedStartParams(imported.flat)}
+        backHref="/templates"
+        backLabel="Templates"
+      />
+    );
   }
 
   // Built-in (parametric) template: the generator lives in code, name and description come from the database.

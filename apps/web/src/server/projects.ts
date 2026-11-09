@@ -7,7 +7,7 @@ export async function listProjects(userId: string) {
   const rows = await db.project.findMany({
     where: { userId },
     orderBy: { updatedAt: "desc" },
-    select: { id: true, name: true, templateId: true, projectData: true, updatedAt: true },
+    select: { id: true, name: true, templateId: true, projectData: true, updatedAt: true, template: { select: { name: true, source: true, thumbnail: true } } },
     take: 200,
   });
   return rows.map((r) => ({ ...r, doc: safeDoc(r.projectData) }));

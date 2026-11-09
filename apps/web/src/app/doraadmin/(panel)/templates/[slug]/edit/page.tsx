@@ -12,7 +12,7 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
   const { slug } = await params;
   if (slug.length > 80) notFound();
   const [t, categories] = await Promise.all([
-    db.template.findUnique({ where: { id: slug }, select: { id: true, name: true, description: true, published: true, sortOrder: true, backgroundKey: true, source: true, geometry: true, categories: { select: { id: true } } } }),
+    db.template.findUnique({ where: { id: slug }, select: { id: true, name: true, description: true, published: true, sortOrder: true, backgroundKey: true, updatedAt: true, source: true, geometry: true, categories: { select: { id: true } } } }),
     db.templateCategory.findMany({ orderBy: [{ kind: "asc" }, { sortOrder: "asc" }, { name: "asc" }], select: { id: true, kind: true, name: true } }),
   ]);
   if (!t) notFound();
@@ -21,10 +21,14 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
     <div className="flex flex-col gap-6">
       <div>
         <Link href="/doraadmin/templates" className="text-sm text-muted-foreground hover:underline">← Templates</Link>
-        <h1 className="text-2xl font-semibold">Edit {t.name}</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold">Edit {t.name}</h1>
+          {t.published ? <Link href={`/template/dieline/${t.id}`} target="_blank" rel="noreferrer" className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">Open public page ↗</Link> : <span className="text-sm text-muted-foreground">Hidden: not shown to customers</span>}
+        </div>
         {t.source === "builtin" ? <p className="text-sm text-muted-foreground">Built-in parametric template: you can change its name, description, categories, order, background image and visibility. Its shape comes from the dieline generator in code.</p> : null}
       </div>
       <TemplateWizard
+        key={t.updatedAt.getTime()}
         mode="edit"
         categories={categories.map((c) => ({ id: c.id, kind: c.kind as "use" | "model", name: c.name }))}
         initial={{

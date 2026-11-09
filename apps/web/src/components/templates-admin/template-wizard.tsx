@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, FileUp, ImagePlus, RotateCcw, Trash2, Wand2 } from "lucide-react";
@@ -11,6 +11,8 @@ import { notify } from "@/lib/notify";
 import { isValidSlug, slugify } from "@/lib/slug";
 import { MAX_SVG_CHARS, ROLE_COLOR, ROLE_HINTS, ROLE_LABELS, ROLE_ORDER } from "@/lib/template-import";
 import { ImportedPreview } from "./imported-preview";
+import { RoleSampleButton } from "./role-sample";
+import { SvgPreviewButton } from "./svg-preview";
 
 type Unit = "auto" | "mm" | "cm" | "in" | "pt" | "px";
 interface Options {
@@ -104,7 +106,42 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
     return r;
   }, [roles, dieline, showBleed, showGuides]);
 
+  // Edit mode: has anything changed since the page loaded? (Compared as plain data.)
+  const sortedRoles = (r: Record<string, Role>) => Object.fromEntries(Object.entries(r).sort(([a], [b]) => a.localeCompare(b)));
+  const snapshot = JSON.stringify({
+    name: name.trim(), slug, description: description.trim(), published, sortOrder,
+    cats: [...categoryIds].sort(), roles: sortedRoles(roles), opts,
+    newSvg: text !== null, bg: bgFile ? "new" : bgRemoved ? "removed" : "same",
+  });
+  const [baseline] = useState(() =>
+    JSON.stringify({
+      name: initial.name.trim(), slug: initial.slug, description: initial.description.trim(), published: initial.published, sortOrder: initial.sortOrder,
+      cats: [...initial.categoryIds].sort(), roles: sortedRoles(initial.roles), opts: initial.options,
+      newSvg: false, bg: "same",
+    }),
+  );
+  const dirty = mode === "create" || snapshot !== baseline;
+
+  const [activeSection, setActiveSection] = useState("sec-details");
+  useEffect(() => {
+    if (mode !== "edit") return;
+    const ids = ["sec-details", "sec-categories", "sec-background", "sec-dieline", "sec-lines"];
+    const els = ids.map((id) => document.getElementById(id)).filter((e): e is HTMLElement => e !== null);
+    // The section crossing the upper third of the screen is the current one.
+    const io = new IntersectionObserver(
+      (entries) => {
+        const hit = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (hit) setActiveSection(hit.target.id);
+      },
+      { rootMargin: "-15% 0px -65% 0px" },
+    );
+    els.forEach((e) => io.observe(e));
+    return () => io.disconnect();
+  }, [mode, builtin, dieline !== null]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const hasCut = Object.values(roles).includes("cut");
+  // Customers get a resizable sheet from the Cut lines, so some Cut shape must be closed.
+  const hasClosedCut = !dieline || dieline.paths.some((p) => p.closed && roles[p.style] === "cut");
   const slugOk = isValidSlug(slug);
   const nameOk = name.trim().length >= 2;
   const stepName = steps[step]!;
@@ -112,12 +149,13 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
   const canNext =
     stepName === "Categories" ? categoryIds.length > 0 :
     stepName === "SVG file" ? dieline !== null :
-    stepName === "Customize" ? dieline !== null && hasCut :
+    stepName === "Customize" ? dieline !== null && hasCut && hasClosedCut :
     true;
   const blocker =
     stepName === "Categories" && categoryIds.length === 0 ? "Choose at least one category." :
     stepName === "SVG file" && dieline === null ? "Upload an SVG file to continue." :
-    stepName === "Customize" && !hasCut ? "Mark at least one line style as Cut." : null;
+    stepName === "Customize" && !hasCut ? "Mark at least one line style as Cut." :
+    stepName === "Customize" && !hasClosedCut ? "The Cut lines must include a closed outline." : null;
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -174,12 +212,16 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
         roles,
       });
       if (r.ok) {
-        const bgOk = await syncBackground(r.slug ?? slug);
+        const finalSlug = r.slug ?? slug;
+        const bgOk = await syncBackground(finalSlug);
         if (bgOk) notify.success(r.message);
-        // On a failed picture upload stay on the edit page of the saved template so it can be retried.
-        if (!bgOk && mode === "create") router.push(`/doraadmin/templates/${r.slug ?? slug}/edit`);
-        else if (bgOk) router.push("/doraadmin/templates");
-        router.refresh();
+        if (mode === "create") {
+          // On a failed picture upload go to the edit page of the saved template so it can be retried.
+          router.push(bgOk ? "/doraadmin/templates" : `/doraadmin/templates/${finalSlug}/edit`);
+        } else if (finalSlug !== initial.slug) {
+          router.replace(`/doraadmin/templates/${finalSlug}/edit`); // renamed: the page address changes
+        }
+        router.refresh(); // edit stays here; the page remounts with the saved data
       } else notify.error(r.message);
     } catch {
       notify.error("Could not save the template. Please try again.");
@@ -188,32 +230,35 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
     }
   }
 
+  const saveShortcut = useEffectEvent(() => {
+    if (!saving && dirty && nameOk && slugOk && categoryIds.length > 0 && (builtin || (hasCut && hasClosedCut))) void save();
+  });
+  useEffect(() => {
+    if (mode !== "edit") return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        saveShortcut();
+      }
+    };
+    const onLeave = (e: BeforeUnloadEvent) => {
+      if (dirty) e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("beforeunload", onLeave);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("beforeunload", onLeave);
+    };
+  }, [mode, dirty]);
+
   const toggleCategory = (id: string) => setCategoryIds((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
 
-  return (
-    <div className="flex flex-col gap-6">
-      <ol className="flex flex-wrap gap-2" aria-label="Steps">
-        {steps.map((s, i) => (
-          <li key={s}>
-            <button
-              type="button"
-              disabled={i > step}
-              onClick={() => setStep(i)}
-              aria-current={i === step ? "step" : undefined}
-              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${i === step ? "border-primary bg-primary/5 font-medium" : i < step ? "hover:bg-muted" : "text-muted-foreground"}`}
-            >
-              <span className={`grid size-5 place-items-center rounded-full text-xs ${i < step ? "bg-primary text-primary-foreground" : "border"}`}>{i < step ? <Check className="size-3" aria-hidden /> : i + 1}</span>
-              {s}
-            </button>
-          </li>
-        ))}
-      </ol>
-
-      {/* ---------------------------------------------------------- 1. categories */}
-      {stepName === "Categories" ? (
+  // ---- the pieces, shared by the create stepper and the edit page
+  const categoriesSection = (
         <section aria-labelledby="s-cat" className="flex flex-col gap-5">
           <div>
-            <h2 id="s-cat" className="text-lg font-semibold">Choose categories</h2>
+            <h2 id="s-cat" className="text-lg font-semibold">{mode === "create" ? "Choose categories" : "Categories"}</h2>
             <p className="text-sm text-muted-foreground">A template can be in several: for example Food (by use) and Tuck End Boxes (by model). Pick at least one.</p>
           </div>
           {(["use", "model"] as const).map((k) => (
@@ -234,13 +279,11 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
             </fieldset>
           ))}
         </section>
-      ) : null}
-
-      {/* ---------------------------------------------------------- 2. svg */}
-      {stepName === "SVG file" ? (
+  );
+  const svgSection = (
         <section aria-labelledby="s-svg" className="flex flex-col gap-5">
           <div>
-            <h2 id="s-svg" className="text-lg font-semibold">Upload the dieline SVG</h2>
+            <h2 id="s-svg" className="text-lg font-semibold">{mode === "create" ? "Upload the dieline SVG" : "Dieline file"}</h2>
             <p className="text-sm text-muted-foreground">
               Any dieline drawn as lines and shapes (Illustrator, Inkscape, Figma, a cutting-table export). Text, images and effects are ignored. Use only files you have the right to publish.
             </p>
@@ -304,14 +347,18 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
             </div>
           ) : null}
         </section>
-      ) : null}
-
-      {/* ---------------------------------------------------------- 3. customise */}
-      {stepName === "Customize" && dieline ? (
+  );
+  const customizeSection = dieline ? (
         <section aria-labelledby="s-cust" className="flex flex-col gap-4">
-          <div>
-            <h2 id="s-cust" className="text-lg font-semibold">Customize the dieline</h2>
-            <p className="text-sm text-muted-foreground">Tell us what each kind of line means. We guessed from colour and dashes; change anything that is wrong.</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 id="s-cust" className="text-lg font-semibold">{mode === "create" ? "Customize the dieline" : "Line roles and preview"}</h2>
+              <p className="text-sm text-muted-foreground">Tell us what each kind of line means. We guessed from colour and dashes; change anything that is wrong.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <SvgPreviewButton rawSvg={text} dieline={dieline} roles={roles} onRole={(key, role) => setOverrides((o) => ({ ...o, [key]: role }))} />
+              <RoleSampleButton />
+            </div>
           </div>
           <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
             <div className="flex flex-col gap-3">
@@ -346,7 +393,7 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
                   </div>
                 ))}
               </dl>
-              {!hasCut ? <p role="alert" className="text-sm text-destructive">Mark at least one style as Cut.</p> : null}
+              {!hasCut ? <p role="alert" className="text-sm text-destructive">Mark at least one style as Cut.</p> : !hasClosedCut ? <p role="alert" className="text-sm text-destructive">The Cut lines must include a closed outline (the outer shape of the box).</p> : null}
             </div>
 
             <div className="flex min-w-0 flex-col gap-3">
@@ -359,17 +406,13 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
               <div className="rounded-xl border bg-white p-3">
                 <ImportedPreview dieline={dieline} roles={previewRoles} animate replayKey={replay} className="mx-auto max-h-[60vh] w-full" />
               </div>
-              <p className="text-xs text-muted-foreground">The preview animates the drawing. Folding this sheet into a 3D box (and placing artwork on its panels) is not available for imported dielines yet.</p>
+              <p className="text-xs text-muted-foreground">Customers can resize this sheet, add artwork, and export it. Folding it into a 3D box is not available for imported dielines yet.</p>
             </div>
           </div>
         </section>
-      ) : null}
-
-      {/* ---------------------------------------------------------- 4. details */}
-      {stepName === "Details" || stepName === "Details & publish" ? (
-        <section aria-labelledby="s-det" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="flex max-w-xl flex-col gap-4">
-            <h2 id="s-det" className="text-lg font-semibold">Details</h2>
+  ) : null;
+  const detailsFields = (
+    <>
             <label className="flex flex-col gap-1 text-sm font-medium">
               Name
               <input
@@ -420,7 +463,12 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
               <input type="checkbox" checked={published} onChange={(e) => setPublished(e.target.checked)} />
               Published (visible on the public site)
             </label>
-            <fieldset className="flex flex-col gap-2 rounded-xl border p-3">
+            {!published ? <p role="status" className="-mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Not published: customers will not see this template in the library until you publish it.</p> : null}
+            
+    </>
+  );
+  const backgroundFieldset = (
+    <fieldset className="flex flex-col gap-2 rounded-xl border p-3">
               <legend className="px-1 text-sm font-medium">Box background image</legend>
               <p className="text-xs text-muted-foreground">
                 {builtin
@@ -446,8 +494,9 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
               </div>
               <p className="text-xs text-muted-foreground">PNG or JPEG, up to 10 MB. {bgFile ? "It is uploaded when you save." : ""}</p>
             </fieldset>
-          </div>
-          <aside className="flex flex-col gap-3 rounded-xl border p-4 text-sm">
+  );
+  const summaryAside = (
+    <aside className="flex flex-col gap-3 rounded-xl border p-4 text-sm">
             <h3 className="font-medium">Summary</h3>
             <div className="flex flex-wrap gap-1">
               {categories.filter((c) => categoryIds.includes(c.id)).map((c) => <span key={c.id} className="rounded-full bg-muted px-2 py-0.5 text-xs">{c.name}</span>)}
@@ -459,6 +508,109 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
               </>
             ) : <p className="text-xs text-muted-foreground">Built-in template: its geometry comes from the dieline generator.</p>}
           </aside>
+  );
+
+  // ---- edit mode: one page with every section, a section menu and a sticky save bar
+  if (mode === "edit") {
+    const problems = [
+      !nameOk ? "Name needs at least 2 characters." : null,
+      !slugOk ? "Fix the slug." : null,
+      categoryIds.length === 0 ? "Choose at least one category." : null,
+      !builtin && !hasCut ? "Mark at least one line style as Cut." : null,
+      !builtin && hasCut && !hasClosedCut ? "The Cut lines must include a closed outline." : null,
+    ].filter((x): x is string => x !== null);
+    const canSave = dirty && problems.length === 0 && !saving;
+    const sections = [
+      { id: "sec-details", label: "Details" },
+      { id: "sec-categories", label: "Categories" },
+      { id: "sec-background", label: "Background image" },
+      ...(builtin ? [] : [{ id: "sec-dieline", label: "Dieline file" }, ...(dieline ? [{ id: "sec-lines", label: "Line roles" }] : [])]),
+    ];
+    const card = "scroll-mt-24 rounded-2xl border bg-card p-5";
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="grid gap-6 lg:grid-cols-[190px_minmax(0,1fr)]">
+          <nav aria-label="Sections" className="lg:sticky lg:top-20 lg:self-start">
+            <ul className="flex gap-1 overflow-x-auto lg:flex-col">
+              {sections.map((x) => (
+                <li key={x.id} className="shrink-0">
+                  <a
+                    href={`#${x.id}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      document.getElementById(x.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }}
+                    aria-current={activeSection === x.id ? "location" : undefined}
+                    className={`block rounded-lg px-3 py-1.5 text-sm ${activeSection === x.id ? "bg-muted font-medium" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"}`}
+                  >
+                    {x.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          <div className="flex min-w-0 flex-col gap-6">
+            <section id="sec-details" aria-labelledby="s-det" className={card}>
+              <h2 id="s-det" className="mb-4 text-lg font-semibold">Details</h2>
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
+                <div className="flex max-w-xl flex-col gap-4">{detailsFields}</div>
+                {summaryAside}
+              </div>
+            </section>
+            <div id="sec-categories" className={card}>{categoriesSection}</div>
+            <div id="sec-background" className={card}>{backgroundFieldset}</div>
+            {!builtin ? <div id="sec-dieline" className={card}>{svgSection}</div> : null}
+            {!builtin && customizeSection ? <div id="sec-lines" className={card}>{customizeSection}</div> : null}
+          </div>
+        </div>
+
+        <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur" role="region" aria-label="Save">
+          <div className="min-w-0 text-sm" aria-live="polite">
+            {problems.length ? <span className="text-destructive">{problems[0]}</span> : dirty ? <span className="font-medium">Unsaved changes</span> : <span className="text-muted-foreground">All changes saved</span>}
+          </div>
+          <div className="flex items-center gap-3">
+            <Link href="/doraadmin/templates" className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">Back to list</Link>
+            <Button type="button" className="h-10" disabled={!canSave} onClick={() => void save()} title="Ctrl/Cmd + S">
+              {saving ? "Saving…" : "Save changes"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- create mode: the stepper
+  return (
+    <div className="flex flex-col gap-6">
+      <ol className="flex flex-wrap gap-2" aria-label="Steps">
+        {steps.map((s, i) => (
+          <li key={s}>
+            <button
+              type="button"
+              disabled={i > step}
+              onClick={() => setStep(i)}
+              aria-current={i === step ? "step" : undefined}
+              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${i === step ? "border-primary bg-primary/5 font-medium" : i < step ? "hover:bg-muted" : "text-muted-foreground"}`}
+            >
+              <span className={`grid size-5 place-items-center rounded-full text-xs ${i < step ? "bg-primary text-primary-foreground" : "border"}`}>{i < step ? <Check className="size-3" aria-hidden /> : i + 1}</span>
+              {s}
+            </button>
+          </li>
+        ))}
+      </ol>
+
+      {stepName === "Categories" ? categoriesSection : null}
+      {stepName === "SVG file" ? svgSection : null}
+      {stepName === "Customize" ? customizeSection : null}
+      {stepName === "Details" || stepName === "Details & publish" ? (
+        <section aria-labelledby="s-det" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="flex max-w-xl flex-col gap-4">
+            <h2 id="s-det" className="text-lg font-semibold">Details</h2>
+            {detailsFields}
+            {backgroundFieldset}
+          </div>
+          {summaryAside}
         </section>
       ) : null}
 

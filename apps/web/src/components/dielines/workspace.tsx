@@ -4,7 +4,8 @@ import { useActionState, useDeferredValue, useEffect, useMemo, useRef, useState 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, Info, Layers, Printer, Ruler, SlidersHorizontal, type LucideIcon } from "lucide-react";
-import { ParamValidationError, getGenerator, type DielineGeometry, type ParamDescriptor, type ParamGroup } from "@packaging/dieline-engine";
+import { ParamValidationError, createImportedGenerator, getGenerator, type DielineGeometry, type FlatDieline, type ParamDescriptor, type ParamGroup } from "@packaging/dieline-engine";
+import type { FlatDielineData } from "@packaging/svg-import";
 import { STYLE, dielineViewBox, renderDielineSvg } from "@packaging/render-svg";
 import { DeleteProjectButton } from "@/components/projects/delete-project-button";
 import { notify } from "@/lib/notify";
@@ -13,7 +14,7 @@ import { createProject, createProjectDraft, updateProject, type DesignState } fr
 import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { MaterialPicker, ParamField } from "./settings-fields";
 import { DIELINE_TOGGLES, SheetCanvas, type ViewToggles } from "./sheet-canvas";
-import { FormatCard, FoldPreview, type DownloadFormat } from "./side-cards";
+import { DOWNLOAD_FORMATS, FormatCard, FoldPreview, type DownloadFormat } from "./side-cards";
 import { CUSTOM_GRADE, MATERIAL_TYPES, materialFor, withUnitLabels, type Unit } from "./units";
 
 type Values = Record<string, string>;
@@ -23,6 +24,8 @@ type TabId = ParamGroup | "Info";
 interface Props {
   mode: Mode;
   generatorId: string;
+  /** For an imported (SVG) template: its lines, so the generator can be rebuilt here. */
+  imported?: { templateId: string; flat: FlatDielineData };
   title: string;
   description: string;
   initialName: string;
@@ -69,9 +72,9 @@ function saveBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-export function DielineWorkspace({ mode, generatorId, title, description, initialName, initialParams, backHref, backLabel }: Props) {
+export function DielineWorkspace({ mode, generatorId, imported, title, description, initialName, initialParams, backHref, backLabel }: Props) {
   const router = useRouter();
-  const gen = getGenerator(generatorId);
+  const gen = useMemo(() => (imported ? createImportedGenerator(imported.templateId, imported.flat as FlatDieline) : getGenerator(generatorId)), [generatorId, imported]);
   const [values, setValues] = useState<Values>(() =>
     Object.fromEntries(gen.params.map((p) => [p.key, initialParams[p.key] === undefined ? "" : String(initialParams[p.key])])),
   );
@@ -218,10 +221,15 @@ export function DielineWorkspace({ mode, generatorId, title, description, initia
     }
   };
 
+  // Imported dielines are flat: no glue areas or panels to show, and no 3D.
+  const foldable = (shown?.foldTree.hinges.length ?? 0) > 0;
+  const toggleDefs = imported ? DIELINE_TOGGLES.filter((t) => t.key === "dimensions" || t.key === "bleed" || (t.key === "safe" && (shown?.safeAreas.length ?? 0) > 0)) : DIELINE_TOGGLES;
+  const formats = foldable ? DOWNLOAD_FORMATS : DOWNLOAD_FORMATS.filter((f) => f.value !== "glb");
+
   const legend = [
     { label: "Cut", color: STYLE.cut.stroke },
     { label: "Crease", color: STYLE.crease.stroke, dashed: true },
-    ...(toggles.glue ? [{ label: "Glue area", color: STYLE.glue.fill }] : []),
+    ...(toggles.glue && !imported ? [{ label: "Glue area", color: STYLE.glue.fill }] : []),
     ...(toggles.bleed ? [{ label: "Bleed", color: STYLE.bleed.stroke, dashed: true }] : []),
     ...(toggles.safe ? [{ label: "Safe area", color: STYLE.safe.stroke, dashed: true }] : []),
   ];
@@ -384,7 +392,7 @@ export function DielineWorkspace({ mode, generatorId, title, description, initia
         {/* Centre: sheet */}
         <main className="flex min-h-[55vh] min-w-0 flex-col lg:min-h-0">
           {shown && src ? (
-            <SheetCanvas bounds={dielineViewBox(shown, 22)} src={src} toggles={toggles} toggleDefs={DIELINE_TOGGLES} onToggles={setToggles} legend={legend} />
+            <SheetCanvas bounds={dielineViewBox(shown, 22)} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} />
           ) : (
             <p className="p-6 text-sm text-muted-foreground">Enter valid dimensions to see the dieline.</p>
           )}
@@ -393,8 +401,15 @@ export function DielineWorkspace({ mode, generatorId, title, description, initia
 
         {/* Right: 3D + download */}
         <aside className="flex min-h-0 flex-col gap-4 overflow-y-auto border-t p-4 lg:border-t-0 lg:border-l">
-          {shown ? <FoldPreview geo={shown} progress={progress} onProgress={setProgress} color={materialType.color} viewRef={viewRef} /> : null}
+          {shown && foldable ? <FoldPreview geo={shown} progress={progress} onProgress={setProgress} color={materialType.color} viewRef={viewRef} /> : null}
+          {shown && !foldable ? (
+            <section aria-label="Imported dieline" className="rounded-2xl border p-4 text-sm">
+              <h2 className="font-semibold">Imported dieline</h2>
+              <p className="mt-1 text-xs text-muted-foreground">The shape is fixed: you can change its overall size, bleed and artwork. The 3D fold preview is not available for it.</p>
+            </section>
+          ) : null}
           <FormatCard
+            formats={formats}
             format={format}
             onFormat={(f) => {
               setFormat(f);

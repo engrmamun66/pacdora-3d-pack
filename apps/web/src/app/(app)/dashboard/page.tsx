@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { requireUser } from "@/server/session";
 import { listProjects } from "@/server/projects";
-import { tryThumbnail } from "@/lib/dieline-preview";
+import { projectThumbnail } from "@/lib/dieline-preview";
 import { ButtonLink } from "@/components/button-link";
 
 export const metadata = { title: "Dashboard" };
@@ -29,7 +29,7 @@ async function Overview() {
         ) : (
           <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {recent.map((p) => {
-              const thumb = p.doc ? tryThumbnail(p.doc.template.generatorId, p.doc.template.params) : null;
+              const thumb = p.doc ? projectThumbnail(p.template, p.doc.template.generatorId, p.doc.template.params) : null;
               return (
                 <li key={p.id}>
                   <Link href={`/projects/${p.id}`} className="flex flex-col overflow-hidden rounded-xl border transition hover:shadow-sm">
