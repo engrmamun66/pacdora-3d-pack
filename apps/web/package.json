@@ -24,6 +24,7 @@
     "@packaging/artwork": "^0.0.0",
     "@packaging/dieline-engine": "^0.0.0",
     "@packaging/model3d": "^0.0.0",
+    "@packaging/render-print": "^0.0.0",
     "@packaging/render-svg": "^0.0.0",
     "@packaging/schema": "^0.0.0",
     "@packaging/vector-scene": "^0.0.0",

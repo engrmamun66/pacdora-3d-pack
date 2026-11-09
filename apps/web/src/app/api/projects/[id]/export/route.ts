@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { dielineToDxf, sceneToSvg } from "@packaging/vector-scene";
+import { getProfile, sceneToEps, sceneToPdf } from "@packaging/render-print";
 import { auth } from "@/server/auth";
 import { fileBase, projectScene } from "@/server/export";
 import { getProject } from "@/server/projects";
 
 const flag = z.enum(["0", "1"]).transform((v) => v === "1");
 const query = z.object({
-  format: z.enum(["svg", "dxf", "json"]),
+  format: z.enum(["pdf", "ai", "eps", "svg", "dxf", "json"]),
+  /** Illustrator target for ai/eps. */
+  profile: z.string().max(10).default("cc"),
   artwork: flag.default(true),
   dieline: flag.default(true),
   bleed: flag.default(false),
@@ -55,7 +58,26 @@ export async function GET(request: Request, ctx: RouteContext<"/api/projects/[id
         cutSpot: q.cutSpot,
         creaseSpot: q.creaseSpot,
       });
-      if (q.format === "dxf") {
+      if (q.format === "pdf" || q.format === "ai" || q.format === "eps") {
+        const profile = getProfile(q.profile);
+        if (!profile) return NextResponse.json({ error: "Unknown Illustrator version." }, { status: 400 });
+        const untested = q.format === "pdf" ? [] : [`${profile.label} profile is untested: it has not been opened in that Illustrator version yet.`];
+        if (q.format === "eps") {
+          const r = sceneToEps(scene, { psLevel: profile.eps.psLevel, title: project.name });
+          body = r.bytes;
+          type = "application/postscript";
+          ext = "eps";
+          losses = [...scene.losses, ...r.losses, ...untested];
+        } else {
+          const settings = q.format === "pdf" ? ({ pdfVersion: "1.7", layers: true, transparency: "live" } as const) : profile.ai;
+          if (!settings) return NextResponse.json({ error: `${profile.label} .ai files are PostScript-based; use EPS for this version.` }, { status: 400 });
+          const r = await sceneToPdf(scene, { ...settings, title: project.name });
+          body = r.bytes;
+          type = q.format === "pdf" ? "application/pdf" : "application/illustrator";
+          ext = q.format;
+          losses = [...scene.losses, ...r.losses, ...untested];
+        }
+      } else if (q.format === "dxf") {
         body = dielineToDxf(geo);
         type = "application/dxf";
         ext = "dxf";
@@ -77,7 +99,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/projects/[id
       "Content-Disposition": `attachment; filename="${base}.${ext}"`,
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",
-      "X-Export-Report": encodeURIComponent(JSON.stringify({ format: q.format, losses })),
+      "X-Export-Report": encodeURIComponent(JSON.stringify({ format: q.format, profile: q.format === "ai" || q.format === "eps" ? q.profile : null, losses })),
     },
   });
 }

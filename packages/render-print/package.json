@@ -1,0 +1,16 @@
+{
+  "name": "@packaging/render-print",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./profiles": "./src/profiles.ts"
+  },
+  "dependencies": {
+    "@packaging/vector-scene": "^0.0.0",
+    "pdf-lib": "1.17.1",
+    "pngjs": "7.0.0"
+  }
+}
