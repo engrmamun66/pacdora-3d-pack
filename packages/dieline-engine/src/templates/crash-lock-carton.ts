@@ -49,12 +49,18 @@ export function buildCrashLockTree(p: CrashLockParams): FoldTree {
     b.addHinge(main, major, P(x0, H), P(x1, H));
     b.addPanel(tab, "glue-flap", `glue tab ${major}`, { polygon: poly(P(x1, H), P(x1, H + half), P(x1 - half, H + half)) }, false);
     b.addHinge(tab, main, P(x1, H), P(x1 - half, H + half), 180);
-    b.addPanel(lock, "lock-flap", `lock ${minor}`, { polygon: poly(P(x1, H), P(x1 + W, H), P(x1 + W - taper, H + half), P(x1, H + half)) }, false);
-    b.addHinge(lock, minor, P(x1, H), P(x1 + W, H));
+    // The right lock flap stops a cut gap (board thickness x factor) short of the back half's outer
+    // flap, which it would otherwise touch at the hinge. (The glue tab must keep its full contact
+    // with the lock flap, so that side stays a plain slit.)
+    const gr = minor === "right" ? p.cutGap : 0;
+    const lockPoly = poly(P(x1, H), P(x1 + W - gr, H), P(x1 + W - Math.max(taper, gr), H + half), P(x1, H + half));
+    b.addPanel(lock, "lock-flap", `lock ${minor}`, { polygon: lockPoly }, false);
+    if (gr > 0) b.splitEdge(minor, P(x1 + W - gr, H));
+    b.addHinge(lock, minor, P(x1, H), P(x1 + W - gr, H));
     // Tab and lock flap are separated by a cut on the body crease line.
     b.slits.push({ id: `slit-tab-${major}`, a: P(x1, H), b: P(x1, H + half) });
-    // Without taper the right lock flap touches the back flap edge-to-edge.
-    if (taper === 0 && minor === "right") b.slits.push({ id: "slit-lock-right", a: P(x1 + W, H), b: P(x1 + W, H + half) });
+    // Without taper (and without a gap) the right lock flap touches the back flap edge-to-edge.
+    if (gr === 0 && taper === 0 && minor === "right") b.slits.push({ id: "slit-lock-right", a: P(x1 + W, H), b: P(x1 + W, H + half) });
   }
   return b.tree();
 }
@@ -67,7 +73,8 @@ export function generateCrashLockCarton(input: unknown): DielineGeometry {
   const expect = tubeExpectations(params, {
     extent: W / 2,
     // 4 bottom hinges + 2 tab creases, each the diagonal of a W/2 square.
-    crease: 2 * L + 2 * W + 2 * Math.SQRT2 * (W / 2),
+    // The right lock flap's hinge is one gap shorter.
+    crease: 2 * L + 2 * W + 2 * Math.SQRT2 * (W / 2) - params.cutGap,
     lids: [],
   });
   return finalizeCarton({
@@ -114,7 +121,13 @@ export function crashLockChecks(p: CrashLockParams, tree: FoldTree, world: Map<s
 
   const floorIds = ["bottom-front", "bottom-back", "lock-right", "lock-left"];
   const covered = unionArea(floorIds.map(F));
-  check("folded-bottom-covered", Math.abs(covered - L * W) <= tol, `bottom covered ${covered.toFixed(3)} of ${(L * W).toFixed(3)} mm2`);
+  // The cut gap (at most gap x W/2) is the only place the floor may stay open.
+  const maxOpen = p.cutGap * (W / 2);
+  check(
+    "folded-bottom-covered",
+    covered <= L * W + tol && covered >= L * W - maxOpen - tol,
+    `bottom covered ${covered.toFixed(3)} of ${(L * W).toFixed(3)} mm2 (the cut gap may leave up to ${maxOpen.toFixed(3)} open)`,
+  );
 
   const outerOverlap = intersectionArea(F("bottom-front"), F("bottom-back"));
   check("folded-outer-flaps-no-overlap", outerOverlap <= tol, `front/back flap overlap ${outerOverlap.toFixed(4)} mm2`);

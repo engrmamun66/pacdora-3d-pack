@@ -678,4 +678,5 @@ Ignored line styles stay dropped from geometry, exports and 3D. In the template 
 ## Cut gap follows board thickness (tuck-end and crash-lock cartons)
 - New param `cutGapFactor` (default 1, "Cut gap (x thickness)", Material group). Gap = factor x thickness.
 - Each dust flap stops `gap` short of the closure beside it, so a slot of that width separates them; the slot bottom is its own cut segment on the body edge. Closure/tuck keep full width. Crease total drops by the gap per affected dust hinge. Factor 0 = old geometry.
+- Crash-lock bottom: the right lock flap also stops one gap short of the back half's outer flap (its hinge is one gap shorter, no zero-width slit there). The tab/lock-flap slits stay zero-width so the glue tab keeps full contact. The closed-bottom coverage check allows the gap area to stay open.
 - Slotted (corrugated) box already had thickness-driven slots. Imported SVG templates are fixed geometry and unaffected. Slot ends are square, not rounded.

@@ -381,7 +381,7 @@ export class CartonBuilder extends TubeBuilder {
   }
 
   /** Insert a vertex on the edge of a panel that the point lies on (no-op if it is already one). */
-  private splitEdge(panelId: string, pt: Vec2): void {
+  splitEdge(panelId: string, pt: Vec2): void {
     const i = this.panels.findIndex((q) => q.id === panelId);
     const panel = this.panels[i]!;
     const poly0 = panel.polygon;

@@ -61,10 +61,27 @@ describe("crash-lock bottom carton", () => {
     expect(h(tuck) - h(g)).toBeCloseTo(Math.max(60 + tp.tuckDepth, tp.dustFlapDepth) - 30, 9);
   });
 
-  it("taper 0 turns the shared edge between right lock flap and back flap into a slit", () => {
-    const g = gen({ ...base, lockFlapTaper: 0 });
+  it("taper 0 and no cut gap turn the shared edge between right lock flap and back flap into a slit", () => {
+    const g = gen({ ...base, lockFlapTaper: 0, cutGapFactor: 0 });
     expect(g.checks.every((c) => c.pass)).toBe(true);
     expect(g.slitLines.map((s) => s.id)).toContain("slit-lock-right");
+  });
+
+  it("right lock flap stops one cut gap (thickness x factor) short of the back flap", () => {
+    const hinge = (g: ReturnType<typeof gen>, id: string) => {
+      const h = g.foldTree.hinges.find((x) => x.childId === id)!;
+      return dist(h.a, h.b);
+    };
+    for (const t of [0.5, 1.5, 3]) {
+      const g = gen({ ...base, thickness: t, cutGapFactor: 1 });
+      expect(g.checks.every((c) => c.pass)).toBe(true);
+      expect(hinge(g, "lock-right")).toBeCloseTo(60 - t, 6);
+      expect(hinge(g, "lock-left")).toBeCloseTo(60, 6);
+      // No slit replaces the gap, and the tab slits stay.
+      expect(g.slitLines.map((s) => s.id)).not.toContain("slit-lock-right");
+      expect(g.slitLines.map((s) => s.id)).toContain("slit-tab-front");
+    }
+    expect(hinge(gen({ ...base, thickness: 3, cutGapFactor: 0 }), "lock-right")).toBeCloseTo(60, 6);
   });
 
   it("square footprint (depth = width) still closes", () => {
