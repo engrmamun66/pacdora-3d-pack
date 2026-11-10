@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { Check, ChevronDown, ChevronRight } from "lucide-react";
 import type { ParamDescriptor } from "@packaging/dieline-engine";
 import { MM_PER_INCH, fmtRange, fromDisplay, gradeLabel, toDisplay, type MaterialGrade, type MaterialType, type Unit } from "./units";
 
@@ -80,47 +81,168 @@ export function ParamField({
   );
 }
 
-/** Board family (Material) and then the item inside it. A fixed item decides the thickness. */
+/**
+ * One field for the material. It opens a menu of board families; pointing at a family (or
+ * pressing Right) opens its items in a submenu next to it, and picking an item closes both.
+ * A fixed item decides the thickness. The menu is `fixed`-positioned so the scrolling side
+ * panel cannot clip it.
+ */
 export function MaterialPicker({
   types,
   typeId,
   gradeId,
   unit,
-  onType,
-  onGrade,
+  onPick,
 }: {
   types: readonly MaterialType[];
   typeId: string;
   gradeId: string;
   unit: Unit;
-  onType: (id: string) => void;
-  onGrade: (id: string) => void;
+  onPick: (typeId: string, gradeId: string) => void;
 }) {
   const type = types.find((t) => t.id === typeId) ?? types[0]!;
+  const grade = type.grades.find((g) => g.id === gradeId) ?? type.grades[0]!;
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(type.id);
+  const [box, setBox] = useState<{ left: number; top: number; width: number } | null>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const uid = useId();
+
+  const show = () => {
+    const r = trigger.current?.getBoundingClientRect();
+    if (!r) return;
+    setBox({ left: r.left, top: r.bottom + 4, width: r.width });
+    setActive(type.id);
+    setOpen(true);
+  };
+  const close = (refocus: boolean) => {
+    setOpen(false);
+    if (refocus) trigger.current?.focus();
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const down = (e: globalThis.PointerEvent) => {
+      const t = e.target as Node;
+      if (!menu.current?.contains(t) && !trigger.current?.contains(t)) setOpen(false);
+    };
+    const away = () => setOpen(false);
+    document.addEventListener("pointerdown", down);
+    window.addEventListener("resize", away);
+    window.addEventListener("scroll", away, true);
+    // Focus the current family so the arrow keys work straight away.
+    menu.current?.querySelector<HTMLElement>(`[data-type="${type.id}"]`)?.focus();
+    return () => {
+      document.removeEventListener("pointerdown", down);
+      window.removeEventListener("resize", away);
+      window.removeEventListener("scroll", away, true);
+    };
+  }, [open, type.id]);
+
+  const items = (level: "type" | "grade") => Array.from(menu.current?.querySelectorAll<HTMLElement>(`[data-level="${level}"]`) ?? []);
+  const keys = (e: KeyboardEvent<HTMLDivElement>) => {
+    const el = document.activeElement as HTMLElement | null;
+    const level = el?.dataset.level as "type" | "grade" | undefined;
+    if (!el || !level) return;
+    const list = items(level);
+    const i = list.indexOf(el);
+    if (e.key === "Escape") close(true);
+    else if (e.key === "ArrowDown") list[(i + 1) % list.length]?.focus();
+    else if (e.key === "ArrowUp") list[(i - 1 + list.length) % list.length]?.focus();
+    else if (e.key === "ArrowRight" && level === "type") items("grade")[0]?.focus();
+    else if (e.key === "ArrowLeft" && level === "grade") menu.current?.querySelector<HTMLElement>(`[data-type="${active}"]`)?.focus();
+    else if (e.key === "Tab") setOpen(false);
+    else return;
+    if (e.key !== "Tab") e.preventDefault();
+  };
+
+  const activeType = types.find((t) => t.id === active) ?? type;
+  const row = "flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm outline-none";
+
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <label htmlFor="material-type" className="text-xs font-medium">Material</label>
-        <div className="flex items-center gap-2">
-          <span className="size-6 shrink-0 rounded-full border" style={{ background: type.color }} aria-hidden />
-          <select id="material-type" value={type.id} onChange={(e) => onType(e.target.value)} className={inputCls}>
-            {types.map((t) => (
-              <option key={t.id} value={t.id}>{t.label}</option>
-            ))}
-          </select>
+    <div className="flex flex-col gap-1">
+      <span id={`${uid}-label`} className="text-xs font-medium">Material</span>
+      <button
+        ref={trigger}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-labelledby={`${uid}-label ${uid}-value`}
+        onClick={() => (open ? close(false) : show())}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            show();
+          }
+        }}
+        className={`${inputCls} flex items-center gap-2 text-left ${open ? "border-ring ring-3 ring-ring/50" : ""}`}
+      >
+        <span className="size-5 shrink-0 rounded-full border" style={{ background: type.color }} aria-hidden />
+        <span id={`${uid}-value`} className="min-w-0 flex-1 truncate">{gradeLabel(grade, unit)}</span>
+        <ChevronDown className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
+      </button>
+      {open && box ? (
+        <div
+          ref={menu}
+          role="menu"
+          aria-label="Material"
+          onKeyDown={keys}
+          style={{ position: "fixed", left: box.left, top: box.top, width: box.width }}
+          className="z-50"
+        >
+          <div className="overflow-hidden rounded-xl border bg-popover py-1 text-popover-foreground shadow-lg">
+            {types.map((t) => {
+              const on = t.id === active;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="menuitem"
+                  aria-haspopup="menu"
+                  aria-expanded={on}
+                  data-level="type"
+                  data-type={t.id}
+                  tabIndex={-1}
+                  onPointerEnter={() => setActive(t.id)}
+                  onFocus={() => setActive(t.id)}
+                  onClick={() => setActive(t.id)}
+                  className={`${row} ${on ? "bg-muted" : ""} ${t.id === type.id ? "font-medium" : ""}`}
+                >
+                  <span className="flex-1">{t.label}</span>
+                  <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
+                </button>
+              );
+            })}
+          </div>
+          <div role="menu" aria-label={`${activeType.label} items`} className="absolute top-0 left-full max-h-[70vh] w-max min-w-64 max-w-[22rem] pl-1">
+            <div className="overflow-y-auto rounded-xl border bg-popover py-1 text-popover-foreground shadow-lg">
+              {activeType.grades.map((g) => {
+                const on = g.id === grade.id && activeType.id === type.id;
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={on}
+                    data-level="grade"
+                    tabIndex={-1}
+                    onClick={() => {
+                      onPick(activeType.id, g.id);
+                      close(true);
+                    }}
+                    className={`${row} hover:bg-muted focus-visible:bg-muted ${on ? "font-medium text-primary" : ""}`}
+                  >
+                    <span className="size-5 shrink-0 rounded-full border" style={{ background: activeType.color }} aria-hidden />
+                    <span className="flex-1">{gradeLabel(g, unit)}</span>
+                    {on ? <Check className="size-4" aria-hidden /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
-      </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="material-grade" className="text-xs font-medium">{type.label} item</label>
-        <select id="material-grade" aria-describedby="material-hint" value={gradeId} onChange={(e) => onGrade(e.target.value)} className={inputCls}>
-          {type.grades.map((g) => (
-            <option key={g.id} value={g.id}>{gradeLabel(g, unit)}</option>
-          ))}
-        </select>
-        <p id="material-hint" className="text-xs text-muted-foreground">
-          Typical thicknesses, not supplier data. Pick a custom item (or a flute) to type the exact thickness your supplier gives you.
-        </p>
-      </div>
+      ) : null}
     </div>
   );
 }

@@ -152,16 +152,11 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   const materialType = materialTypes.find((t) => t.id === material.typeId) ?? materialTypes[0];
   const materialGrade = materialType?.grades.find((g) => g.id === material.gradeId) ?? materialType?.grades[0];
   const setThickness = (mm: number) => setValues((s) => ({ ...s, thickness: String(mm) }));
-  const pickType = (typeId: string) => {
-    const g = materialTypes.find((x) => x.id === typeId)?.grades[0];
+  const pickMaterial = (typeId: string, gradeId: string) => {
+    const g = materialTypes.find((x) => x.id === typeId)?.grades.find((x) => x.id === gradeId);
     if (!g) return;
-    setMaterial({ typeId, gradeId: g.id });
+    setMaterial({ typeId, gradeId });
     setThickness(g.thickness);
-  };
-  const pickGrade = (gradeId: string) => {
-    setMaterial({ typeId: material.typeId, gradeId });
-    const g = materialType?.grades.find((x) => x.id === gradeId);
-    if (g) setThickness(g.thickness);
   };
   const boardColor = materialType?.color ?? "#c9a574";
 
@@ -369,7 +364,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
                 {hasThickness && thickness ? (
                   <section aria-labelledby="sec-material" className="flex flex-col gap-3 border-t pt-5">
                     <h2 id="sec-material" className="font-semibold">Choose material</h2>
-                    <MaterialPicker types={materialTypes} typeId={material.typeId} gradeId={material.gradeId} unit={unit} onType={pickType} onGrade={pickGrade} />
+                    <MaterialPicker types={materialTypes} typeId={material.typeId} gradeId={material.gradeId} unit={unit} onPick={pickMaterial} />
                     <ThicknessField
                       p={thickness}
                       value={values.thickness || (typeof resolved.thickness === "number" ? String(resolved.thickness) : "")}
