@@ -674,3 +674,8 @@ Ignored line styles stay dropped from geometry, exports and 3D. In the template 
 - Materials: four families with sub items (`components/dielines/units.ts`): fixed thickness for standard paperboards, editable thickness with a suggested range for flutes and "Custom ..." items. Shown in mm or inch. Thickness feeds the engine; it changes the sheet in Size mode "Inner" (fold allowance = allowanceFactor x thickness), not in "Manufacture". Families/grades outside a template's thickness range are hidden.
 - Left menu: Dielines (pick another dieline, loaded on demand by `loadTemplatePicker`), Basic (size, material, thickness, size mode), Info (description, checks), More (structure, print, flaps; only if the template has such fields).
 - Info tab ("Dieline info"): Model ID (template id), Dimensions (Manufacturing / Inner / Outer from the allowance rule), statistics (design area with bleed, cut length, crease length); checks and built-in-default notes below, collapsed. Math in `components/dielines/info-math.ts` (tested).
+
+## Cut gap follows board thickness (tuck-end and crash-lock cartons)
+- New param `cutGapFactor` (default 1, "Cut gap (x thickness)", Material group). Gap = factor x thickness.
+- Each dust flap stops `gap` short of the closure beside it, so a slot of that width separates them; the slot bottom is its own cut segment on the body edge. Closure/tuck keep full width. Crease total drops by the gap per affected dust hinge. Factor 0 = old geometry.
+- Slotted (corrugated) box already had thickness-driven slots. Imported SVG templates are fixed geometry and unaffected. Slot ends are square, not rounded.

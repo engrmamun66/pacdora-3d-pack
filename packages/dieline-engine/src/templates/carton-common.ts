@@ -42,6 +42,11 @@ export const cartonBaseShape = {
   sizeMode: z.enum(["manufacture", "inner"]).default("manufacture"),
   /** Only used when sizeMode = "inner". */
   allowanceFactor: mm(0, 5).optional(),
+  /**
+   * Width of the cut gap between a dust flap and the closure beside it, as a multiple of the
+   * board thickness (the board needs that room to fold). 0 = the flap touches the closure.
+   */
+  cutGapFactor: mm(0, 5).optional(),
   bleed: mm(0, 20).default(3),
   safeMargin: mm(0, 20).default(3),
   glueFlapWidth: mm(2, 100).optional(),
@@ -69,6 +74,10 @@ export interface CartonBaseParams {
   readonly sizeMode: "manufacture" | "inner";
   /** Effective factor (0 in manufacture mode). */
   readonly allowanceFactor: number;
+  /** Effective factor (default 1). */
+  readonly cutGapFactor: number;
+  /** Cut gap between a dust flap and its neighbouring closure, mm (= cutGapFactor x thickness). */
+  readonly cutGap: number;
   readonly bleed: number;
   readonly safeMargin: number;
   readonly glueFlapWidth: number;
@@ -110,6 +119,8 @@ export function resolveCartonBase(d: CartonBaseData, used: string[], issues: Iss
   const w = d.width + allowanceFactor * d.thickness;
   const dp = d.depth + allowanceFactor * d.thickness;
   const h = d.height + allowanceFactor * d.thickness;
+  const cutGapFactor = pick("cutGapFactor", d.cutGapFactor, () => 1);
+  const cutGap = cutGapFactor * d.thickness;
 
   // UNVERIFIED defaults (documented in docs/dieline-math.md).
   const glueFlapWidth = pick("glueFlapWidth", d.glueFlapWidth, () => Math.min(15, dp));
@@ -138,6 +149,7 @@ export function resolveCartonBase(d: CartonBaseData, used: string[], issues: Iss
   need(2 * tuckCornerCut < w, "tuckCornerCut", "must be less than half the width");
   need(2 * dustFlapDepth < w, "dustFlapDepth", "must be less than half the width (opposite dust flaps would collide)");
   need(2 * dustFlapInset < dp, "dustFlapInset", "must be less than half the depth");
+  need(cutGap <= dp / 4, "cutGapFactor", "the cut gap (factor x thickness) must not exceed a quarter of the depth");
   need(d.sizeMode === "inner" || d.allowanceFactor === undefined, "allowanceFactor", 'only applies when sizeMode is "inner"');
   need(2 * d.tuckSlitLength < w - 2 * tuckCornerCut, "tuckSlitLength", "slits at both ends must leave a crease between the tuck corners");
   need(
@@ -153,6 +165,8 @@ export function resolveCartonBase(d: CartonBaseData, used: string[], issues: Iss
     thickness: d.thickness,
     sizeMode: d.sizeMode,
     allowanceFactor,
+    cutGapFactor,
+    cutGap,
     bleed: d.bleed,
     safeMargin: d.safeMargin,
     glueFlapWidth,
@@ -286,6 +300,21 @@ export class TubeBuilder {
   }
 }
 
+/**
+ * Which ends of a dust flap on `host` are flat-adjacent to the closure on `closureHost`.
+ * Body order in the flat is [front][right][back][left].
+ */
+export function dustGaps(host: "right" | "left", closureHost: Body): { left: boolean; right: boolean } {
+  if (host === "right") return { left: closureHost === "front", right: closureHost === "back" };
+  return { left: closureHost === "back", right: false };
+}
+
+/** Crease length lost to the cut gaps on the dust flap hinges of one end (top or bottom). */
+export function dustHingeLoss(p: CartonBaseParams, closureHost: Body): number {
+  const n = [dustGaps("right", closureHost), dustGaps("left", closureHost)].reduce((c, g) => c + (g.left ? 1 : 0) + (g.right ? 1 : 0), 0);
+  return n * p.cutGap;
+}
+
 /** Tube carton with tuck closures and dust flaps (folding-carton board). */
 export class CartonBuilder extends TubeBuilder {
   constructor(readonly p: CartonBaseParams) {
@@ -326,18 +355,50 @@ export class CartonBuilder extends TubeBuilder {
     }
   }
 
-  /** Dust flaps on both side panels (W wide at the hinge, free edge inset, corners rounded). */
-  addDustFlaps(pos: "top" | "bottom"): void {
+  /**
+   * Dust flaps on both side panels (W wide at the hinge, free edge inset, corners rounded).
+   * Where a dust flap sits next to the closure on `closureHost` it stops `cutGap` short of it, so
+   * a slot of that width (the board thickness times cutGapFactor) separates the two.
+   */
+  addDustFlaps(pos: "top" | "bottom", closureHost: Body): void {
     const { P, W, H } = this;
-    const { dustFlapDepth: d, dustFlapInset: s, dustFlapCornerRadius: r } = this.p;
+    const { dustFlapDepth: d, dustFlapInset: s, dustFlapCornerRadius: r, cutGap: g } = this.p;
     const [y0, dir] = pos === "top" ? [0, -1] : [H, 1];
     for (const host of ["right", "left"] as const) {
       const x = this.bodyX[host];
       const id = `dust-${host}-${pos}`;
-      const base = [P(x, y0), P(x + W, y0), P(x + W - s, y0 + dir * d), P(x + s, y0 + dir * d)];
+      const gap = dustGaps(host, closureHost);
+      const gl = gap.left ? g : 0;
+      const gr = gap.right ? g : 0;
+      const yd = y0 + dir * d;
+      const base = [P(x + gl, y0), P(x + W - gr, y0), P(x + W - Math.max(s, gr), yd), P(x + Math.max(s, gl), yd)];
       this.addPanel(id, "dust-flap", `dust ${host} ${pos}`, rounded("dustFlapCornerRadius", base, [0, 0, r, r]), false);
-      this.addHinge(id, host, P(x, y0), P(x + W, y0));
+      // The body edge now has the slot bottom as a separate cut segment: give it its own vertices.
+      if (gl > 0) this.splitEdge(host, P(x + gl, y0));
+      if (gr > 0) this.splitEdge(host, P(x + W - gr, y0));
+      this.addHinge(id, host, P(x + gl, y0), P(x + W - gr, y0));
     }
+  }
+
+  /** Insert a vertex on the edge of a panel that the point lies on (no-op if it is already one). */
+  private splitEdge(panelId: string, pt: Vec2): void {
+    const i = this.panels.findIndex((q) => q.id === panelId);
+    const panel = this.panels[i]!;
+    const poly0 = panel.polygon;
+    for (let k = 0; k < poly0.length; k++) {
+      const a = poly0[k]!;
+      const b = poly0[(k + 1) % poly0.length]!;
+      if (nearlyEqual(a, pt) || nearlyEqual(b, pt)) return;
+      const cross = (b.x - a.x) * (pt.y - a.y) - (b.y - a.y) * (pt.x - a.x);
+      const dot = (pt.x - a.x) * (b.x - a.x) + (pt.y - a.y) * (b.y - a.y);
+      const len2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+      if (Math.abs(cross) <= 1e-6 * Math.sqrt(len2) && dot > 0 && dot < len2) {
+        const polygon = [...poly0.slice(0, k + 1), pt, ...poly0.slice(k + 1)];
+        this.panels[i] = { ...panel, polygon };
+        return;
+      }
+    }
+    throw new DielineBuildError(`Point lies on no edge of panel "${panelId}".`);
   }
 
 }
@@ -383,7 +444,7 @@ export function tubeExpectations(
   const t = cartonLayout(p);
   const { L, W } = t;
   // Top: closure + shortened tuck crease + 2 dust flaps.
-  const topCrease = L + (L - 2 * p.tuckSlitLength) + 2 * W;
+  const topCrease = L + (L - 2 * p.tuckSlitLength) + 2 * W - dustHingeLoss(p, "back");
   return tubeBaseExpectations(t, {
     top: topExtent(p),
     bottom: bottom.extent,

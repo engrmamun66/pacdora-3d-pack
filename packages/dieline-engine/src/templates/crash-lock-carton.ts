@@ -34,7 +34,7 @@ export function buildCrashLockTree(p: CrashLockParams): FoldTree {
   const b = new CartonBuilder(p);
   b.addBodyAndGlueStrip();
   b.addTuckClosure("top", "back", 0, -1);
-  b.addDustFlaps("top");
+  b.addDustFlaps("top", "back");
 
   const { P, L, W, H } = b;
   const half = W / 2;

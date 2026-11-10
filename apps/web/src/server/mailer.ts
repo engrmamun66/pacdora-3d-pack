@@ -1,7 +1,7 @@
 import "server-only";
 import nodemailer from "nodemailer";
 import { env } from "./env";
-import { site } from "@/config/site";
+import { getSiteTitle } from "./site-identity";
 
 const transport = nodemailer.createTransport({
   host: env.SMTP_HOST,
@@ -16,10 +16,11 @@ const escapeHtml = (s: string) =>
 /** Send a simple transactional email with one call-to-action link. */
 export async function sendActionEmail(opts: { to: string; subject: string; intro: string; actionLabel: string; url: string }) {
   const { to, subject, intro, actionLabel, url } = opts;
+  const siteTitle = await getSiteTitle();
   await transport.sendMail({
     from: env.MAIL_FROM,
     to,
-    subject: `${subject} - ${site.name}`,
+    subject: `${subject} - ${siteTitle}`,
     text: `${intro}\n\n${actionLabel}: ${url}\n\nIf you did not request this, you can ignore this email.`,
     html:
       `<p>${escapeHtml(intro)}</p>` +

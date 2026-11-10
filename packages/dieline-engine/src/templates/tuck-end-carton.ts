@@ -1,6 +1,6 @@
 import type { FoldTree } from "../fold-tree/types";
 import type { DielineGeometry } from "../geometry-types";
-import { CartonBuilder, cartonLayout, effectiveDims, finalizeCarton, sheetOrigin, tubeExpectations } from "./carton-common";
+import { CartonBuilder, cartonLayout, dustHingeLoss, effectiveDims, finalizeCarton, sheetOrigin, tubeExpectations } from "./carton-common";
 import { resolveTuckEndParams, type TuckEndParams } from "./tuck-end-params";
 
 export const TUCK_END_TEMPLATE_ID = "tuck-end-carton";
@@ -17,8 +17,8 @@ export function buildTuckEndTree(p: TuckEndParams): FoldTree {
   b.addBodyAndGlueStrip();
   b.addTuckClosure("top", "back", 0, -1);
   b.addTuckClosure("bottom", p.variant === "straight" ? "back" : "front", b.H, 1);
-  b.addDustFlaps("top");
-  b.addDustFlaps("bottom");
+  b.addDustFlaps("top", "back");
+  b.addDustFlaps("bottom", p.variant === "straight" ? "back" : "front");
   return b.tree();
 }
 
@@ -31,7 +31,7 @@ export function generateTuckEndCarton(input: unknown): DielineGeometry {
   const bottomHost = params.variant === "straight" ? "back" : "front";
   const expect = tubeExpectations(params, {
     extent: Math.max(W + params.tuckDepth, params.dustFlapDepth),
-    crease: L + (L - 2 * params.tuckSlitLength) + 2 * W,
+    crease: L + (L - 2 * params.tuckSlitLength) + 2 * W - dustHingeLoss(params, bottomHost),
     // A closure on the back panel (z = W) lands its far edge at the front (z = 0) and vice versa.
     lids: [{ closureId: "bottom-closure", y: o.y + H, z: bottomHost === "back" ? 0 : W, xMin: o.x, xMax: o.x + L }],
   });

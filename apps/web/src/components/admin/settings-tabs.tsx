@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Home, Server } from "lucide-react";
+import { Bell, Globe, Home, Server } from "lucide-react";
 
 const TABS = [
   { href: "/doraadmin/settings", label: "Home page", icon: Home },
+  { href: "/doraadmin/settings/identity", label: "Site Identity", icon: Globe },
   { href: "/doraadmin/settings/notifications", label: "Notifications", icon: Bell },
   { href: "/doraadmin/settings/system", label: "System status", icon: Server },
 ];

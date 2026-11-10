@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense, type ReactNode } from "react";
 import { ExternalLink } from "lucide-react";
-import { site } from "@/config/site";
+import { SiteTitle } from "@/components/site-brand";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { AdminUserMenu } from "@/components/admin/admin-user-menu";
 import { requireSuperAdmin } from "@/server/admin";
@@ -21,7 +21,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <div className="grid min-h-screen grid-cols-1 md:grid-cols-[220px_1fr]">
       <aside className="flex flex-col border-b bg-muted/30 py-4 md:border-r md:border-b-0">
-        <p className="px-5 pt-1 font-semibold">{site.name}</p>
+        <p className="px-5 pt-1 font-semibold"><Suspense fallback={null}><SiteTitle /></Suspense></p>
         <p className="px-5 pb-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">Super admin</p>
         {/* usePathname() needs a Suspense boundary on routes with dynamic segments (e.g. templates/[slug]/edit). */}
         <Suspense fallback={<div className="mx-2 h-32 animate-pulse rounded-md bg-muted" />}>

@@ -1,13 +1,64 @@
 "use client";
 
 import { useRef } from "react";
-import { Play, RotateCcw } from "lucide-react";
+import { Box, Check, DraftingCompass, FileText, PenTool, Play, RotateCcw, Spline, type LucideIcon } from "lucide-react";
 import type { DielineGeometry } from "@packaging/dieline-engine";
 import { ILLUSTRATOR_PROFILES } from "@packaging/render-print/profiles";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
 import type { ViewSettings } from "@/lib/view-settings";
 
 export type DownloadFormat = "ai" | "pdf" | "dxf" | "svg" | "glb";
+
+/** Look of one format card: its icon and colours (full class names so Tailwind finds them). */
+interface FormatTone {
+  readonly icon: LucideIcon;
+  /** Icon tile. */
+  readonly tile: string;
+  /** Card when it is the chosen one. */
+  readonly on: string;
+  /** Card hover. */
+  readonly hover: string;
+  /** Check mark on the chosen card. */
+  readonly check: string;
+}
+
+const FORMAT_TONES: Record<DownloadFormat, FormatTone> = {
+  ai: {
+    icon: PenTool,
+    tile: "bg-orange-100 text-orange-600 dark:bg-orange-500/15 dark:text-orange-300",
+    on: "border-orange-400 bg-orange-50 ring-1 ring-orange-400 dark:bg-orange-500/10",
+    hover: "hover:border-orange-300 hover:bg-orange-50/60 dark:hover:bg-orange-500/5",
+    check: "bg-orange-500",
+  },
+  pdf: {
+    icon: FileText,
+    tile: "bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-300",
+    on: "border-red-400 bg-red-50 ring-1 ring-red-400 dark:bg-red-500/10",
+    hover: "hover:border-red-300 hover:bg-red-50/60 dark:hover:bg-red-500/5",
+    check: "bg-red-500",
+  },
+  dxf: {
+    icon: DraftingCompass,
+    tile: "bg-sky-100 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300",
+    on: "border-sky-400 bg-sky-50 ring-1 ring-sky-400 dark:bg-sky-500/10",
+    hover: "hover:border-sky-300 hover:bg-sky-50/60 dark:hover:bg-sky-500/5",
+    check: "bg-sky-500",
+  },
+  svg: {
+    icon: Spline,
+    tile: "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300",
+    on: "border-emerald-400 bg-emerald-50 ring-1 ring-emerald-400 dark:bg-emerald-500/10",
+    hover: "hover:border-emerald-300 hover:bg-emerald-50/60 dark:hover:bg-emerald-500/5",
+    check: "bg-emerald-500",
+  },
+  glb: {
+    icon: Box,
+    tile: "bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300",
+    on: "border-violet-400 bg-violet-50 ring-1 ring-violet-400 dark:bg-violet-500/10",
+    hover: "hover:border-violet-300 hover:bg-violet-50/60 dark:hover:bg-violet-500/5",
+    check: "bg-violet-500",
+  },
+};
 
 export const DOWNLOAD_FORMATS: { value: DownloadFormat; label: string; ext: string; hint: string }[] = [
   { value: "ai", label: "Illustrator", ext: ".ai", hint: "PDF-compatible .ai for the chosen Illustrator version, die lines as named spot colours on their own layers." },
@@ -101,19 +152,34 @@ export function FormatCard({
     <section aria-label="Download" className="flex shrink-0 flex-col gap-4 rounded-2xl border p-4">
       <h2 className="font-semibold">File formats</h2>
       <div role="radiogroup" aria-label="File format" className="grid grid-cols-2 gap-2">
-        {formats.map((f) => (
-          <button
-            key={f.value}
-            type="button"
-            role="radio"
-            aria-checked={format === f.value}
-            onClick={() => onFormat(f.value)}
-            className={`flex flex-col items-start rounded-lg border px-3 py-2 text-left text-sm transition-colors ${format === f.value ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted"}`}
-          >
-            <span className="font-medium">{f.label}</span>
-            <span className="text-xs text-muted-foreground">{f.ext}</span>
-          </button>
-        ))}
+        {formats.map((f) => {
+          const tone = FORMAT_TONES[f.value];
+          const Icon = tone.icon;
+          const on = format === f.value;
+          return (
+            <button
+              key={f.value}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => onFormat(f.value)}
+              className={`relative flex items-center gap-2.5 rounded-xl border px-2.5 py-2.5 text-left text-sm transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${on ? tone.on : tone.hover}`}
+            >
+              <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${tone.tile}`} aria-hidden>
+                <Icon className="size-4" />
+              </span>
+              <span className="flex min-w-0 flex-col">
+                <span className="font-medium whitespace-nowrap">{f.label}</span>
+                <span className="text-xs text-muted-foreground">{f.ext}</span>
+              </span>
+              {on ? (
+                <span className={`absolute right-1.5 bottom-1.5 grid size-4 place-items-center rounded-full text-white ${tone.check}`} aria-hidden>
+                  <Check className="size-3" strokeWidth={3} />
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
       </div>
       <p className="text-xs text-muted-foreground">{meta.hint}</p>
 

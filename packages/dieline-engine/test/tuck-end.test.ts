@@ -24,6 +24,7 @@ describe("tuck-end carton, explicit hand-calculated reference", () => {
     dustFlapDepth: 25,
     dustFlapInset: 3,
     dustFlapCornerRadius: 3,
+    cutGapFactor: 1,
     bleed: 3,
     safeMargin: 3,
   };
@@ -50,10 +51,13 @@ describe("tuck-end carton, explicit hand-calculated reference", () => {
     expect(g.cutLoops).toHaveLength(1);
   });
 
-  it("has the hand-calculated total crease length 4H+4L+4W", () => {
+  it("has the hand-calculated total crease length 4H+4L+4W, less the four cut gaps", () => {
     const g = gen(explicit);
     const total = g.creaseLines.reduce((s, c) => s + dist(c.a, c.b), 0);
-    expect(total).toBeCloseTo(4 * 150 + 4 * 100 + 4 * 50, 6);
+    // Thickness 0.5 mm x factor 1 = 0.5 mm gap at each of the four dust flap / closure junctions.
+    expect(total).toBeCloseTo(4 * 150 + 4 * 100 + 4 * 50 - 4 * 0.5, 6);
+    const none = gen({ ...explicit, cutGapFactor: 0 });
+    expect(none.creaseLines.reduce((s, c) => s + dist(c.a, c.b), 0)).toBeCloseTo(4 * 150 + 4 * 100 + 4 * 50, 6);
   });
 
   it("body panel areas match W*H and L*H", () => {
@@ -97,8 +101,9 @@ describe("variants", () => {
   });
 
   it("both variants have the same sheet size and total cut area", () => {
-    const a = gen({ ...base, variant: "straight" });
-    const b = gen({ ...base, variant: "reverse" });
+    // Without cut gaps: a reverse bottom has its closure beside only one dust flap, a straight one beside both.
+    const a = gen({ ...base, variant: "straight", cutGapFactor: 0 });
+    const b = gen({ ...base, variant: "reverse", cutGapFactor: 0 });
     expect(b.cutBounds).toEqual(a.cutBounds);
     expect(outlineArea(b.cutLoops[0]!)).toBeCloseTo(outlineArea(a.cutLoops[0]!), 6);
   });
@@ -253,5 +258,49 @@ describe("rounded corners, slits and size mode", () => {
 
   it("rejects allowanceFactor in manufacture mode (it would be silently ignored)", () => {
     expect(() => gen({ ...explicit, allowanceFactor: 1 })).toThrow(ParamValidationError);
+  });
+});
+
+describe("cut gap follows the board thickness", () => {
+  const hingeLen = (g: DielineGeometry, id: string) => {
+    const h = g.foldTree.hinges.find((x) => x.childId === id)!;
+    return dist(h.a, h.b);
+  };
+  const tuned = { ...base, dustFlapInset: 1, dustFlapCornerRadius: 0 };
+
+  it("shortens the dust flap on the closure side by thickness x factor", () => {
+    for (const t of [0.5, 1, 3]) {
+      const g = gen({ ...tuned, thickness: t, cutGapFactor: 1 });
+      expect(g.checks.every((c) => c.pass)).toBe(true);
+      expect(hingeLen(g, "dust-right-top")).toBeCloseTo(50 - t, 6);
+      expect(hingeLen(g, "dust-left-top")).toBeCloseTo(50 - t, 6);
+      // The closure keeps its full width.
+      expect(hingeLen(g, "top-closure")).toBeCloseTo(100, 6);
+    }
+    expect(hingeLen(gen({ ...tuned, thickness: 2, cutGapFactor: 1.5 }), "dust-right-top")).toBeCloseTo(50 - 3, 6);
+  });
+
+  it("factor 0 leaves no gap", () => {
+    const g = gen({ ...tuned, thickness: 3, cutGapFactor: 0 });
+    expect(hingeLen(g, "dust-right-top")).toBeCloseTo(50, 6);
+  });
+
+  it("puts the slot bottom on the body edge as its own cut segment", () => {
+    const g = gen({ ...tuned, thickness: 3, cutGapFactor: 1 });
+    const right = g.foldTree.panels.find((p) => p.id === "right")!;
+    // 4 corners + one slot vertex on the top edge and one on the bottom edge.
+    expect(right.polygon.length).toBe(6);
+    const flat = gen({ ...tuned, thickness: 3, cutGapFactor: 0 });
+    expect(flat.foldTree.panels.find((p) => p.id === "right")!.polygon.length).toBe(4);
+  });
+
+  it("reverse bottom: only the dust flap beside the front closure is shortened", () => {
+    const g = gen({ ...tuned, variant: "reverse", thickness: 3, cutGapFactor: 1 });
+    expect(hingeLen(g, "dust-right-bottom")).toBeCloseTo(47, 6);
+    expect(hingeLen(g, "dust-left-bottom")).toBeCloseTo(50, 6);
+  });
+
+  it("rejects a gap wider than a quarter of the depth", () => {
+    expect(() => gen({ ...base, thickness: 5, cutGapFactor: 5 })).toThrow(ParamValidationError);
   });
 });

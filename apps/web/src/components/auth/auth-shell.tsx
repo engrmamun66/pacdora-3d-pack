@@ -1,6 +1,7 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { ArrowLeft, Check } from "lucide-react";
+import { SiteBrand, SiteTitle } from "@/components/site-brand";
 import { site } from "@/config/site";
 import { AuthArt } from "./auth-art";
 
@@ -9,10 +10,9 @@ const POINTS = ["Dielines calculated from your dimensions", "Live 3D fold with y
 function Logo({ className = "" }: { className?: string }) {
   return (
     <Link href="/" className={`flex items-center gap-2 font-semibold ${className}`}>
-      <span aria-hidden className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
-        <svg viewBox="0 0 24 24" className="size-4.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z" /><path d="M3 7.5 12 12l9-4.5M12 12v9" /></svg>
-      </span>
-      {site.name}
+      <Suspense fallback={<span className="h-8 w-28" />}>
+        <SiteBrand size="lg" />
+      </Suspense>
     </Link>
   );
 }
@@ -44,7 +44,7 @@ export function AuthShell({
           {variant === "admin" ? (
             <>
               <h2 className="text-3xl font-semibold tracking-tight">Restricted area</h2>
-              <p className="mt-3 opacity-80">Administration for {site.name}. Sign-ins here are for authorised staff only.</p>
+              <p className="mt-3 opacity-80">Administration for <Suspense fallback={site.name}><SiteTitle /></Suspense>. Sign-ins here are for authorised staff only.</p>
             </>
           ) : (
             <>

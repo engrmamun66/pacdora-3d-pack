@@ -102,6 +102,12 @@ const cartonBaseParams = (structure: readonly ParamDescriptor[]): ParamDescripto
     help: "Added to each dimension in inner size mode. Confirm with your printer.",
     showWhen: { key: "sizeMode", equals: "inner" },
   }),
+  num("cutGapFactor", "Cut gap (x thickness)", "Material", 0, 5, {
+    step: 0.1,
+    unit: "factor",
+    optional: true,
+    help: "Slot between a dust flap and the closure beside it. It grows with the board thickness.",
+  }),
   num("bleed", "Bleed", "Print", 0, 20),
   num("safeMargin", "Safe margin", "Print", 0, 20),
   num("glueFlapWidth", "Glue flap width", "Flaps (advanced)", 2, 100, { optional: true }),

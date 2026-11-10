@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
 import { LayoutDashboard, Shapes, FolderOpen, Settings } from "lucide-react";
-import { site } from "@/config/site";
+import { SiteTitle } from "@/components/site-brand";
 import { UserMenu } from "@/components/app/user-menu";
 
 const nav = [
@@ -21,7 +21,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <div className="grid min-h-screen grid-cols-[220px_1fr]">
       <aside className="flex flex-col border-r bg-muted/30">
         <Link href="/dashboard" className="px-5 py-4 font-semibold">
-          {site.name}
+          <Suspense fallback={null}>
+            <SiteTitle />
+          </Suspense>
         </Link>
         <nav className="flex flex-col gap-0.5 px-2">
           {nav.map(({ href, label, icon: Icon }) => (

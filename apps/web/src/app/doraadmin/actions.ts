@@ -8,6 +8,8 @@ import { db } from "@/server/db";
 import { SUPERADMIN, requireSuperAdmin } from "@/server/admin";
 import { HERO_TAG } from "@/server/site-settings";
 import { heroSettingsSchema } from "@/lib/hero-settings";
+import { SITE_TITLE_MAX } from "@/lib/site-identity";
+import { IDENTITY_TAG, readSiteIdentity, writeSiteIdentity } from "@/server/site-identity";
 
 /**
  * Called by the admin login form right after a normal email/password sign-in.
@@ -81,4 +83,20 @@ export async function saveHeroSettings(_prev: HeroFormState, formData: FormData)
   });
   updateTag(HERO_TAG); // the home page shows the change on the next visit
   return { ok: true, message: "Saved. The home page now uses these settings." };
+}
+
+export type IdentityFormState = { ok: boolean; message: string | null };
+
+/** Save the site title. An empty field goes back to the built-in name. The logo and favicon are uploaded by /api/doraadmin/site-identity. */
+export async function saveSiteTitle(_prev: IdentityFormState, formData: FormData): Promise<IdentityFormState> {
+  const admin = await requireSuperAdmin();
+  const raw = formData.get("title");
+  if (typeof raw !== "string") return { ok: false, message: "Enter a site title." };
+  const title = raw.trim().replace(/\s+/g, " ");
+  if (title.length > SITE_TITLE_MAX) return { ok: false, message: `The title can have at most ${SITE_TITLE_MAX} characters.` };
+  const { identity } = await readSiteIdentity();
+  await writeSiteIdentity({ ...identity, title: title || null }, admin.id);
+  updateTag(IDENTITY_TAG);
+  revalidatePath("/", "layout"); // the tab title is part of every page
+  return { ok: true, message: title ? "Saved. The site now uses this title." : "Saved. The site uses its default title." };
 }

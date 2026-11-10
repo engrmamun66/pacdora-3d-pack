@@ -16,6 +16,7 @@ import { DielineInfo } from "./dieline-info";
 import { boxSizes, dielineStats } from "./info-math";
 import { DielineTopBar } from "./dieline-top-bar";
 import { TemplatePicker } from "./template-picker";
+import { MaterialInfoButton } from "./material-info";
 import { MaterialPicker, ParamField, ThicknessField } from "./settings-fields";
 import { DIELINE_TOGGLES, SheetCanvas, type ViewToggles } from "./sheet-canvas";
 import { DOWNLOAD_FORMATS, FormatCard, FoldPreview, type DownloadFormat } from "./side-cards";
@@ -363,7 +364,10 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
 
                 {hasThickness && thickness ? (
                   <section aria-labelledby="sec-material" className="flex flex-col gap-3 border-t pt-5">
-                    <h2 id="sec-material" className="font-semibold">Choose material</h2>
+                    <div className="flex items-center gap-1.5">
+                      <h2 id="sec-material" className="font-semibold">Choose material</h2>
+                      <MaterialInfoButton />
+                    </div>
                     <MaterialPicker types={materialTypes} typeId={material.typeId} gradeId={material.gradeId} unit={unit} onPick={pickMaterial} />
                     <ThicknessField
                       p={thickness}

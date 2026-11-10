@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { Menu } from "lucide-react";
 import { ButtonLink } from "@/components/button-link";
-import { site } from "@/config/site";
+import { SiteBrand } from "@/components/site-brand";
 import { getSession } from "@/server/session";
 
 const NAV = [
@@ -39,10 +39,9 @@ export function SiteHeader({ solid = false }: { solid?: boolean }) {
     <header className={solid ? "sticky top-0 z-20 border-b bg-background/90 backdrop-blur" : "absolute inset-x-0 top-0 z-20"}>
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-6 px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2 font-semibold">
-          <span aria-hidden className="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground">
-            <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z" /><path d="M3 7.5 12 12l9-4.5M12 12v9" /></svg>
-          </span>
-          {site.name}
+          <Suspense fallback={<span className="h-7 w-28" />}>
+            <SiteBrand />
+          </Suspense>
         </Link>
 
         <nav aria-label="Main" className="hidden items-center gap-1 md:flex">

@@ -4,6 +4,7 @@ import { Box, Download, Layers, Ruler, Sparkles, ShieldCheck } from "lucide-reac
 import { ButtonLink } from "@/components/button-link";
 import { HeroCarton } from "@/components/marketing/hero-carton";
 import { SiteHeader } from "@/components/marketing/site-header";
+import { SiteTitle } from "@/components/site-brand";
 import { site } from "@/config/site";
 import { DEFAULT_BOX_COLOR, luminance } from "@/lib/hero-settings";
 import { getHeroSettings } from "@/server/site-settings";
@@ -136,7 +137,7 @@ export default function Home() {
 
       <footer className="border-t px-4 py-8 text-sm text-muted-foreground sm:px-6">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
-          <span>{site.name}</span>
+          <span><Suspense fallback={site.name}><SiteTitle /></Suspense></span>
           <nav aria-label="Footer" className="flex gap-4">
             <Link href="/templates" className="hover:text-foreground">Templates</Link>
             <Link href="/login" className="hover:text-foreground">Log in</Link>
