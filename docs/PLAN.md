@@ -641,3 +641,21 @@ Decision (user): level 1 first (projects, artwork, exports, resizing); 3D fold d
 - **Admin screen.** `fold-setup-editor.tsx`: flat sheet with coloured panels and numbered fold lines, panel inspector (name, kind, printable, size, make base), fold table (step, angle, inward/outward), live 3D preview with a step-by-step play. Wizard: new "3D fold" step on create, "3D fold" section on edit. A change to the lines after the fold was set up marks it stale and blocks saving until it is detected again or removed. A template without a fold stays flat only.
 - **Starting 3D view.** `Template.viewSettings` (turn, tilt, zoom, move X/Y, fold amount, all relative to box size; `lib/view-settings.ts`). Admin sets it from the camera icon on each row of the Templates list (dialog) or the "Starting 3D view" section of the edit page; typed numbers move the camera and the camera updates the numbers. Saved separately from the main Save button. The template page, project page and artwork editor start from it, and "reset camera" returns to it. Templates without a saved view keep the old framing.
 - **Known limits.** Windows or cut-outs inside a panel show as solid in 3D (a panel is one outline). Detection is a starting point: complex dielines need hand correction. Artwork is anchored per panel on folded templates. Customers still change only overall width and bleed of an imported dieline.
+
+## Ignored lines as an optional "Reference" picture
+
+Ignored line styles stay dropped from geometry, exports and 3D. In the template wizard each ignored style has a "Show as reference" checkbox; the chosen style keys are stored in `geometry.referenceStyles` (checked on save: must be ignored styles). `toFlatDieline(d, roles, referenceStyles)` returns them as thinned `reference` paths (about 1/1500 of the sheet size, 40k point cap); `scaleImportedPaths` (engine) moves them with the same scale as the generated sheet. On the customer's template page (imported templates only, only when reference lines exist) a "Reference" switch, off by default, draws them faint grey on top of the picture. They are not part of downloads.
+
+### Fold list: drag to reorder
+
+- 3D fold step: the fold-lines table is now a list (`hinge-list.tsx`). A grip handle on the far left lets the admin drag a row to change the folding order; other rows slide out of the way (150-180 ms transform, off with reduced-motion), the row settles on drop. Handle also works with ArrowUp/ArrowDown (focus stays on the handle).
+- `moveHinge` / `sortedHinges` in `lib/fold-edit.ts`: dropping renumbers steps 1..n; lines that shared a step keep sharing it; a line dropped between two lines of one step joins that step. The Step up/down buttons stay for fine control.
+- Verified in headless Chrome with real mouse events (drag to end, keyboard) and 9 unit tests. No new dependency.
+
+### Several pieces on one sheet (box + lid)
+
+- The sheet is now measured from ALL separate closed cut shapes (not only the biggest): width/height, scale corner, cut and bleed boxes, dimension marks, exports. Cut shapes inside another one stay holes/cut-outs. With more than one piece the bleed outline is one box around all of them.
+- 3D: `detectFoldSetup` turns every other piece with 2+ panels into an extra part (`FoldSetup.parts`, each with its own base panel). The deepest piece (folded height) is the main body. A single loose panel is still left out with a warning. Max 8 parts.
+- Per part the admin sets placement (`FoldPart.placement`): open (tilted by 0..120 degrees about the back edge), closed on top, or beside. `foldTree()` folds each piece alone, then moves the part onto the CLOSED main body; that move is the last 20% of the fold animation. Pieces with parts stand on their base (model3d rotates the sheet normal to up).
+- All pieces resize together with the one width. "Make this the main body" swaps main and part; "Make this the base" works inside any piece.
+- Not done: each part its own size, bleed outline per piece, glued/hinged lids (lid attached to the box by a fold line is already a normal single piece), parts inside parts.

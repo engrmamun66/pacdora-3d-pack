@@ -1,6 +1,6 @@
 import type { FlatDieline, FlatPath } from "./imported";
 import type { DetectResult, FoldHingeSpec, FoldPanelSpec, FoldSetup } from "./imported-fold";
-import { flatCentroid, flatSignedArea, segmentOnPolygonEdge, HINGE_TOLERANCE } from "./imported-fold-util";
+import { deepestAsMain, flatCentroid, flatSignedArea, segmentOnPolygonEdge, HINGE_TOLERANCE } from "./imported-fold-util";
 
 /**
  * Detects panels and fold hinges in a flat dieline.
@@ -640,21 +640,56 @@ export function detectFoldSetup(flat: FlatDieline): DetectResult {
     }
   });
   for (const l of neighbours.values()) l.sort((p, q) => p.other - q.other);
-  const depth = new Map<number, number>([[root, 0]]);
+  const depth = new Map<number, number>();
   const parentOf = new Map<number, number>();
   const treeHinges: { parent: number; child: number; cand: number }[] = [];
   const used = new Set<number>();
-  const queue = [root];
-  for (let qi = 0; qi < queue.length; qi++) {
-    const u = queue[qi]!;
-    for (const { other, cand } of neighbours.get(u) ?? []) {
-      if (depth.has(other)) continue;
-      depth.set(other, depth.get(u)! + 1);
-      parentOf.set(other, u);
-      treeHinges.push({ parent: u, child: other, cand });
-      used.add(cand);
-      queue.push(other);
+  /** Grow the spanning tree of one piece from its base panel; returns how many panels it has. */
+  const grow = (base: number): number => {
+    depth.set(base, 0);
+    const queue = [base];
+    for (let qi = 0; qi < queue.length; qi++) {
+      const u = queue[qi]!;
+      for (const { other, cand } of neighbours.get(u) ?? []) {
+        if (depth.has(other)) continue;
+        depth.set(other, depth.get(u)! + 1);
+        parentOf.set(other, u);
+        treeHinges.push({ parent: u, child: other, cand });
+        used.add(cand);
+        queue.push(other);
+      }
     }
+    return queue.length;
+  };
+  grow(root);
+  // Other pieces on the sheet (a lid next to the box): each one with at least two panels becomes an extra part.
+  const partRoots: number[] = [];
+  const lonely: number[] = [];
+  for (;;) {
+    const rest = materialFaces.filter((fi) => !depth.has(fi) && !lonely.includes(fi));
+    if (rest.length === 0) break;
+    let base = rest[0]!;
+    for (const fi of rest) if (faces[fi]!.area > faces[base]!.area + 1e-9) base = fi;
+    // A piece is a group of panels joined by fold lines; a single panel on its own is not folded.
+    const seen = new Set<number>([base]);
+    const q = [base];
+    for (let qi = 0; qi < q.length; qi++) {
+      for (const { other } of neighbours.get(q[qi]!) ?? []) {
+        if (!seen.has(other) && !depth.has(other)) {
+          seen.add(other);
+          q.push(other);
+        }
+      }
+    }
+    if (seen.size < 2 || partRoots.length >= 8) {
+      lonely.push(base);
+      continue;
+    }
+    grow(base);
+    partRoots.push(base);
+  }
+  if (partRoots.length > 0) {
+    warnings.push(`The sheet has ${partRoots.length + 1} separate pieces. The largest panel's piece is the main body; ${partRoots.length === 1 ? "the other is an extra part" : `the other ${partRoots.length} are extra parts`} that you place in 3D (for example as a lid).`);
   }
   const loopClosing = candidates.filter((c, i) => !used.has(i) && depth.has(c.fa) && depth.has(c.fb)).length;
   if (loopClosing > 0) warnings.push(`${loopClosing} fold line${loopClosing === 1 ? "" : "s"} would fold a panel back onto one it is already attached to (a loop), so ${loopClosing === 1 ? "it was" : "they were"} ignored.`);
@@ -726,6 +761,11 @@ export function detectFoldSetup(flat: FlatDieline): DetectResult {
     if (faces[fi]!.extraParts > 0) warnings.push(`${labelOf.get(fi)} touches itself at a point. Only its largest part is used.`);
   }
 
-  const setup: FoldSetup = { rootId: idOf.get(root)!, panels, hinges };
-  return { setup, warnings };
+  const setup: FoldSetup = {
+    rootId: idOf.get(root)!,
+    panels,
+    hinges,
+    ...(partRoots.length > 0 ? { parts: partRoots.map((fi) => ({ rootId: idOf.get(fi)!, placement: { mode: "open" as const, openDeg: 30 } })) } : {}),
+  };
+  return { setup: deepestAsMain(setup), warnings };
 }

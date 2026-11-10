@@ -97,15 +97,79 @@ export function stagedHingeProgress(tree: FoldTree, progress: number): Record<st
   return out;
 }
 
+/** Share of the animation (at the end) used to move extra parts onto the main body. */
+const PLACE_SHARE = 0.2;
+
+const X_AXIS: Vec3 = { x: 1, y: 0, z: 0 };
+
+/** Rotation by `angle` about the line through `p` with unit direction `u`. */
+function rotateAbout(u: Vec3, p: Vec3, angle: number): Mat4 {
+  return multiply(translation(p.x, p.y, p.z), multiply(axisAngle(u, angle), translation(-p.x, -p.y, -p.z)));
+}
+
+interface Bounds3 {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  minZ: number;
+  maxZ: number;
+}
+
+function boundsOfPanels(tree: FoldTree, world: ReadonlyMap<string, Mat4>): Bounds3 | null {
+  const b: Bounds3 = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+  for (const p of tree.panels) {
+    const m = world.get(p.id);
+    if (!m) continue;
+    for (const v of p.polygon) {
+      const q = transformPoint(m, flatPoint(v));
+      b.minX = Math.min(b.minX, q.x);
+      b.maxX = Math.max(b.maxX, q.x);
+      b.minY = Math.min(b.minY, q.y);
+      b.maxY = Math.max(b.maxY, q.y);
+      b.minZ = Math.min(b.minZ, q.z);
+      b.maxZ = Math.max(b.maxZ, q.z);
+    }
+  }
+  return Number.isFinite(b.minX) ? b : null;
+}
+
+/**
+ * Where an extra part goes, as a matrix that moves it from its own folded position.
+ * `t` is 0 (part still lying flat where the dieline has it) to 1 (in place).
+ */
+function placementMatrix(main: Bounds3, part: Bounds3, mode: "closed" | "open" | "beside", openDeg: number, t: number): Mat4 {
+  const mcx = (main.minX + main.maxX) / 2;
+  const mcy = (main.minY + main.maxY) / 2;
+  const pcx = (part.minX + part.maxX) / 2;
+  const pcy = (part.minY + part.maxY) / 2;
+  if (mode === "beside") {
+    const gap = Math.max(10, 0.15 * (main.maxX - main.minX));
+    return translation(t * (main.maxX + gap - part.minX), t * (mcy - pcy), t * (main.minZ - part.minZ));
+  }
+  // Flip the part over about a line through its own middle, then set it on the main body's rim.
+  const flip = rotateAbout(X_AXIS, { x: 0, y: pcy, z: 0 }, Math.PI * t);
+  const move = translation(t * (mcx - pcx), t * (mcy - pcy), t * (main.maxZ + part.maxZ));
+  const closed = multiply(move, flip);
+  if (mode === "closed" || openDeg <= 0) return closed;
+  // Hinged at the back edge of the body (the largest y: farthest from a viewer of the upright model).
+  const swing = rotateAbout(X_AXIS, { x: 0, y: main.maxY, z: main.maxZ }, (-openDeg * Math.PI * t) / 180);
+  return multiply(swing, closed);
+}
+
 /**
  * World transform of every panel. The root panel stays in place; each child is
  * rotated about its hinge (in the flat frame) and then carried along by its
- * parent's transform.
+ * parent's transform. Extra parts (tree.parts) are folded on their own and then
+ * moved next to or onto the main body; that move takes the last part of the animation.
  */
 export function foldTree(tree: FoldTree, opts: FoldOptions = {}): Map<string, Mat4> {
   const progress = opts.progress ?? 1;
-  // Hinges with a foldOrder fold one step after another when only `progress` is given.
-  const hingeProgress = opts.hingeProgress ?? (opts.progress !== undefined ? stagedHingeProgress(tree, opts.progress) : undefined);
+  const parts = tree.parts ?? [];
+  // With extra parts the folding itself takes the first 80% and placing them the rest.
+  const foldProgress = parts.length > 0 ? Math.min(1, Math.max(0, progress) / (1 - PLACE_SHARE)) : progress;
+  const placeT = parts.length > 0 ? Math.min(1, Math.max(0, (progress - (1 - PLACE_SHARE)) / PLACE_SHARE)) : 1;
+  const hingeProgress = opts.hingeProgress ?? (opts.progress !== undefined ? stagedHingeProgress(tree, foldProgress) : undefined);
   const panelById = new Map(tree.panels.map((p) => [p.id, p]));
   const childrenOf = new Map<string, typeof tree.hinges[number][]>();
   for (const h of tree.hinges) {
@@ -114,33 +178,60 @@ export function foldTree(tree: FoldTree, opts: FoldOptions = {}): Map<string, Ma
     childrenOf.set(h.parentId, list);
   }
 
-  const world = new Map<string, Mat4>([[tree.rootId, IDENTITY]]);
-  const queue = [tree.rootId];
-  while (queue.length > 0) {
-    const parentId = queue.shift()!;
-    const parentWorld = world.get(parentId)!;
-    for (const h of childrenOf.get(parentId) ?? []) {
-      const child = panelById.get(h.childId);
-      if (!child) throw new Error(`Hinge "${h.id}" references missing panel "${h.childId}".`);
-      if (world.has(child.id)) throw new Error(`Panel "${child.id}" reached twice: fold tree has a cycle.`);
+  const foldFrom = (rootId: string, hp: Readonly<Record<string, number>> | undefined, p0: number, world: Map<string, Mat4>) => {
+    world.set(rootId, IDENTITY);
+    const queue = [rootId];
+    while (queue.length > 0) {
+      const parentId = queue.shift()!;
+      const parentWorld = world.get(parentId)!;
+      for (const h of childrenOf.get(parentId) ?? []) {
+        const child = panelById.get(h.childId);
+        if (!child) throw new Error(`Hinge "${h.id}" references missing panel "${h.childId}".`);
+        if (world.has(child.id)) throw new Error(`Panel "${child.id}" reached twice: fold tree has a cycle.`);
 
-      const dx = h.b.x - h.a.x;
-      const dy = h.b.y - h.a.y;
-      const len = Math.hypot(dx, dy);
-      const u: Vec3 = { x: dx / len, y: dy / len, z: 0 };
+        const dx = h.b.x - h.a.x;
+        const dy = h.b.y - h.a.y;
+        const len = Math.hypot(dx, dy);
+        const u: Vec3 = { x: dx / len, y: dy / len, z: 0 };
 
-      // Which side of the hinge the child lies on decides the rotation sign so
-      // the child always moves toward +z (unprinted faces together).
-      const cx = child.polygon.reduce((s, p) => s + p.x, 0) / child.polygon.length - h.a.x;
-      const cy = child.polygon.reduce((s, p) => s + p.y, 0) / child.polygon.length - h.a.y;
-      const side = u.x * cy - u.y * cx;
-      if (Math.abs(side) < 1e-9) throw new Error(`Panel "${child.id}" lies on its own hinge line.`);
+        // Which side of the hinge the child lies on decides the rotation sign so
+        // the child always moves toward +z (unprinted faces together).
+        const cx = child.polygon.reduce((s, q) => s + q.x, 0) / child.polygon.length - h.a.x;
+        const cy = child.polygon.reduce((s, q) => s + q.y, 0) / child.polygon.length - h.a.y;
+        const side = u.x * cy - u.y * cx;
+        if (Math.abs(side) < 1e-9) throw new Error(`Panel "${child.id}" lies on its own hinge line.`);
 
-      const p = hingeProgress?.[h.id] ?? progress;
-      const angle = Math.sign(side) * p * (h.foldAngleDeg * Math.PI) / 180;
-      const local = multiply(translation(h.a.x, h.a.y, 0), multiply(axisAngle(u, angle), translation(-h.a.x, -h.a.y, 0)));
-      world.set(child.id, multiply(parentWorld, local));
-      queue.push(child.id);
+        const p = hp?.[h.id] ?? p0;
+        const angle = Math.sign(side) * p * (h.foldAngleDeg * Math.PI) / 180;
+        const local = multiply(translation(h.a.x, h.a.y, 0), multiply(axisAngle(u, angle), translation(-h.a.x, -h.a.y, 0)));
+        world.set(child.id, multiply(parentWorld, local));
+        queue.push(child.id);
+      }
+    }
+  };
+
+  const world = new Map<string, Mat4>();
+  foldFrom(tree.rootId, hingeProgress, foldProgress, world);
+
+  if (parts.length > 0) {
+    // Each extra part is folded on its own, then moved relative to the CLOSED main body.
+    const closedMain = new Map<string, Mat4>();
+    foldFrom(tree.rootId, undefined, 1, closedMain);
+    const mainBounds = boundsOfPanels(tree, closedMain);
+    for (const part of parts) {
+      const own = new Map<string, Mat4>();
+      foldFrom(part.rootId, hingeProgress, foldProgress, own);
+      const closedOwn = new Map<string, Mat4>();
+      foldFrom(part.rootId, undefined, 1, closedOwn);
+      const partBounds = boundsOfPanels(tree, closedOwn);
+      const place =
+        mainBounds && partBounds
+          ? placementMatrix(mainBounds, partBounds, part.placement.mode, part.placement.openDeg ?? 30, placeT)
+          : IDENTITY;
+      for (const [id, m] of own) {
+        if (world.has(id)) throw new Error(`Panel "${id}" reached twice: fold tree has a cycle.`);
+        world.set(id, multiply(place, m));
+      }
     }
   }
   if (world.size !== tree.panels.length) {

@@ -30,9 +30,9 @@ export async function loadImportedSource(templateId: string): Promise<ImportedSo
   if (hit && hit.stamp === stamp) return hit.source;
 
   const row = await db.template.findUnique({ where: { id: templateId }, select: { name: true, geometry: true, viewSettings: true } });
-  const g = row?.geometry as unknown as { dieline?: ImportedDieline; roles?: Record<string, Role>; fold?: FoldSetup | null } | null | undefined;
+  const g = row?.geometry as unknown as { dieline?: ImportedDieline; roles?: Record<string, Role>; fold?: FoldSetup | null; referenceStyles?: string[] } | null | undefined;
   if (!row || !g?.dieline || !g.roles) return null;
-  const source: ImportedSource = { templateId, name: row.name, flat: toFlatDieline(g.dieline, g.roles), fold: g.fold ?? null, viewSettings: row.viewSettings };
+  const source: ImportedSource = { templateId, name: row.name, flat: toFlatDieline(g.dieline, g.roles, g.referenceStyles ?? []), fold: g.fold ?? null, viewSettings: row.viewSettings };
   if (cache.size >= 24) cache.delete(cache.keys().next().value!);
   cache.set(templateId, { stamp, source });
   return source;

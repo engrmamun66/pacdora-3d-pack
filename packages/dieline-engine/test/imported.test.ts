@@ -60,3 +60,15 @@ describe("imported dieline generator", () => {
     expect(gen.params.map((p) => p.key)).toEqual(gen.schemaKeys);
   });
 });
+
+describe("scaleImportedPaths", () => {
+  it("uses the generator's own scale and corner", async () => {
+    const { scaleImportedPaths } = await import("../src");
+    const gen = createImportedGenerator("t3", flat);
+    const g = gen.generate({ width: 200, bleed: 0 });
+    // a reference point on the outline's top-right corner lands on the generated outline's corner
+    const [p] = scaleImportedPaths(flat, 200, [{ pts: [110, 10], closed: false }]);
+    expect(p!.pts[0]).toBeCloseTo(g.cutBounds.max.x, 6);
+    expect(p!.pts[1]).toBeCloseTo(g.cutBounds.min.y, 6);
+  });
+});

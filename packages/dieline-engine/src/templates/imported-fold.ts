@@ -1,5 +1,5 @@
 import type { FlatDieline } from "./imported";
-import type { PanelRole } from "../fold-tree/types";
+import type { PanelRole, PartPlacement } from "../fold-tree/types";
 import { detectFoldSetup as detect } from "./imported-fold-detect";
 import { HINGE_TOLERANCE, flatSignedArea, segmentOnPolygonEdge } from "./imported-fold-util";
 
@@ -38,11 +38,27 @@ export interface FoldHingeSpec {
   readonly order: number;
 }
 
+/**
+ * A second piece on the same sheet (for example the lid next to the box). Its panels hang
+ * off `rootId`; `placement` says where it goes in 3D relative to the main body.
+ */
+export interface FoldPartSpec {
+  /** The panel of this piece that stays flat (like the main `rootId`). */
+  readonly rootId: string;
+  readonly placement: PartPlacement;
+}
+
 export interface FoldSetup {
+  /** Base panel of the main body. */
   readonly rootId: string;
   readonly panels: readonly FoldPanelSpec[];
   readonly hinges: readonly FoldHingeSpec[];
+  /** Extra pieces (lid, insert...), each with its own base panel. Absent or empty for a single piece. */
+  readonly parts?: readonly FoldPartSpec[];
 }
+
+export const MAX_FOLD_PARTS = 8;
+export const PLACEMENT_MODES = ["closed", "open", "beside"] as const;
 
 export interface DetectResult {
   readonly setup: FoldSetup;
@@ -123,7 +139,20 @@ export function validateFoldSetup(setup: FoldSetup): string[] {
     }
   }
 
-  // The folds must form one tree hanging from the root.
+  // The folds must form trees hanging from the base panels: the main one, plus one per extra part.
+  const parts = setup.parts ?? [];
+  const roots = [setup.rootId, ...parts.map((p) => p.rootId)];
+  if (parts.length > MAX_FOLD_PARTS) problems.push(`There can be at most ${MAX_FOLD_PARTS} extra parts.`);
+  const partRoots = new Set<string>();
+  for (const part of parts) {
+    if (!byId.has(part.rootId)) problems.push(`The base panel "${part.rootId}" of an extra part does not exist.`);
+    else if (part.rootId === setup.rootId) problems.push(`${label(part.rootId)} is the main base panel, so it cannot also be the base of an extra part.`);
+    else if (partRoots.has(part.rootId)) problems.push(`${label(part.rootId)} is the base of more than one extra part.`);
+    partRoots.add(part.rootId);
+    const pl = part.placement;
+    if (!pl || !(PLACEMENT_MODES as readonly string[]).includes(pl.mode)) problems.push(`The part with base ${label(part.rootId)} needs a placement: closed, open or beside.`);
+    else if (pl.openDeg !== undefined && (!Number.isFinite(pl.openDeg) || pl.openDeg < 0 || pl.openDeg > 120)) problems.push(`The opening angle of the part with base ${label(part.rootId)} must be between 0 and 120 degrees.`);
+  }
   if (byId.has(setup.rootId) && dupPanels.size === 0) {
     const incoming = new Map<string, number>();
     const children = new Map<string, string[]>();
@@ -133,12 +162,19 @@ export function validateFoldSetup(setup: FoldSetup): string[] {
       l.push(h.childId);
       children.set(h.parentId, l);
     }
-    if (incoming.has(setup.rootId)) problems.push(`The root panel ${label(setup.rootId)} cannot also fold off another panel.`);
-    for (const [id, n] of incoming) {
-      if (n > 1 && id !== setup.rootId) problems.push(`${label(id)} is folded by ${n} different folds. A panel can only hang off one.`);
+    for (const r of roots) {
+      if (incoming.has(r)) problems.push(`The base panel ${label(r)} cannot also fold off another panel.`);
     }
-    const reached = new Set<string>([setup.rootId]);
-    const queue = [setup.rootId];
+    for (const [id, n] of incoming) {
+      if (n > 1 && !roots.includes(id)) problems.push(`${label(id)} is folded by ${n} different folds. A panel can only hang off one.`);
+    }
+    const reached = new Set<string>();
+    const queue: string[] = [];
+    for (const r of roots) {
+      if (!byId.has(r) || reached.has(r)) continue;
+      reached.add(r);
+      queue.push(r);
+    }
     for (let i = 0; i < queue.length; i++) {
       for (const c of children.get(queue[i]!) ?? []) {
         if (reached.has(c)) continue;

@@ -1,3 +1,8 @@
+import { foldTree } from "../fold-tree/fold3d";
+import type { FoldTree } from "../fold-tree/types";
+import { vec } from "../primitives/vec2";
+import type { FoldSetup } from "./imported-fold";
+
 /** Small geometry helpers shared by fold setup detection and validation (flat x,y,x,y lists). */
 
 /** How far (mm) a hinge line may stray from a panel edge. */
@@ -76,4 +81,61 @@ export function segmentOnPolygonEdge(
     if (ok) return true;
   }
   return false;
+}
+
+/** How tall (mm) one folded piece stands: its panels, hinged from `rootId`, folded closed. 0 if it cannot be folded. */
+export function foldedDepth(setup: FoldSetup, rootId: string): number {
+  const children = new Map<string, FoldSetup["hinges"][number][]>();
+  for (const h of setup.hinges) children.set(h.parentId, [...(children.get(h.parentId) ?? []), h]);
+  const ids = new Set<string>([rootId]);
+  const queue = [rootId];
+  for (let i = 0; i < queue.length; i++) {
+    for (const h of children.get(queue[i]!) ?? []) {
+      if (!ids.has(h.childId)) {
+        ids.add(h.childId);
+        queue.push(h.childId);
+      }
+    }
+  }
+  const tree: FoldTree = {
+    rootId,
+    panels: setup.panels
+      .filter((p) => ids.has(p.id))
+      .map((p) => ({ id: p.id, role: p.role, label: p.label, printable: p.printable, polygon: Array.from({ length: p.polygon.length / 2 }, (_, i) => vec(p.polygon[i * 2]!, p.polygon[i * 2 + 1]!)) })),
+    hinges: setup.hinges
+      .filter((h) => ids.has(h.parentId) && ids.has(h.childId))
+      .map((h) => ({ id: h.id, parentId: h.parentId, childId: h.childId, a: vec(h.line[0], h.line[1]), b: vec(h.line[2], h.line[3]), foldAngleDeg: h.angleDeg })),
+  };
+  try {
+    const world = foldTree(tree);
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const p of tree.panels) {
+      const m = world.get(p.id)!;
+      for (const v of p.polygon) {
+        const z = m[2]! * v.x + m[6]! * v.y + m[14]!;
+        lo = Math.min(lo, z);
+        hi = Math.max(hi, z);
+      }
+    }
+    return Number.isFinite(hi - lo) ? hi - lo : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * With several pieces, the deepest one (the box, not its lid) is the main body that the
+ * others are placed on. Pieces are exchanged only if another one is clearly deeper.
+ */
+export function deepestAsMain(setup: FoldSetup): FoldSetup {
+  const parts = setup.parts ?? [];
+  if (parts.length === 0) return setup;
+  const rootIds = [setup.rootId, ...parts.map((p) => p.rootId)];
+  const depths = rootIds.map((id) => foldedDepth(setup, id));
+  let best = 0;
+  for (let i = 1; i < rootIds.length; i++) if (depths[i]! > depths[best]! + 1e-6) best = i;
+  if (best === 0) return setup;
+  const newParts = parts.map((p, i) => (i === best - 1 ? { ...p, rootId: setup.rootId } : p));
+  return { ...setup, rootId: rootIds[best]!, parts: newParts };
 }

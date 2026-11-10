@@ -17,7 +17,7 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
     db.templateCategory.findMany({ orderBy: [{ kind: "asc" }, { sortOrder: "asc" }, { name: "asc" }], select: { id: true, kind: true, name: true } }),
   ]);
   if (!t) notFound();
-  const g = t.source === "svg" ? (t.geometry as unknown as { dieline: ImportedDieline; roles: Record<string, Role>; options: { unit: "auto" | "mm" | "cm" | "in" | "pt" | "px"; scale: number; pxPerInch: number }; fold?: FoldSetup | null } | null) : null;
+  const g = t.source === "svg" ? (t.geometry as unknown as { dieline: ImportedDieline; roles: Record<string, Role>; options: { unit: "auto" | "mm" | "cm" | "in" | "pt" | "px"; scale: number; pxPerInch: number }; fold?: FoldSetup | null; referenceStyles?: string[] } | null) : null;
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -43,8 +43,9 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
           source: t.source === "svg" ? "svg" : "builtin",
           dieline: g?.dieline ?? null,
           roles: g?.roles ?? {},
-          options: g?.options ?? { unit: "auto", scale: 1, pxPerInch: 96 },
+          options: g?.options ?? { unit: "px", scale: 1, pxPerInch: 96 },
           fold: g?.fold ?? null,
+          referenceStyles: g?.referenceStyles ?? [],
         }}
       />
     </div>

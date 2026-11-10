@@ -107,3 +107,41 @@ describe("buildCartonModel with an imported dieline folded in stages", () => {
     );
   });
 });
+
+describe("a box with a lid (extra part)", () => {
+  const closed = (...xy: number[]) => ({ pts: xy, closed: true });
+  const line = (...xy: number[]) => ({ pts: xy, closed: false });
+  const cross = (ox: number, c: number, w: number) => {
+    const x0 = ox, x1 = ox + w, x2 = ox + w + c, x3 = ox + 2 * w + c;
+    const y0 = 0, y1 = w, y2 = w + c, y3 = 2 * w + c;
+    return {
+      cut: closed(x1, y0, x2, y0, x2, y1, x3, y1, x3, y2, x2, y2, x2, y3, x1, y3, x1, y2, x0, y2, x0, y1, x1, y1),
+      crease: [line(x1, y1, x2, y1), line(x2, y1, x2, y2), line(x2, y2, x1, y2), line(x1, y2, x1, y1)],
+    };
+  };
+  const a = cross(0, 100, 40);
+  const b = cross(230, 104, 20);
+  const flat: FlatDieline = { cut: [a.cut, b.cut], crease: [...a.crease, ...b.crease], bleed: [], guide: [] };
+  const setup = detectFoldSetup(flat).setup;
+  const make = (mode: "closed" | "open" | "beside") =>
+    buildCartonModel(createImportedGenerator("t", flat, { ...setup, parts: setup.parts!.map((p) => ({ ...p, placement: { mode } })) }).generate({}));
+
+  it("stands on its base: y is the height, 40 deep box + 20 deep lid", () => {
+    const m = make("closed");
+    expect(m.size.y).toBeCloseTo(60, 4);
+    expect(m.size.x).toBeCloseTo(104, 4);
+    const box = worldBox(m.object).getSize(new THREE.Vector3());
+    expect(box.y).toBeCloseTo(60, 3);
+    expect(box.x).toBeCloseTo(104, 3);
+    expect(box.z).toBeCloseTo(104, 3);
+  });
+
+  it("a lid beside the box is as tall as the box only", () => {
+    expect(make("beside").size.y).toBeCloseTo(40, 4);
+  });
+
+  it("an open lid is raised above the closed one", () => {
+    expect(worldBox(make("open").object).max.y).toBeGreaterThan(worldBox(make("closed").object).max.y + 1);
+  });
+});
+

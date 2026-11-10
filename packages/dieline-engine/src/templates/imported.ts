@@ -1,5 +1,5 @@
 import type { CreaseLine, CutSegment } from "../fold-tree/extract";
-import type { Hinge, LinearAnnotation, Panel } from "../fold-tree/types";
+import type { FoldPart, Hinge, LinearAnnotation, Panel } from "../fold-tree/types";
 import type { CheckResult, DielineGeometry, SafeArea } from "../geometry-types";
 import type { Outline } from "../primitives/arc";
 import { area, bounds, offsetPolygon } from "../primitives/polygon";
@@ -32,6 +32,11 @@ export interface FlatDieline {
   readonly bleed: readonly FlatPath[];
   /** Reference lines such as the safe area (closed ones become safe areas). */
   readonly guide: readonly FlatPath[];
+  /**
+   * Ignored lines the admin chose to keep as an optional picture behind the dieline
+   * (not part of the geometry, exports or 3D). Drawn faint on request.
+   */
+  readonly reference?: readonly FlatPath[];
 }
 
 export const IMPORTED_GENERATOR_ID = "svg-import";
@@ -85,19 +90,41 @@ function pointInPolygon(p: Vec2, poly: readonly Vec2[]): boolean {
 
 const round1 = (v: number) => Math.round(v * 10) / 10;
 
-/** Width (mm) of the outer cut outline, as imported. */
+/**
+ * The separate pieces of the sheet: closed cut shapes that are not inside another one
+ * (those are holes or cut-outs). Largest first. Usually one; a box with its lid drawn
+ * next to it has two.
+ */
+function sheetPieces(loops: readonly Vec2[][]): Vec2[][] {
+  const out: Vec2[][] = [];
+  for (const l of loops) if (!out.some((o) => pointInPolygon(l[0]!, o))) out.push(l);
+  return out;
+}
+
+/** Box around all the pieces. */
+function unionBounds(pieces: readonly (readonly Vec2[])[]) {
+  const all = pieces.map(bounds);
+  return {
+    min: vec(Math.min(...all.map((b) => b.min.x)), Math.min(...all.map((b) => b.min.y))),
+    max: vec(Math.max(...all.map((b) => b.max.x)), Math.max(...all.map((b) => b.max.y))),
+  };
+}
+
+const rectangle = (min: Vec2, max: Vec2): Vec2[] => [vec(min.x, min.y), vec(max.x, min.y), vec(max.x, max.y), vec(min.x, max.y)];
+
+/** Width (mm) of the whole sheet's cut outline (all separate pieces together), as imported. */
 export function importedCutSize(flat: FlatDieline): { width: number; height: number } {
-  const outer = closedCutLoops(flat)[0];
-  if (!outer) throw new ImportedDielineError("No closed cut outline.");
-  const b = bounds(outer);
+  const loops = closedCutLoops(flat);
+  if (loops.length === 0) throw new ImportedDielineError("No closed cut outline.");
+  const b = unionBounds(sheetPieces(loops));
   return { width: b.max.x - b.min.x, height: b.max.y - b.min.y };
 }
 
 /** Starting parameters: original width, and the bleed the file itself drew (3 mm if none). */
 export function importedDefaults(flat: FlatDieline): { width: number; bleed: number } {
-  const outer = closedCutLoops(flat)[0];
-  if (!outer) throw new ImportedDielineError("No closed cut outline.");
-  const cb = bounds(outer);
+  const loops = closedCutLoops(flat);
+  if (loops.length === 0) throw new ImportedDielineError("No closed cut outline.");
+  const cb = unionBounds(sheetPieces(loops));
   let bleed = 3;
   const bleeds = flat.bleed.filter((p) => p.closed).map(toPoints).filter((pts) => pts.length >= 3);
   const big = bleeds.sort((a, b) => area(b) - area(a))[0];
@@ -107,6 +134,18 @@ export function importedDefaults(flat: FlatDieline): { width: number; bleed: num
     if (Number.isFinite(d) && d > 0.1 && d <= 20) bleed = Math.round(d * 10) / 10;
   }
   return { width: round1(cb.max.x - cb.min.x), bleed };
+}
+
+/**
+ * Move paths from the imported frame into the frame of a generated dieline of overall
+ * `width` (the same uniform scale about the outline's corner the generator uses).
+ */
+export function scaleImportedPaths(flat: FlatDieline, width: number, paths: readonly FlatPath[]): FlatPath[] {
+  const loops = closedCutLoops(flat);
+  if (loops.length === 0) return [];
+  const ob = unionBounds(sheetPieces(loops));
+  const k = width / (ob.max.x - ob.min.x);
+  return paths.map((p) => ({ closed: p.closed, pts: p.pts.map((v, i) => (i % 2 === 0 ? ob.min.x + (v - ob.min.x) * k : ob.min.y + (v - ob.min.y) * k)) }));
 }
 
 const MAX_SEGMENTS = 60_000;
@@ -141,8 +180,8 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
     if (issues.length) throw new ParamValidationError(issues);
 
     const loops = closedCutLoops(flat);
-    const outerRaw = loops[0]!;
-    const ob = bounds(outerRaw);
+    const pieces = sheetPieces(loops);
+    const ob = unionBounds(pieces);
     const k = width / (ob.max.x - ob.min.x);
     // Scale about the outline's corner so everything keeps its place relative to it.
     const map = (p: Vec2): Vec2 => vec(ob.min.x + (p.x - ob.min.x) * k, ob.min.y + (p.y - ob.min.y) * k);
@@ -171,11 +210,17 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
     const slitLines: CutSegment[] = segs(flat.cut.filter((p) => !p.closed), "slit");
     const creaseLines: CreaseLine[] = segs(flat.crease, "fold").map((s) => ({ ...s, hingeId: s.id, foldAngleDeg: 90 }));
 
-    let bleedLoop: readonly Vec2[] = outer;
+    // One piece: the cut outline grown by the bleed. Several pieces: one box around all of them.
+    const sheetBox = { min: vec(ob.min.x, ob.min.y), max: vec(ob.min.x + (ob.max.x - ob.min.x) * k, ob.min.y + (ob.max.y - ob.min.y) * k) };
+    let bleedLoop: readonly Vec2[] = pieces.length > 1 ? rectangle(sheetBox.min, sheetBox.max) : outer;
     if (bleed > 0) {
-      const pieces = offsetPolygon(outer, bleed);
-      const largest = [...pieces].sort((a, b) => area(b) - area(a))[0];
-      if (largest) bleedLoop = largest;
+      if (pieces.length > 1) {
+        bleedLoop = rectangle(vec(sheetBox.min.x - bleed, sheetBox.min.y - bleed), vec(sheetBox.max.x + bleed, sheetBox.max.y + bleed));
+      } else {
+        const grown = offsetPolygon(outer, bleed);
+        const largest = [...grown].sort((a, b) => area(b) - area(a))[0];
+        if (largest) bleedLoop = largest;
+      }
     }
 
     const guides = flat.guide
@@ -186,6 +231,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
     let panels: Panel[];
     let hinges: Hinge[];
     let rootId: string;
+    let parts: FoldPart[] = [];
     let safeAreas: SafeArea[];
     if (fold) {
       panels = fold.panels.map((p) => {
@@ -203,6 +249,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
         foldOrder: h.order,
       }));
       rootId = fold.rootId;
+      parts = (fold.parts ?? []).map((q) => ({ rootId: q.rootId, placement: q.placement }));
       // A guide belongs to the panel that contains its first point (else its centre, else the root panel).
       safeAreas = guides.map((polygon) => {
         const centre = vec(polygon.reduce((a, v) => a + v.x, 0) / polygon.length, polygon.reduce((a, v) => a + v.y, 0) / polygon.length);
@@ -210,12 +257,12 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
         return { panelId: host?.id ?? rootId, polygon };
       });
     } else {
-      panels = [{ id: "sheet", role: "body", label: "Sheet", polygon: outer, printable: true }];
+      panels = [{ id: "sheet", role: "body", label: "Sheet", polygon: pieces.length > 1 ? rectangle(sheetBox.min, sheetBox.max) : outer, printable: true }];
       hinges = [];
       rootId = "sheet";
       safeAreas = guides.map((polygon) => ({ panelId: "sheet", polygon }));
     }
-    const cutBounds = bounds(outer);
+    const cutBounds = pieces.length > 1 ? sheetBox : bounds(outer);
     const bleedBounds = bounds(bleedLoop);
     const w = cutBounds.max.x - cutBounds.min.x;
     const h = cutBounds.max.y - cutBounds.min.y;
@@ -238,7 +285,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
       engineVersion: ENGINE_VERSION,
       params: { width, bleed },
       unverifiedDefaultsUsed: [],
-      foldTree: { rootId, panels, hinges },
+      foldTree: { rootId, panels, hinges, ...(parts.length > 0 ? { parts } : {}) },
       cutLoops,
       slitLines,
       creaseLines,

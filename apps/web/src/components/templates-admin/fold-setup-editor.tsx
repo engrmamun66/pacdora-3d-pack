@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Play, RotateCcw, Wand2 } from "lucide-react";
-import { createImportedGenerator, detectFoldSetup, importedDefaults, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldHingeSpec, type FoldSetup, type PanelRole } from "@packaging/dieline-engine";
+import { Play, RotateCcw, Wand2 } from "lucide-react";
+import { createImportedGenerator, detectFoldSetup, importedDefaults, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldHingeSpec, type FoldSetup, type PanelRole, type PartPlacementMode } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
-import { compactOrders, depthOf, rootAt, stepsOf, updateHinge, updatePanel } from "@/lib/fold-edit";
+import { compactOrders, depthOf, makeMain, moveHinge, pieceOf, rootAt, rootsOf, sortedHinges, stepsOf, updateHinge, updatePanel, updatePart } from "@/lib/fold-edit";
+import { HingeList } from "./hinge-list";
 import { pathData } from "@/lib/template-import";
 
 const ROLE_OPTIONS: { value: PanelRole; label: string; hint: string }[] = [
@@ -17,6 +18,12 @@ const ROLE_OPTIONS: { value: PanelRole; label: string; hint: string }[] = [
   { value: "glue-flap", label: "Glue flap", hint: "The strip that is glued to another panel." },
   { value: "bottom-flap", label: "Bottom flap", hint: "Outer flap of a glued bottom." },
   { value: "lock-flap", label: "Lock flap", hint: "Inner flap of a glued bottom." },
+];
+
+const PLACEMENT_OPTIONS: { value: PartPlacementMode; label: string }[] = [
+  { value: "open", label: "Open, tilted above the main body" },
+  { value: "closed", label: "Closed, on top of the main body" },
+  { value: "beside", label: "Beside the main body" },
 ];
 
 const DEPTH_COLORS = ["#fde68a", "#bfdbfe", "#bbf7d0", "#fbcfe8", "#ddd6fe", "#fed7aa", "#a5f3fc"];
@@ -122,57 +129,21 @@ export function FoldSetupEditor({
     );
   }
 
-  const hinges = [...fold.hinges].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+  const hinges = sortedHinges(fold);
   const selPanel = sel?.kind === "panel" ? fold.panels.find((p) => p.id === sel.id) : undefined;
   const selHinge = sel?.kind === "hinge" ? fold.hinges.find((h) => h.id === sel.id) : undefined;
   const setHinge = (id: string, patch: Partial<Pick<FoldHingeSpec, "angleDeg" | "order">>) => onChange(updateHinge(fold, id, patch));
-  const sign = (h: FoldHingeSpec) => (h.angleDeg < 0 ? -1 : 1);
   const steps = stepsOf(fold);
-
-  const hingeRow = (h: FoldHingeSpec) => (
-    <tr key={h.id} className={`border-b last:border-0 ${sel?.kind === "hinge" && sel.id === h.id ? "bg-primary/5" : ""}`}>
-      <td className="px-2 py-1.5">
-        <button type="button" className="text-left text-sm hover:underline" onClick={() => setSel({ kind: "hinge", id: h.id })}>
-          {label(h.parentId)} <span className="text-muted-foreground">→</span> {label(h.childId)}
-        </button>
-      </td>
-      <td className="px-2 py-1.5">
-        <span className="flex items-center gap-1">
-          <button type="button" aria-label={`Fold ${label(h.childId)} earlier`} className="grid size-6 place-items-center rounded border hover:bg-muted disabled:opacity-40" disabled={h.order <= 1} onClick={() => setHinge(h.id, { order: h.order - 1 })}><ChevronUp className="size-3.5" /></button>
-          <span className="w-5 text-center tabular-nums">{h.order}</span>
-          <button type="button" aria-label={`Fold ${label(h.childId)} later`} className="grid size-6 place-items-center rounded border hover:bg-muted" onClick={() => setHinge(h.id, { order: h.order + 1 })}><ChevronDown className="size-3.5" /></button>
-        </span>
-      </td>
-      <td className="px-2 py-1.5">
-        <input
-          aria-label={`Angle of ${label(h.parentId)} to ${label(h.childId)}`}
-          className={`${field} w-20`}
-          type="number"
-          min={1}
-          max={180}
-          step={1}
-          value={Math.abs(h.angleDeg)}
-          onChange={(e) => {
-            const v = Math.min(180, Math.max(1, Math.round(Number(e.target.value) || 90)));
-            setHinge(h.id, { angleDeg: sign(h) * v });
-          }}
-        />
-        <span className="ml-1 text-xs text-muted-foreground">°</span>
-      </td>
-      <td className="px-2 py-1.5">
-        <select aria-label={`Direction of ${label(h.parentId)} to ${label(h.childId)}`} className={field} value={sign(h)} onChange={(e) => setHinge(h.id, { angleDeg: Number(e.target.value) * Math.abs(h.angleDeg) })}>
-          <option value={1}>Inward (print stays outside)</option>
-          <option value={-1}>Outward (reverse)</option>
-        </select>
-      </td>
-    </tr>
-  );
+  const roots = rootsOf(fold);
+  const parts = fold.parts ?? [];
+  /** "Main body" or "Part 2" for the piece whose base panel is `rootId`. */
+  const pieceName = (rootId: string) => (rootId === fold.rootId ? "Main body" : `Part ${roots.indexOf(rootId) + 1}`);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <p className="mr-auto text-sm text-muted-foreground">
-          {fold.panels.length} panels, {fold.hinges.length} fold lines, {steps.length} {steps.length === 1 ? "step" : "steps"}. Click a panel or a fold line to edit it.
+          {fold.panels.length} panels, {fold.hinges.length} fold lines, {steps.length} {steps.length === 1 ? "step" : "steps"}{parts.length ? `, ${parts.length + 1} pieces` : ""}. Click a panel or a fold line to edit it.
         </p>
         <Button type="button" variant="outline" size="sm" onClick={detect}><Wand2 className="size-4" aria-hidden /> Detect again</Button>
         <Button type="button" variant="outline" size="sm" onClick={() => { if (window.confirm("Remove the 3D fold? The template becomes flat only.")) { onChange(null); setSel(null); setWarnings([]); } }}>Make flat only</Button>
@@ -208,7 +179,7 @@ export function FoldSetupEditor({
                       onClick={(e) => { e.stopPropagation(); setSel({ kind: "panel", id: p.id }); }}
                     />
                     <text x={cx} y={cy} textAnchor="middle" fontSize={size / 40} fill="#18181b" pointerEvents="none">{p.label}</text>
-                    {p.id === fold.rootId ? <text x={cx} y={cy + size / 32} textAnchor="middle" fontSize={size / 55} fill="#2563eb" fontWeight="600" pointerEvents="none">BASE (stays flat)</text> : null}
+                    {roots.includes(p.id) ? <text x={cx} y={cy + size / 32} textAnchor="middle" fontSize={size / 55} fill="#2563eb" fontWeight="600" pointerEvents="none">{parts.length ? `BASE of ${pieceName(p.id).toLowerCase()}` : "BASE (stays flat)"}</text> : null}
                   </g>
                 );
               })}
@@ -257,6 +228,52 @@ export function FoldSetupEditor({
         </div>
       </div>
 
+      {parts.length ? (
+        <section aria-label="Pieces" className="flex flex-col gap-3 rounded-xl border p-4">
+          <div>
+            <h3 className="text-sm font-semibold">This sheet has {parts.length + 1} pieces</h3>
+            <p className="text-sm text-muted-foreground">Each piece folds on its own. The main body stays where it is; choose where every other piece (a lid, for example) goes in 3D. Customers see them together and resize them together.</p>
+          </div>
+          <ul className="flex flex-col gap-2 text-sm">
+            <li className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-muted/40 px-3 py-2">
+              <strong>Main body</strong>
+              <span className="text-muted-foreground">base: {label(fold.rootId)}. Stays in place.</span>
+            </li>
+            {parts.map((part) => (
+              <li key={part.rootId} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3 py-2">
+                <strong>{pieceName(part.rootId)}</strong>
+                <span className="text-muted-foreground">base: {label(part.rootId)}</span>
+                <select
+                  aria-label={`Where ${pieceName(part.rootId)} goes in 3D`}
+                  className={`${field} ml-auto`}
+                  value={part.placement.mode}
+                  onChange={(e) => onChange(updatePart(fold, part.rootId, { mode: e.target.value as PartPlacementMode, ...(part.placement.openDeg === undefined ? {} : { openDeg: part.placement.openDeg }) }))}
+                >
+                  {PLACEMENT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                {part.placement.mode === "open" ? (
+                  <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                    Lift
+                    <input
+                      aria-label={`How far ${pieceName(part.rootId)} is lifted, in degrees`}
+                      className={`${field} w-16`}
+                      type="number"
+                      min={0}
+                      max={120}
+                      step={1}
+                      value={part.placement.openDeg ?? 30}
+                      onChange={(e) => onChange(updatePart(fold, part.rootId, { mode: "open", openDeg: Math.min(120, Math.max(0, Math.round(Number(e.target.value) || 0))) }))}
+                    />
+                    °
+                  </label>
+                ) : null}
+                <Button type="button" variant="outline" size="sm" onClick={() => onChange(makeMain(fold, part.rootId))}>Make this the main body</Button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {/* inspector */}
       {selPanel ? (
         <section aria-label="Panel settings" className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -277,7 +294,7 @@ export function FoldSetupEditor({
             Size: <strong className="text-foreground tabular-nums">{panelSize(selPanel.polygon).w.toFixed(1)} × {panelSize(selPanel.polygon).h.toFixed(1)} mm</strong> at the imported size, {selPanel.polygon.length / 2} corners.
           </p>
           <div className="self-end pb-1">
-            {selPanel.id === fold.rootId ? <p className="text-sm text-muted-foreground">This is the base panel.</p> : <Button type="button" variant="outline" size="sm" onClick={() => onChange(rootAt(fold, selPanel.id))}>Make this the base (stays flat)</Button>}
+            {roots.includes(selPanel.id) ? <p className="text-sm text-muted-foreground">{parts.length ? `This is the base panel of the ${pieceName(selPanel.id).toLowerCase()}.` : "This is the base panel."}</p> : <Button type="button" variant="outline" size="sm" onClick={() => onChange(rootAt(fold, selPanel.id))}>{parts.length ? `Make this the base of its piece (${pieceName(roots[Math.max(0, pieceOf(fold, selPanel.id))]!).toLowerCase()})` : "Make this the base (stays flat)"}</Button>}
           </div>
         </section>
       ) : null}
@@ -286,20 +303,13 @@ export function FoldSetupEditor({
           <p className="font-medium">{label(selHinge.parentId)} → {label(selHinge.childId)}</p>
           <p className="text-muted-foreground">
             {label(selHinge.childId)} swings about this fold line while {label(selHinge.parentId)} stays. Line length{" "}
-            <strong className="tabular-nums text-foreground">{Math.hypot(selHinge.line[2] - selHinge.line[0], selHinge.line[3] - selHinge.line[1]).toFixed(1)} mm</strong>. Change step, angle and direction in the table below.
+            <strong className="tabular-nums text-foreground">{Math.hypot(selHinge.line[2] - selHinge.line[0], selHinge.line[3] - selHinge.line[1]).toFixed(1)} mm</strong>. Change step, angle and direction in the list below.
           </p>
         </section>
       ) : null}
 
-      <div className="overflow-x-auto rounded-xl border">
-        <table className="w-full min-w-[560px] text-left text-sm">
-          <caption className="sr-only">Fold lines</caption>
-          <thead className="border-b bg-muted/40 text-xs text-muted-foreground">
-            <tr><th className="px-2 py-2 font-medium">Fold (stays → swings)</th><th className="px-2 py-2 font-medium">Step</th><th className="px-2 py-2 font-medium">Angle</th><th className="px-2 py-2 font-medium">Direction</th></tr>
-          </thead>
-          <tbody>{hinges.map(hingeRow)}</tbody>
-        </table>
-      </div>
+      <HingeList hinges={hinges} label={label} selectedId={sel?.kind === "hinge" ? sel.id : null} onSelect={(id) => setSel({ kind: "hinge", id })} onSetHinge={setHinge} onMove={(id, to) => onChange(moveHinge(fold, id, to))} />
+      <p className="-mt-2 text-xs text-muted-foreground">Drag a row by its handle (or focus it and press the up / down arrow keys) to change which fold happens first.</p>
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="outline" size="sm" onClick={() => onChange(compactOrders(fold))}>Tidy step numbers</Button>
         <Button type="button" variant="outline" size="sm" onClick={() => onChange({ ...fold, hinges: fold.hinges.map((h) => ({ ...h, angleDeg: Math.sign(h.angleDeg || 1) * 90 })) })}>Set every angle to 90°</Button>

@@ -9,6 +9,8 @@ export type ViewToggles = {
   glue: boolean;
   dimensions: boolean;
   labels: boolean;
+  /** Imported dielines: ignored lines the admin kept as a faint picture. */
+  reference: boolean;
 };
 
 /** A named on/off switch in the canvas toolbar. */

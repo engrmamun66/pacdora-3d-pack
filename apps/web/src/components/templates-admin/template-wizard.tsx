@@ -40,6 +40,8 @@ export interface WizardInitial {
   options: Options;
   /** How the template folds in 3D (imported templates), or null for flat only. */
   fold: FoldSetup | null;
+  /** Ignored line styles kept as an optional "Reference" picture for customers. */
+  referenceStyles: string[];
 }
 
 export interface WizardCategory {
@@ -75,6 +77,8 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
   const [text, setText] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [opts, setOpts] = useState<Options>(initial.options);
+  // Only three units are offered. A template saved earlier with another choice (auto, cm, pt) shows as pixels, the old fallback.
+  const shownUnit: "mm" | "in" | "px" = opts.unit === "mm" || opts.unit === "in" ? opts.unit : "px";
   const [overrides, setOverrides] = useState<Record<string, Role>>(initial.roles);
   const [showBleed, setShowBleed] = useState(true);
   const [showGuides, setShowGuides] = useState(true);
@@ -115,6 +119,10 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
   // 3D fold: the lines it was set up for are remembered, so a change to them is noticed.
   const flat = useMemo(() => (dieline ? toFlatDieline(dieline, roles) : null), [dieline, roles]);
   const flatKey = flat ? linesKey(flat) : "";
+  // "Show as reference" is on by default for every ignored style: remember the ones the admin switched OFF.
+  // (A template saved before this default keeps exactly what it had: its ignored styles not listed are off.)
+  const [noRef, setNoRef] = useState<string[]>(() => Object.keys(initial.roles).filter((k) => initial.roles[k] === "ignore" && !initial.referenceStyles.includes(k)));
+  const refStyles = useMemo(() => Object.keys(roles).filter((k) => roles[k] === "ignore" && !noRef.includes(k)), [roles, noRef]);
   const [fold, setFold] = useState<FoldSetup | null>(initial.fold);
   const [foldKey, setFoldKey] = useState(() => (initial.dieline && initial.fold ? linesKey(toFlatDieline(initial.dieline, initial.roles)) : ""));
   const foldStale = fold !== null && foldKey !== flatKey;
@@ -126,13 +134,13 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
   const snapshot = JSON.stringify({
     name: name.trim(), slug, description: description.trim(), published, sortOrder,
     cats: [...categoryIds].sort(), roles: sortedRoles(roles), opts,
-    newSvg: text !== null, bg: bgFile ? "new" : bgRemoved ? "removed" : "same", fold,
+    newSvg: text !== null, bg: bgFile ? "new" : bgRemoved ? "removed" : "same", fold, refs: [...refStyles].sort(),
   });
   const [baseline] = useState(() =>
     JSON.stringify({
       name: initial.name.trim(), slug: initial.slug, description: initial.description.trim(), published: initial.published, sortOrder: initial.sortOrder,
       cats: [...initial.categoryIds].sort(), roles: sortedRoles(initial.roles), opts: initial.options,
-      newSvg: false, bg: "same", fold: initial.fold,
+      newSvg: false, bg: "same", fold: initial.fold, refs: [...initial.referenceStyles].sort(),
     }),
   );
   const dirty = mode === "create" || snapshot !== baseline;
@@ -182,6 +190,7 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
     setText(t);
     setFileName(file.name);
     setOverrides({});
+    setNoRef([]);
     if (!name.trim() && mode === "create") {
       const guess = file.name.replace(/\.svg$/i, "").replace(/[-_]+/g, " ").trim();
       setName(guess);
@@ -228,6 +237,7 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
         unit: opts.unit, scale: opts.scale, pxPerInch: opts.pxPerInch,
         roles,
         fold: foldOk ? fold : null,
+        referenceStyles: refStyles,
       });
       if (r.ok) {
         const finalSlug = r.slug ?? slug;
@@ -324,12 +334,9 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
           <div className="grid gap-4 sm:grid-cols-3">
             <label className="flex flex-col gap-1 text-sm font-medium">
               Units in the file
-              <select className={field} value={opts.unit} onChange={(e) => setOpts({ ...opts, unit: e.target.value as Unit })}>
-                <option value="auto">Auto-detect</option>
-                <option value="mm">Millimetres</option>
-                <option value="cm">Centimetres</option>
+              <select className={field} value={shownUnit} onChange={(e) => setOpts({ ...opts, unit: e.target.value as Unit })}>
+                <option value="mm">Millimeters</option>
                 <option value="in">Inches</option>
-                <option value="pt">Points</option>
                 <option value="px">Pixels</option>
               </select>
             </label>
@@ -337,7 +344,7 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
               Scale (×)
               <input className={field} type="number" min={0.001} max={1000} step="any" value={opts.scale} onChange={(e) => setOpts({ ...opts, scale: Number(e.target.value) || 1 })} />
             </label>
-            {opts.unit === "px" || opts.unit === "auto" ? (
+            {shownUnit === "px" ? (
               <label className="flex flex-col gap-1 text-sm font-medium">
                 Pixels per inch
                 <input className={field} type="number" min={1} max={2400} value={opts.pxPerInch} onChange={(e) => setOpts({ ...opts, pxPerInch: Number(e.target.value) || 96 })} />
@@ -382,7 +389,7 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
             <div className="flex flex-col gap-3">
               <ul className="flex flex-col gap-2">
                 {dieline.styles.map((st) => (
-                  <li key={st.key} className="flex items-center gap-3 rounded-lg border p-2.5">
+                  <li key={st.key} className="flex flex-wrap items-center gap-3 rounded-lg border p-2.5">
                     <svg width="34" height="14" aria-hidden className="shrink-0">
                       <line x1="1" y1="7" x2="33" y2="7" stroke={st.stroke ?? "#000"} strokeWidth="3" strokeDasharray={st.dashed ? "6 3" : undefined} />
                     </svg>
@@ -399,7 +406,13 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
                     >
                       {ROLE_ORDER.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
                     </select>
-                  </li>
+                  {roles[st.key] === "ignore" ? (
+                      <label className="flex basis-full items-center gap-1.5 pl-[46px] text-xs text-muted-foreground" title="Customers get an optional 'Reference' switch that draws these lines faint behind the dieline">
+                        <input type="checkbox" checked={!noRef.includes(st.key)} onChange={(e) => setNoRef((r) => (e.target.checked ? r.filter((k) => k !== st.key) : [...r, st.key]))} />
+                        Show as reference
+                      </label>
+                    ) : null}
+                    </li>
                 ))}
               </ul>
               <Button type="button" variant="outline" onClick={() => setOverrides({})}><Wand2 className="size-4" aria-hidden /> Auto-detect again</Button>

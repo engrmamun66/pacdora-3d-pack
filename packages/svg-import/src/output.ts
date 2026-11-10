@@ -158,18 +158,49 @@ export function toDxf(d: ImportedDieline, roles: Record<string, Role>): string {
 
 /** An imported dieline sorted by role, in the plain shape the dieline engine takes (no engine import needed). */
 export interface FlatDielineData {
+  /** Ignored lines kept as an optional faint picture (see `toFlatDieline`), thinned out. */
+  reference?: { pts: number[]; closed: boolean }[];
   cut: { pts: number[]; closed: boolean }[];
   crease: { pts: number[]; closed: boolean }[];
   bleed: { pts: number[]; closed: boolean }[];
   guide: { pts: number[]; closed: boolean }[];
 }
 
-/** Group the paths by role. Paths with fewer than two points and "ignore" paths are dropped. */
-export function toFlatDieline(d: ImportedDieline, roles: Record<string, Role>): FlatDielineData {
+/**
+ * Group the paths by role. Paths with fewer than two points and "ignore" paths are dropped,
+ * except the styles listed in `referenceStyles` (ignored styles the admin keeps as a faint picture):
+ * those are returned as `reference`, with points thinned to about 1/1500 of the sheet size.
+ */
+export function toFlatDieline(d: ImportedDieline, roles: Record<string, Role>, referenceStyles: readonly string[] = []): FlatDielineData {
   const out: FlatDielineData = { cut: [], crease: [], bleed: [], guide: [] };
+  const keep = new Set(referenceStyles);
+  const minGap = Math.max(d.widthMm, d.heightMm) / 1500;
+  const MAX_REFERENCE_POINTS = 40_000;
+  let refPoints = 0;
   for (const p of d.paths) {
     const role = roleOf(d, roles, p.style);
-    if (role === "ignore" || p.pts.length < 4) continue;
+    if (p.pts.length < 4) continue;
+    if (role === "ignore") {
+      if (!keep.has(p.style) || refPoints >= MAX_REFERENCE_POINTS) continue;
+      const pts: number[] = [];
+      let lx = Infinity;
+      let ly = Infinity;
+      for (let i = 0; i + 1 < p.pts.length; i += 2) {
+        const x = p.pts[i]!;
+        const y = p.pts[i + 1]!;
+        const last = i + 2 >= p.pts.length;
+        if (pts.length === 0 || last || Math.hypot(x - lx, y - ly) >= minGap) {
+          pts.push(x, y);
+          lx = x;
+          ly = y;
+        }
+      }
+      if (pts.length >= 4) {
+        (out.reference ??= []).push({ pts, closed: p.closed });
+        refPoints += pts.length / 2;
+      }
+      continue;
+    }
     out[role].push({ pts: p.pts, closed: p.closed });
   }
   return out;

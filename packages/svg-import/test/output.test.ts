@@ -142,3 +142,16 @@ describe("toFlatDieline", () => {
     expect(f.crease.length).toBeGreaterThan(0);
   });
 });
+
+describe("toFlatDieline reference lines", () => {
+  it("keeps only the chosen ignored styles, thinned, and never the others", () => {
+    const ignoredKeys = d.styles.filter((st) => roles[st.key] === "ignore").map((st) => st.key);
+    expect(ignoredKeys.length).toBeGreaterThan(0);
+    expect(toFlatDieline(d, roles).reference).toBeUndefined();
+    const withRef = toFlatDieline(d, roles, [ignoredKeys[0]!]);
+    expect(withRef.reference?.length).toBeGreaterThan(0);
+    // a style that is not ignored is never added as reference
+    const cutKey = d.styles.find((st) => roles[st.key] === "cut")!.key;
+    expect(toFlatDieline(d, roles, [cutKey]).reference).toBeUndefined();
+  });
+});

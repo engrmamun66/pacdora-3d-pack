@@ -1,4 +1,4 @@
-import type { FoldHingeSpec, FoldPanelSpec, FoldSetup } from "@packaging/dieline-engine";
+import type { FoldHingeSpec, FoldPanelSpec, FoldSetup, PartPlacement } from "@packaging/dieline-engine";
 
 /** Pure edits of a fold setup, used by the admin fold screen. Every function returns a new setup. */
 
@@ -10,13 +10,43 @@ export function updateHinge(setup: FoldSetup, id: string, patch: Partial<Pick<Fo
   return { ...setup, hinges: setup.hinges.map((h) => (h.id === id ? { ...h, ...patch } : h)) };
 }
 
+/** Base panels: the main one first, then one per extra part. */
+export const rootsOf = (setup: FoldSetup): string[] => [setup.rootId, ...(setup.parts ?? []).map((p) => p.rootId)];
+
+/** Which piece a panel belongs to: 0 for the main body, 1.. for extra parts (-1 if none). */
+export function pieceOf(setup: FoldSetup, panelId: string): number {
+  const roots = rootsOf(setup);
+  const adj = new Map<string, string[]>();
+  for (const h of setup.hinges) {
+    (adj.get(h.parentId) ?? adj.set(h.parentId, []).get(h.parentId)!).push(h.childId);
+    (adj.get(h.childId) ?? adj.set(h.childId, []).get(h.childId)!).push(h.parentId);
+  }
+  const seen = new Set([panelId]);
+  const queue = [panelId];
+  for (let i = 0; i < queue.length; i++) {
+    const at = roots.indexOf(queue[i]!);
+    if (at >= 0) return at;
+    for (const o of adj.get(queue[i]!) ?? []) {
+      if (!seen.has(o)) {
+        seen.add(o);
+        queue.push(o);
+      }
+    }
+  }
+  return -1;
+}
+
 /**
- * Make another panel the one that stays flat. Hinges are turned around where needed so
- * the parent is always the side nearer to the new base. The folded result is the same
- * shape (only its position in space changes).
+ * Make another panel the one that stays flat (in its own piece: the main body or an extra
+ * part). Hinges are turned around where needed so the parent is always the side nearer to
+ * the new base. The folded result is the same shape (only its position in space changes).
  */
 export function rootAt(setup: FoldSetup, newRootId: string): FoldSetup {
-  if (!setup.panels.some((p) => p.id === newRootId) || newRootId === setup.rootId) return setup;
+  if (!setup.panels.some((p) => p.id === newRootId)) return setup;
+  const roots = rootsOf(setup);
+  if (roots.includes(newRootId)) return setup;
+  const piece = pieceOf(setup, newRootId);
+  if (piece < 0) return setup;
   const adj = new Map<string, FoldHingeSpec[]>();
   for (const h of setup.hinges) {
     (adj.get(h.parentId) ?? adj.set(h.parentId, []).get(h.parentId)!).push(h);
@@ -35,11 +65,55 @@ export function rootAt(setup: FoldSetup, newRootId: string): FoldSetup {
       queue.push(other);
     }
   }
-  return { ...setup, rootId: newRootId, hinges: setup.hinges.map((h) => next.get(h.id) ?? h) };
+  const hinges = setup.hinges.map((h) => next.get(h.id) ?? h);
+  if (piece === 0) return { ...setup, rootId: newRootId, hinges };
+  return { ...setup, hinges, parts: (setup.parts ?? []).map((p, i) => (i === piece - 1 ? { ...p, rootId: newRootId } : p)) };
+}
+
+/** Change how an extra part is placed in 3D. */
+export function updatePart(setup: FoldSetup, rootId: string, placement: PartPlacement): FoldSetup {
+  return { ...setup, parts: (setup.parts ?? []).map((p) => (p.rootId === rootId ? { ...p, placement } : p)) };
+}
+
+/** Swap the main body with an extra part: the part's piece becomes the main one, the old main takes its place. */
+export function makeMain(setup: FoldSetup, partRootId: string): FoldSetup {
+  const parts = setup.parts ?? [];
+  if (!parts.some((p) => p.rootId === partRootId)) return setup;
+  return { ...setup, rootId: partRootId, parts: parts.map((p) => (p.rootId === partRootId ? { ...p, rootId: setup.rootId } : p)) };
 }
 
 /** Distinct fold steps in the order they happen. */
 export const stepsOf = (setup: FoldSetup): number[] => [...new Set(setup.hinges.map((h) => h.order))].sort((a, b) => a - b);
+
+/** Fold lines in the order they happen (ties keep a stable order). */
+export const sortedHinges = (setup: FoldSetup): FoldHingeSpec[] => [...setup.hinges].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+
+/**
+ * Move one fold line to another place in the sequence and renumber the steps 1, 2, 3...
+ * Lines that shared a step keep sharing it. The moved line gets its own step, unless it is
+ * dropped between two lines of the same step: then it joins them.
+ */
+export function moveHinge(setup: FoldSetup, id: string, toIndex: number): FoldSetup {
+  const list = sortedHinges(setup);
+  const from = list.findIndex((h) => h.id === id);
+  if (from < 0) return setup;
+  const to = Math.min(list.length - 1, Math.max(0, Math.round(toIndex)));
+  if (to === from) return setup;
+  const moved = list[from]!;
+  const rest = list.filter((h) => h.id !== id);
+  const prev = rest[to - 1];
+  const next = rest[to];
+  const joins = prev && next && prev.order === next.order ? prev.order : null;
+  const seq = [...rest.slice(0, to), moved, ...rest.slice(to)];
+  const group = (h: FoldHingeSpec) => (h.id === id ? (joins ?? `own:${id}`) : h.order);
+  const order = new Map<string, number>();
+  let n = 0;
+  seq.forEach((h, i) => {
+    if (i === 0 || group(h) !== group(seq[i - 1]!)) n += 1;
+    order.set(h.id, n);
+  });
+  return { ...setup, hinges: setup.hinges.map((h) => ({ ...h, order: order.get(h.id) ?? h.order })) };
+}
 
 /** Close gaps in the step numbers (1, 3, 3, 7 becomes 1, 2, 2, 3). */
 export function compactOrders(setup: FoldSetup): FoldSetup {
@@ -49,8 +123,9 @@ export function compactOrders(setup: FoldSetup): FoldSetup {
 
 /** Number of hinges between a panel and the base panel. */
 export function depthOf(setup: FoldSetup): Map<string, number> {
-  const depth = new Map<string, number>([[setup.rootId, 0]]);
-  const queue = [setup.rootId];
+  const roots = rootsOf(setup);
+  const depth = new Map<string, number>(roots.map((r) => [r, 0]));
+  const queue = [...roots];
   while (queue.length) {
     const cur = queue.shift()!;
     for (const h of setup.hinges) {

@@ -76,7 +76,11 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
   // Centre on the CLOSED carton so the model does not jump while animating.
   const closedBox = foldedBounds(geo, foldTree(geo.foldTree, { progress: 1 }));
   const centre = closedBox.getCenter(new THREE.Vector3());
-  const size = closedBox.getSize(new THREE.Vector3());
+  const flatSize = closedBox.getSize(new THREE.Vector3());
+  // With extra parts (a lid on a box) the parts are stacked along the sheet's normal, so that is "up":
+  // the model stands on its base. Without parts the sheet's own y axis is up, as always.
+  const standUp = (geo.foldTree.parts?.length ?? 0) > 0;
+  const size = standUp ? new THREE.Vector3(flatSize.x, flatSize.z, flatSize.y) : flatSize;
   const gap = opts.layerGap ?? 0.3;
   const rect = opts.textureRect;
 
@@ -150,7 +154,8 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
 
   const object = new THREE.Group();
   object.name = "carton";
-  object.rotation.x = Math.PI; // flat frame is y-down; make it y-up, print facing +z
+  // Flat frame is y-down. Make it y-up with the print facing +z, or (with parts) stand it on its base.
+  object.rotation.x = standUp ? -Math.PI / 2 : Math.PI;
   object.add(inner);
   return { object, size };
 }

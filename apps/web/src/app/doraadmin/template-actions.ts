@@ -76,6 +76,8 @@ const saveSchema = z.object({
   roles: z.record(z.string().max(80), roleSchema).default({}),
   /** How it folds in 3D (imported templates); null = flat only. Validated again here. */
   fold: z.unknown().optional(),
+  /** Ignored line styles kept as an optional faint "Reference" picture on the dieline page. */
+  referenceStyles: z.array(z.string().max(80)).max(60).default([]),
 });
 
 export type SaveTemplateResult = ActionResult & { slug?: string };
@@ -87,10 +89,21 @@ interface StoredGeometry {
   options: { unit: string; scale: number; pxPerInch: number };
   /** 3D fold setup, or null for flat only. */
   fold: FoldSetup | null;
+  /** Style keys of ignored lines offered as a reference picture. */
+  referenceStyles: string[];
 }
 
 const foldSchema = z.object({
   rootId: z.string().min(1).max(40),
+  parts: z
+    .array(
+      z.object({
+        rootId: z.string().min(1).max(40),
+        placement: z.object({ mode: z.enum(["closed", "open", "beside"]), openDeg: z.number().finite().min(0).max(120).optional() }),
+      }),
+    )
+    .max(8)
+    .optional(),
   panels: z
     .array(
       z.object({
@@ -215,7 +228,10 @@ export async function saveTemplate(input: unknown): Promise<SaveTemplateResult> 
     fold = f.data;
   }
 
-  const geometry: StoredGeometry = { v: 1, dieline, roles, options, fold };
+  // Only styles that really are ignored can be kept as reference.
+  const referenceStyles = [...new Set(v.referenceStyles)].filter((k) => roles[k] === "ignore");
+
+  const geometry: StoredGeometry = { v: 1, dieline, roles, options, fold, referenceStyles };
   if (JSON.stringify(geometry).length > MAX_GEOMETRY_JSON) return { ok: false, message: "This dieline is too detailed to store. Simplify the SVG and try again." };
   const thumbnail = thumbnailSvg(dieline, roles);
   const data = {

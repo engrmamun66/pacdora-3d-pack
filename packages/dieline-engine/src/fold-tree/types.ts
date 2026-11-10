@@ -44,11 +44,34 @@ export interface Hinge {
   readonly foldOrder?: number;
 }
 
+/**
+ * Where an extra part (a second piece such as a lid, drawn next to the main body on the
+ * same sheet) goes in 3D once everything is folded.
+ * - closed: flipped over and set on top of the main body, like a closed lid.
+ * - open: the same, then swung up about the back edge by `openDeg` (default 30).
+ * - beside: stands next to the main body on the same ground.
+ */
+export type PartPlacementMode = "closed" | "open" | "beside";
+
+export interface PartPlacement {
+  readonly mode: PartPlacementMode;
+  /** Only for "open": how far the part is lifted, 0..120 degrees. */
+  readonly openDeg?: number;
+}
+
+/** A second (third...) folded piece. Its panels hang off `rootId`, not off the main root. */
+export interface FoldPart {
+  readonly rootId: string;
+  readonly placement: PartPlacement;
+}
+
 /** Panels joined by hinges. Single source for flat layout (2D) and folding (3D). */
 export interface FoldTree {
   readonly rootId: string;
   readonly panels: readonly Panel[];
   readonly hinges: readonly Hinge[];
+  /** Extra separately folded pieces, placed relative to the main body (see FoldPart). */
+  readonly parts?: readonly FoldPart[];
   /**
    * Cut segments lying on an edge shared by two panels (e.g. tuck-lock slits at
    * the ends of a tuck crease). Each must coincide exactly with one shared edge.
