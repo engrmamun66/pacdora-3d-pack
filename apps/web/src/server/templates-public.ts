@@ -19,6 +19,10 @@ export interface PublicTemplate {
   description: string;
   source: "builtin" | "svg";
   thumbnail: string | null;
+  /** Has a 3D fold view. */
+  has3d: boolean;
+  /** Address of the 3D picture an admin saved for the list, or null. */
+  productImage: string | null;
   categoryKeys: string[];
 }
 
@@ -33,7 +37,7 @@ export async function getPublicCatalogue(): Promise<{ templates: PublicTemplate[
         where: { published: true },
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
         select: {
-          id: true, name: true, description: true, source: true, generatorId: true, defaultParameters: true, thumbnail: true,
+          id: true, name: true, description: true, source: true, generatorId: true, defaultParameters: true, thumbnail: true, hasFold: true, productImageKey: true,
           categories: { where: { active: true }, select: { kind: true, slug: true } },
         },
       }),
@@ -45,6 +49,8 @@ export async function getPublicCatalogue(): Promise<{ templates: PublicTemplate[
       description: t.description,
       source: t.source === "svg" ? "svg" : "builtin",
       thumbnail: t.source === "svg" ? (t.thumbnail ? svgDataUrl(t.thumbnail) : null) : tryThumbnail(t.generatorId, t.defaultParameters),
+      has3d: t.source !== "svg" || t.hasFold,
+      productImage: t.productImageKey ? `/api/templates/${t.id}/product-image?v=${t.productImageKey.slice("templates/".length, -4)}` : null,
       categoryKeys: t.categories.map((c) => `${c.kind}:${c.slug}`),
     }));
     const categories: PublicCategory[] = cats

@@ -9,24 +9,24 @@ export const metadata = { title: "Templates" };
 
 export default function TemplatesPage() {
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Templates</h1>
-        <p className="text-muted-foreground">Pick a structure, then set your exact dimensions or download the dieline.</p>
-      </div>
-      <Suspense fallback={null}>
-        <AiPanel />
-      </Suspense>
-      <Suspense fallback={<div className="h-64 animate-pulse rounded-lg bg-muted" />}>
+    <>
+      <h1 className="sr-only">Templates</h1>
+      <Suspense fallback={<div className="h-96 animate-pulse rounded-2xl bg-muted" />}>
         <Library />
       </Suspense>
-    </div>
+    </>
   );
 }
 
 async function Library() {
   const { templates, categories } = await getPublicCatalogue();
-  return <TemplateLibrary items={templates} categories={categories} />;
+  return (
+    <TemplateLibrary items={templates} categories={categories}>
+      <Suspense fallback={null}>
+        <AiPanel />
+      </Suspense>
+    </TemplateLibrary>
+  );
 }
 
 /** Read at request time: the page itself is prerendered, the AI switch is a runtime setting. */

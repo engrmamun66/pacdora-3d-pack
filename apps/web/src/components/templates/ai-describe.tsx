@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Sparkles } from "lucide-react";
 import { MAX_DESCRIPTION_CHARS } from "@packaging/ai-contract/limits";
-import { suggestBox, type SuggestResponse } from "@/app/(app)/templates/ai-actions";
+import { suggestBox, type SuggestResponse } from "@/app/(site)/templates/ai-actions";
 import { Turnstile } from "@/components/auth/turnstile";
 import { TURNSTILE_SITE_KEY, useCaptcha } from "@/components/auth/use-captcha";
 

@@ -659,3 +659,9 @@ Ignored line styles stay dropped from geometry, exports and 3D. In the template 
 - Per part the admin sets placement (`FoldPart.placement`): open (tilted by 0..120 degrees about the back edge), closed on top, or beside. `foldTree()` folds each piece alone, then moves the part onto the CLOSED main body; that move is the last 20% of the fold animation. Pieces with parts stand on their base (model3d rotates the sheet normal to up).
 - All pieces resize together with the one width. "Make this the main body" swaps main and part; "Make this the base" works inside any piece.
 - Not done: each part its own size, bleed outline per piece, glued/hinged lids (lid attached to the box by a fold line is already a normal single piece), parts inside parts.
+
+### Template list page and product image
+
+- `/templates` moved to the `(site)` layout (site header kept, no dashboard sidebar): category list with counts on the left, 3-column card grid on the right.
+- Product image: in the 3D view editor (list dialog and template edit page) the admin presses "Save as product image". `CartonView.snapshot({width, height})` renders the box exactly as shown at 900 x 1200 px (PNG); `POST /api/doraadmin/template-product-image` stores it in `storage/templates/<uuid>.png` (`Template.productImageKey`, migration `20261110120000`); `GET /api/templates/[slug]/product-image` serves it to signed-in users. Replace and Remove work; deleting a template removes the file.
+- Card layout: dieline on the left (60%), product image on the right (40%, cropped to its middle: the editor draws dashed lines for that part). Without a picture the dieline fills the card.

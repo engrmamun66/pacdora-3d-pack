@@ -45,8 +45,11 @@ export interface CartonViewHandle {
   getView(): ViewSettings | null;
   /** Move the camera to a view. */
   setView(v: ViewSettings): void;
-  /** PNG snapshot of the current view. */
-  snapshot(): string | null;
+  /**
+   * PNG (data URL) of the current view. With `size` it is drawn at exactly that many pixels
+   * (same camera, the picture is just cut to that shape), and the view on screen is left as it was.
+   */
+  snapshot(size?: { width: number; height: number }): string | null;
   /**
    * Rebuild the model at this fold amount right now, without a React render (for smooth animation).
    * `hingeProgress` (hinge id -> 0..1) overrides single hinges, for staged folds.
@@ -154,11 +157,28 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       if (!(result instanceof ArrayBuffer)) throw new Error("GLB export failed.");
       return new Blob([result], { type: "model/gltf-binary" });
     },
-    snapshot: () => {
+    snapshot: (size) => {
       const t = three.current;
       if (!t) return null;
+      if (!size) {
+        t.renderer.render(t.scene, t.camera);
+        return t.renderer.domElement.toDataURL("image/png");
+      }
+      const shown = t.renderer.getSize(new THREE.Vector2());
+      const ratio = t.renderer.getPixelRatio();
+      const aspect = t.camera.aspect;
+      t.renderer.setPixelRatio(1);
+      t.renderer.setSize(size.width, size.height, false);
+      t.camera.aspect = size.width / size.height;
+      t.camera.updateProjectionMatrix();
       t.renderer.render(t.scene, t.camera);
-      return t.renderer.domElement.toDataURL("image/png");
+      const url = t.renderer.domElement.toDataURL("image/png");
+      t.renderer.setPixelRatio(ratio);
+      t.renderer.setSize(shown.x, shown.y, false);
+      t.camera.aspect = aspect;
+      t.camera.updateProjectionMatrix();
+      t.renderer.render(t.scene, t.camera);
+      return url;
     },
   }));
 

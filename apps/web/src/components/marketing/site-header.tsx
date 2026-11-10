@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { Menu } from "lucide-react";
 import { ButtonLink } from "@/components/button-link";
@@ -14,6 +15,8 @@ const NAV = [
 
 /** Shows the right buttons for the visitor. If the session lookup fails (e.g. database down) the page still renders signed-out. */
 async function AuthButtons() {
+  // The session is per visitor: read it at request time, so the rest of the page can still be prerendered.
+  await connection();
   let signedIn = false;
   try {
     signedIn = Boolean(await getSession());
@@ -30,9 +33,10 @@ async function AuthButtons() {
   );
 }
 
-export function SiteHeader() {
+/** `solid`: for inner pages. A bar that stays on top of the page, instead of floating over the home hero. */
+export function SiteHeader({ solid = false }: { solid?: boolean }) {
   return (
-    <header className="absolute inset-x-0 top-0 z-20">
+    <header className={solid ? "sticky top-0 z-20 border-b bg-background/90 backdrop-blur" : "absolute inset-x-0 top-0 z-20"}>
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-6 px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2 font-semibold">
           <span aria-hidden className="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground">

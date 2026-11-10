@@ -36,23 +36,24 @@ export async function saveTemplateView(slug: string, view: unknown): Promise<Act
 }
 
 export type TemplateViewData =
-  | { kind: "builtin"; generatorId: string; params: Record<string, unknown>; view: ViewSettings | null }
-  | { kind: "imported"; templateId: string; flat: FlatDielineData; fold: FoldSetup; view: ViewSettings | null };
+  | { kind: "builtin"; generatorId: string; params: Record<string, unknown>; view: ViewSettings | null; productImage: string | null }
+  | { kind: "imported"; templateId: string; flat: FlatDielineData; fold: FoldSetup; view: ViewSettings | null; productImage: string | null };
 
 /** What the 3D view editor needs for one template (loaded when the editor opens). */
 export async function loadTemplateViewData(slug: string): Promise<{ ok: true; data: TemplateViewData } | { ok: false; message: string }> {
   await requireSuperAdmin();
   const s = slugParam.safeParse(slug);
   if (!s.success) return { ok: false, message: "Invalid request." };
-  const row = await db.template.findUnique({ where: { id: s.data }, select: { source: true, viewSettings: true } });
+  const row = await db.template.findUnique({ where: { id: s.data }, select: { source: true, viewSettings: true, productImageKey: true } });
   if (!row) return { ok: false, message: "Template not found." };
+  const productImage = row.productImageKey ? `/api/templates/${s.data}/product-image?v=${row.productImageKey.slice("templates/".length, -4)}` : null;
   if (row.source === "svg") {
     const src = await loadImportedSource(s.data);
     if (!src) return { ok: false, message: "Template not found." };
     if (!src.fold) return { ok: false, message: "This template has no 3D fold yet. Set it up first." };
-    return { ok: true, data: { kind: "imported", templateId: src.templateId, flat: src.flat, fold: src.fold, view: readViewSettings(row.viewSettings) } };
+    return { ok: true, data: { kind: "imported", templateId: src.templateId, flat: src.flat, fold: src.fold, view: readViewSettings(row.viewSettings), productImage } };
   }
   const preset = getPreset(s.data);
   if (!preset) return { ok: false, message: "Template not found." };
-  return { ok: true, data: { kind: "builtin", generatorId: preset.generatorId, params: { ...preset.defaults }, view: readViewSettings(row.viewSettings) } };
+  return { ok: true, data: { kind: "builtin", generatorId: preset.generatorId, params: { ...preset.defaults }, view: readViewSettings(row.viewSettings), productImage } };
 }

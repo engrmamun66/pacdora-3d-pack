@@ -43,12 +43,13 @@ export async function deleteTemplate(slug: string): Promise<ActionResult> {
   await requireSuperAdmin();
   const s = slugParam.safeParse(slug);
   if (!s.success) return { ok: false, message: "Invalid request." };
-  const t = await db.template.findUnique({ where: { id: s.data }, select: { source: true, backgroundKey: true, _count: { select: { projects: true } } } });
+  const t = await db.template.findUnique({ where: { id: s.data }, select: { source: true, backgroundKey: true, productImageKey: true, _count: { select: { projects: true } } } });
   if (!t) return { ok: false, message: "Template not found." };
   if (t.source !== "svg") return { ok: false, message: "Built-in templates cannot be deleted. Hide it instead." };
   if (t._count.projects > 0) return { ok: false, message: `${t._count.projects} customer project(s) use this template. Hide it instead of deleting.` };
   await db.template.delete({ where: { id: s.data } });
   if (t.backgroundKey) await storage.delete(t.backgroundKey).catch(() => undefined); // the picture goes with the template
+  if (t.productImageKey) await storage.delete(t.productImageKey).catch(() => undefined);
   refresh(s.data);
   return { ok: true, message: "Template deleted." };
 }
