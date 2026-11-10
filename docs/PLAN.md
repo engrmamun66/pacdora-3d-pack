@@ -668,7 +668,9 @@ Ignored line styles stay dropped from geometry, exports and 3D. In the template 
 
 ### Dieline page redesign (template and project pages)
 
-- Same page for `/template/dieline/[slug]` and `/projects/[id]`: top bar (home mark, title, hamburger menu, saved/not-saved cloud, "Design Online", copy-link, "Download the dieline"), one scrolling settings panel on the left (no icon rail), sheet in the middle, 3D + file formats on the right.
+- Same page for `/template/dieline/[slug]` and `/projects/[id]`: top bar (home mark, title, hamburger menu, saved/not-saved cloud, "Design Online", copy-link, "Download the dieline"), a vertical menu on the left (Dielines, Basic, Info, More) with the panel of the chosen item, sheet in the middle, 3D + file formats on the right.
 - Hamburger menu: project name (rename), Create new project, My projects, Account, Homepage, Log out, Delete project (edit mode). Add to favorites, Move, Make a copy, AI generations and Language are shown disabled ("Soon"): not built yet.
 - "Design Online": creates the project and opens the editor (`createProject` reads `next=editor`); in edit mode it links to the editor, and "Save changes" saves.
 - Materials: four families with sub items (`components/dielines/units.ts`): fixed thickness for standard paperboards, editable thickness with a suggested range for flutes and "Custom ..." items. Shown in mm or inch. Thickness feeds the engine; it changes the sheet in Size mode "Inner" (fold allowance = allowanceFactor x thickness), not in "Manufacture". Families/grades outside a template's thickness range are hidden.
+- Left menu: Dielines (pick another dieline, loaded on demand by `loadTemplatePicker`), Basic (size, material, thickness, size mode), Info (description, checks), More (structure, print, flaps; only if the template has such fields).
+- Info tab ("Dieline info"): Model ID (template id), Dimensions (Manufacturing / Inner / Outer from the allowance rule), statistics (design area with bleed, cut length, crease length); checks and built-in-default notes below, collapsed. Math in `components/dielines/info-math.ts` (tested).

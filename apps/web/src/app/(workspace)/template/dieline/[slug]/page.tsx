@@ -39,6 +39,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
         generatorId={IMPORTED_GENERATOR_ID}
         imported={{ templateId: imported.templateId, flat: imported.flat, fold: imported.fold }}
         initialView={readViewSettings(row.viewSettings)}
+        modelId={row.id}
         title={row.name}
         description={row.description}
         initialName={row.name}
@@ -56,6 +57,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
       mode={{ kind: "create", presetId: preset.id }}
       generatorId={preset.generatorId}
       initialView={readViewSettings(row.viewSettings)}
+      modelId={row.id}
       title={row.name}
       description={row.description}
       initialName={row.name}

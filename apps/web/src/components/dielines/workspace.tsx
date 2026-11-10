@@ -2,7 +2,7 @@
 
 import { useActionState, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Info } from "lucide-react";
+import { Box, CircleAlert, CircleEllipsis, Ruler, type LucideIcon } from "lucide-react";
 import { ParamValidationError, createImportedGenerator, scaleImportedPaths, getGenerator, type DielineGeometry, type FlatDieline, type FoldSetup, type ParamDescriptor, type ParamGroup } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { STYLE, dielineViewBox, renderDielineSvg } from "@packaging/render-svg";
@@ -12,7 +12,10 @@ import { svgDataUrl } from "@/lib/dieline-preview";
 import { pathData } from "@/lib/template-import";
 import { createProject, createProjectDraft, updateProject, type DesignState } from "@/app/(app)/projects/actions";
 import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
+import { DielineInfo } from "./dieline-info";
+import { boxSizes, dielineStats } from "./info-math";
 import { DielineTopBar } from "./dieline-top-bar";
+import { TemplatePicker } from "./template-picker";
 import { MaterialPicker, ParamField, ThicknessField } from "./settings-fields";
 import { DIELINE_TOGGLES, SheetCanvas, type ViewToggles } from "./sheet-canvas";
 import { DOWNLOAD_FORMATS, FormatCard, FoldPreview, type DownloadFormat } from "./side-cards";
@@ -32,7 +35,11 @@ interface Props {
   description: string;
   initialName: string;
   initialParams: Record<string, unknown>;
+  /** Template id shown as "Model ID" in the info tab. */
+  modelId: string;
 }
+
+type TabId = "dielines" | "basic" | "info" | "more";
 
 const IDLE: DesignState = { ok: false, message: null, issues: [] };
 
@@ -63,7 +70,7 @@ function saveBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-export function DielineWorkspace({ mode, generatorId, imported, initialView = null, title, description, initialName, initialParams }: Props) {
+export function DielineWorkspace({ mode, generatorId, imported, initialView = null, title, description, initialName, initialParams, modelId }: Props) {
   const router = useRouter();
   const gen = useMemo(() => (imported ? createImportedGenerator(imported.templateId, imported.flat as FlatDieline, imported.fold ?? null) : getGenerator(generatorId)), [generatorId, imported]);
   const [values, setValues] = useState<Values>(() =>
@@ -71,6 +78,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   );
   const [name, setName] = useState(initialName);
   const [unit, setUnit] = useState<Unit>("mm");
+  const [tab, setTab] = useState<TabId>("basic");
   const [toggles, setToggles] = useState<ViewToggles>({ bleed: true, safe: false, glue: true, dimensions: true, labels: false, reference: false });
   const [progress, setProgress] = useState(initialView?.progress ?? 1);
   const thickness = gen.params.find((p): p is ParamDescriptor & { kind: "number" } => p.key === "thickness" && p.kind === "number");
@@ -261,6 +269,23 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   ];
   const issueText = result.error ?? (otherIssues.length ? otherIssues.map((i) => `${i.path}: ${i.message}`).join("; ") : state.message);
   const issueOk = state.ok && !result.error && !otherIssues.length;
+  const num = (k: string) => (typeof resolved[k] === "number" ? (resolved[k] as number) : null);
+  // The factor the customer typed (only used in Inner mode), else the engine's default of 1.
+  const typedAllowance = Number(values.allowanceFactor);
+  const allowance = (values.allowanceFactor ?? "").trim() !== "" && Number.isFinite(typedAllowance) ? typedAllowance : 1;
+  const [bw, bd, bh, bt] = [num("width"), num("depth"), num("height"), num("thickness")];
+  const boxDims =
+    bw !== null && bd !== null && bh !== null && bt !== null
+      ? boxSizes([bw, bd, bh], typeof resolved.sizeMode === "string" ? resolved.sizeMode : "manufacture", bt, allowance)
+      : null;
+  const hasMore = extraGroups.some(({ group }) => fields(group, (p) => p.key !== "sizeMode").length > 0);
+  const railTabs: { id: TabId; label: string; icon: LucideIcon }[] = [
+    { id: "dielines", label: "Dielines", icon: Box },
+    { id: "basic", label: "Basic", icon: Ruler },
+    { id: "info", label: "Info", icon: CircleAlert },
+    ...(hasMore ? [{ id: "more" as const, label: "More", icon: CircleEllipsis }] : []),
+  ];
+  const activeTab: TabId = railTabs.some((t) => t.id === tab) ? tab : "basic";
 
   return (
     <div className="flex min-h-dvh flex-col bg-background lg:h-dvh">
@@ -291,85 +316,102 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
       ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[372px_minmax(0,1fr)_340px]">
-        {/* Left: all settings in one scrolling panel (no icon rail) */}
-        <aside aria-label="Settings" className="flex min-h-0 flex-col gap-6 overflow-y-auto border-b p-4 lg:border-r lg:border-b-0">
-          <section aria-labelledby="sec-size" className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <h2 id="sec-size" className="font-semibold">Custom size</h2>
-              <div role="radiogroup" aria-label="Units" className="flex rounded-lg border p-0.5 text-xs">
-                {(["mm", "in"] as const).map((u) => (
-                  <button
-                    key={u}
-                    type="button"
-                    role="radio"
-                    aria-checked={unit === u}
-                    onClick={() => setUnit(u)}
-                    className={`rounded-md px-2.5 py-1 ${unit === u ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted"}`}
-                  >
-                    {u}
-                  </button>
-                ))}
+        {/* Left: vertical menu (Dielines, Basic, Info, More) and the panel of the chosen one */}
+        <aside className="flex min-h-0 flex-col border-b lg:flex-row lg:border-r lg:border-b-0">
+          <div role="tablist" aria-label="Settings sections" aria-orientation="vertical" className="flex shrink-0 gap-1 overflow-x-auto border-b p-2 lg:w-[76px] lg:flex-col lg:overflow-visible lg:border-r lg:border-b-0">
+            {railTabs.map((t, i) => (
+              <div key={t.id} className="contents">
+                {t.id === "more" && i > 0 ? <span aria-hidden className="mx-1 my-1 hidden h-px bg-border lg:block" /> : null}
+                <button
+                  type="button"
+                  role="tab"
+                  id={`tab-${t.id}`}
+                  aria-selected={activeTab === t.id}
+                  aria-controls="settings-panel"
+                  onClick={() => setTab(t.id)}
+                  className={`flex min-w-16 flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-xs transition-colors ${activeTab === t.id ? "bg-primary/10 font-medium text-primary" : "text-foreground/80 hover:bg-muted"}`}
+                >
+                  <t.icon className="size-6" aria-hidden />
+                  {t.label}
+                </button>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">{sizeFields}</div>
-            {!(hasThickness && thickness) ? sizeMode : null}
-            {sheet ? <p className="text-xs text-muted-foreground">Flat sheet {(unit === "mm" ? sheet.w : sheet.w / 25.4).toFixed(unit === "mm" ? 1 : 2)} × {(unit === "mm" ? sheet.h : sheet.h / 25.4).toFixed(unit === "mm" ? 1 : 2)} {unit}, without bleed.</p> : null}
-          </section>
+            ))}
+          </div>
 
-          {hasThickness && thickness ? (
-            <section aria-labelledby="sec-material" className="flex flex-col gap-3 border-t pt-5">
-              <h2 id="sec-material" className="font-semibold">Choose material</h2>
-              <MaterialPicker types={materialTypes} typeId={material.typeId} gradeId={material.gradeId} unit={unit} onType={pickType} onGrade={pickGrade} />
-              <ThicknessField
-                p={thickness}
-                value={values.thickness || (typeof resolved.thickness === "number" ? String(resolved.thickness) : "")}
+          <div id="settings-panel" role="tabpanel" aria-labelledby={`tab-${activeTab}`} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4">
+            {activeTab === "dielines" ? (
+              <TemplatePicker currentId={mode.kind === "create" ? mode.presetId : ""} mode={mode.kind} />
+            ) : activeTab === "basic" ? (
+              <>
+                <section aria-labelledby="sec-size" className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <h2 id="sec-size" className="font-semibold">Custom size</h2>
+                    <div role="radiogroup" aria-label="Units" className="flex rounded-lg border p-0.5 text-xs">
+                      {(["mm", "in"] as const).map((u) => (
+                        <button
+                          key={u}
+                          type="button"
+                          role="radio"
+                          aria-checked={unit === u}
+                          onClick={() => setUnit(u)}
+                          className={`rounded-md px-2.5 py-1 ${unit === u ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted"}`}
+                        >
+                          {u}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">{sizeFields}</div>
+                  {!(hasThickness && thickness) ? sizeMode : null}
+                  {sheet ? <p className="text-xs text-muted-foreground">Flat sheet {(unit === "mm" ? sheet.w : sheet.w / 25.4).toFixed(unit === "mm" ? 1 : 2)} × {(unit === "mm" ? sheet.h : sheet.h / 25.4).toFixed(unit === "mm" ? 1 : 2)} {unit}, without bleed.</p> : null}
+                </section>
+
+                {hasThickness && thickness ? (
+                  <section aria-labelledby="sec-material" className="flex flex-col gap-3 border-t pt-5">
+                    <h2 id="sec-material" className="font-semibold">Choose material</h2>
+                    <MaterialPicker types={materialTypes} typeId={material.typeId} gradeId={material.gradeId} unit={unit} onType={pickType} onGrade={pickGrade} />
+                    <ThicknessField
+                      p={thickness}
+                      value={values.thickness || (typeof resolved.thickness === "number" ? String(resolved.thickness) : "")}
+                      unit={unit}
+                      grade={materialGrade}
+                      {...(issueFor("thickness") ? { error: issueFor("thickness")! } : {})}
+                      onChange={(v) => setValues((s) => ({ ...s, thickness: v }))}
+                    />
+                    {sizeMode}
+                    {fields("Material")}
+                  </section>
+                ) : null}
+              </>
+            ) : activeTab === "info" ? (
+              <DielineInfo
+                description={description}
+                modelId={modelId}
                 unit={unit}
-                grade={materialGrade}
-                {...(issueFor("thickness") ? { error: issueFor("thickness")! } : {})}
-                onChange={(v) => setValues((s) => ({ ...s, thickness: v }))}
+                stats={shown ? dielineStats(shown) : null}
+                sizes={boxDims}
+                overall={sheet}
+                checks={shown?.checks ?? []}
+                unverified={shown?.unverifiedDefaultsUsed ?? []}
               />
-              {sizeMode}
-              {fields("Material")}
-            </section>
-          ) : null}
-
-          {extraGroups.map(({ group, title: groupTitle, open }) => {
-            const list = fields(group, (p) => p.key !== "sizeMode");
-            if (list.length === 0) return null;
-            return (
-              <details key={group} open={open} className="group border-t pt-4">
-                <summary className="flex cursor-pointer list-none items-center justify-between font-semibold [&::-webkit-details-marker]:hidden">
-                  {groupTitle}
-                  <span aria-hidden className="text-base leading-none text-muted-foreground transition-transform group-open:rotate-180">⌄</span>
-                </summary>
-                <div className="mt-3 flex flex-col gap-3">{list}</div>
-              </details>
-            );
-          })}
-
-          <details className="group border-t pt-4">
-            <summary className="flex cursor-pointer list-none items-center justify-between font-semibold [&::-webkit-details-marker]:hidden">
-              <span className="flex items-center gap-2"><Info className="size-4" aria-hidden /> Info</span>
-              <span aria-hidden className="text-base leading-none text-muted-foreground transition-transform group-open:rotate-180">⌄</span>
-            </summary>
-            <div className="mt-3 flex flex-col gap-3">
-              <p className="text-sm text-muted-foreground">{description}</p>
-              {shown && shown.unverifiedDefaultsUsed.length > 0 ? (
-                <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                  Built-in defaults used for: {shown.unverifiedDefaultsUsed.join(", ")}. They are not taken from an industry standard; confirm them with your printer before production.
-                </div>
-              ) : null}
-              <h3 className="text-sm font-medium">Geometry checks</h3>
-              <ul className="flex flex-col gap-1.5 text-xs">
-                {(shown?.checks ?? []).map((c) => (
-                  <li key={c.name} className="flex gap-2">
-                    <span className={c.pass ? "text-green-700" : "font-semibold text-destructive"} aria-label={c.pass ? "Pass" : "Fail"}>{c.pass ? "✓" : "✗"}</span>
-                    <span><span className="font-medium">{c.name}</span>{c.detail ? <span className="text-muted-foreground"> — {c.detail}</span> : null}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </details>
+            ) : (
+              <>
+                {extraGroups.map(({ group, title: groupTitle, open }, i) => {
+                  const list = fields(group, (p) => p.key !== "sizeMode");
+                  if (list.length === 0) return null;
+                  return (
+                    <details key={group} open={open} className={`group ${i > 0 ? "border-t pt-4" : ""}`}>
+                      <summary className="flex cursor-pointer list-none items-center justify-between font-semibold [&::-webkit-details-marker]:hidden">
+                        {groupTitle}
+                        <span aria-hidden className="text-base leading-none text-muted-foreground transition-transform group-open:rotate-180">⌄</span>
+                      </summary>
+                      <div className="mt-3 flex flex-col gap-3">{list}</div>
+                    </details>
+                  );
+                })}
+              </>
+            )}
+          </div>
         </aside>
 
         {/* Centre: sheet */}

@@ -25,6 +25,7 @@ async function ProjectView({ params }: { params: PageProps<"/projects/[id]">["pa
       generatorId={project.doc.template.generatorId}
       {...(imported ? { imported: { templateId: imported.templateId, flat: imported.flat, fold: imported.fold } } : {})}
       initialView={readViewSettings(project.template.viewSettings)}
+      modelId={project.doc.template.presetId}
       title={project.name}
       description={`Last saved ${project.updatedAt.toISOString().replace("T", " ").slice(0, 16)} UTC`}
       initialName={project.name}
