@@ -29,8 +29,6 @@ async function ProjectView({ params }: { params: PageProps<"/projects/[id]">["pa
       description={`Last saved ${project.updatedAt.toISOString().replace("T", " ").slice(0, 16)} UTC`}
       initialName={project.name}
       initialParams={project.doc.template.params}
-      backHref="/projects"
-      backLabel="Projects"
     />
   );
 }

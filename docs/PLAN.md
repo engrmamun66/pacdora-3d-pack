@@ -665,3 +665,10 @@ Ignored line styles stay dropped from geometry, exports and 3D. In the template 
 - `/templates` moved to the `(site)` layout (site header kept, no dashboard sidebar): category list with counts on the left, 3-column card grid on the right.
 - Product image: in the 3D view editor (list dialog and template edit page) the admin presses "Save as product image". `CartonView.snapshot({width, height})` renders the box exactly as shown at 900 x 1200 px (PNG); `POST /api/doraadmin/template-product-image` stores it in `storage/templates/<uuid>.png` (`Template.productImageKey`, migration `20261110120000`); `GET /api/templates/[slug]/product-image` serves it to signed-in users. Replace and Remove work; deleting a template removes the file.
 - Card layout: dieline on the left (60%), product image on the right (40%, cropped to its middle: the editor draws dashed lines for that part). Without a picture the dieline fills the card.
+
+### Dieline page redesign (template and project pages)
+
+- Same page for `/template/dieline/[slug]` and `/projects/[id]`: top bar (home mark, title, hamburger menu, saved/not-saved cloud, "Design Online", copy-link, "Download the dieline"), one scrolling settings panel on the left (no icon rail), sheet in the middle, 3D + file formats on the right.
+- Hamburger menu: project name (rename), Create new project, My projects, Account, Homepage, Log out, Delete project (edit mode). Add to favorites, Move, Make a copy, AI generations and Language are shown disabled ("Soon"): not built yet.
+- "Design Online": creates the project and opens the editor (`createProject` reads `next=editor`); in edit mode it links to the editor, and "Save changes" saves.
+- Materials: four families with sub items (`components/dielines/units.ts`): fixed thickness for standard paperboards, editable thickness with a suggested range for flutes and "Custom ..." items. Shown in mm or inch. Thickness feeds the engine; it changes the sheet in Size mode "Inner" (fold allowance = allowanceFactor x thickness), not in "Manufacture". Families/grades outside a template's thickness range are hidden.

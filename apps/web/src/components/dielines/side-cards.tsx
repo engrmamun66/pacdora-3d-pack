@@ -47,7 +47,7 @@ export function FoldPreview({
     anim.current = requestAnimationFrame(step);
   };
   return (
-    <section aria-label="3D preview" className="overflow-hidden rounded-2xl border bg-muted/40">
+    <section aria-label="3D preview" className="shrink-0 overflow-hidden rounded-2xl border bg-muted/40">
       <CartonView ref={viewRef} className="h-56 w-full" geo={geo} texture={null} textureRect={null} progress={progress} outsideColor={color} insideColor="#c8a97e" initialView={initialView} />
       <div className="flex items-center gap-2 border-t bg-background px-3 py-2 text-xs">
         <label className="flex flex-1 items-center gap-2">
@@ -82,8 +82,6 @@ export function FormatCard({
   onProfile,
   checks,
   unverified,
-  busy,
-  onDownload,
   result,
 }: {
   /** Formats offered (the 3D model is left out for flat-only dielines). */
@@ -94,15 +92,13 @@ export function FormatCard({
   onProfile: (p: string) => void;
   checks: { pass: number; total: number };
   unverified: readonly string[];
-  busy: boolean;
-  onDownload: () => void;
   result: { ok: boolean; title: string; notes: string[] } | null;
 }) {
   const meta = DOWNLOAD_FORMATS.find((f) => f.value === format)!;
   const profiles = ILLUSTRATOR_PROFILES.filter((p) => p.ai);
   const effective = profiles.some((p) => p.id === profile) ? profile : profiles[0]!.id;
   return (
-    <section aria-label="Download" className="flex flex-col gap-4 rounded-2xl border p-4">
+    <section aria-label="Download" className="flex shrink-0 flex-col gap-4 rounded-2xl border p-4">
       <h2 className="font-semibold">File formats</h2>
       <div role="radiogroup" aria-label="File format" className="grid grid-cols-2 gap-2">
         {formats.map((f) => (
@@ -133,14 +129,7 @@ export function FormatCard({
         </div>
       ) : null}
 
-      <button
-        type="button"
-        disabled={busy}
-        onClick={onDownload}
-        className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/80 disabled:opacity-50"
-      >
-        {busy ? "Preparing…" : `Download ${meta.ext}`}
-      </button>
+      <p className="text-xs text-muted-foreground">Press <span className="font-medium text-foreground">Download the dieline</span> at the top to get the {meta.label} file ({meta.ext}).</p>
 
       {result ? (
         <div role={result.ok ? "status" : "alert"} className={`rounded-md border px-3 py-2 text-sm ${result.ok ? "" : "border-destructive/40 bg-destructive/10 text-destructive"}`}>

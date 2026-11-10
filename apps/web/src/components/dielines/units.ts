@@ -34,9 +34,14 @@ export function withUnitLabels(geo: DielineGeometry, unit: Unit): DielineGeometr
 
 export interface MaterialGrade {
   readonly id: string;
-  readonly label: string;
-  /** Typical caliper, mm. Typical value only: confirm with the board supplier. */
+  /** Name without the thickness, e.g. "210g white paperboard". */
+  readonly name: string;
+  /** Caliper in mm. For a grade that is not `fixed`, the starting value. */
   readonly thickness: number;
+  /** True: the material decides the thickness. False: the customer may change it (see `suggest`). */
+  readonly fixed: boolean;
+  /** Suggested range (mm) for a grade whose thickness can be changed. */
+  readonly suggest?: readonly [number, number];
 }
 export interface MaterialType {
   readonly id: string;
@@ -46,10 +51,16 @@ export interface MaterialType {
   readonly grades: readonly MaterialGrade[];
 }
 
+const fixed = (id: string, name: string, thickness: number): MaterialGrade => ({ id, name, thickness, fixed: true });
+const adjustable = (id: string, name: string, thickness: number, suggest: readonly [number, number]): MaterialGrade => ({ id, name, thickness, fixed: false, suggest });
+const mid = (r: readonly [number, number]) => Math.round(((r[0] + r[1]) / 2) * 10) / 10;
+
+export const CUSTOM_GRADE = "custom";
+
 /**
- * Generic board families with typical calipers. These are approximations of
- * common industry values, not supplier data. Corrugated stops at single wall
- * (A-flute) because the engine accepts board up to 5 mm.
+ * Board families and grades (calipers in mm). Typical values, not supplier data.
+ * A fixed grade sets the board thickness; a flute or a "Custom ..." grade lets the customer type it.
+ * The thickness feeds the engine, which adds `allowanceFactor x thickness` at the folds.
  */
 export const MATERIAL_TYPES: readonly MaterialType[] = [
   {
@@ -57,9 +68,12 @@ export const MATERIAL_TYPES: readonly MaterialType[] = [
     label: "White paperboard",
     color: "#f4f1ea",
     grades: [
-      { id: "wp-250", label: "250 g (0.35 mm)", thickness: 0.35 },
-      { id: "wp-300", label: "300 g (0.42 mm)", thickness: 0.42 },
-      { id: "wp-350", label: "350 g (0.5 mm)", thickness: 0.5 },
+      fixed("wp-210", "210g white paperboard", 0.27),
+      fixed("wp-250", "250g white paperboard", 0.35),
+      fixed("wp-300", "300g white paperboard", 0.42),
+      fixed("wp-350", "350g white paperboard", 0.5),
+      fixed("wp-400", "400g white paperboard", 0.55),
+      adjustable(CUSTOM_GRADE, "Custom white paperboard", 1.5, [0.2, 0.8]),
     ],
   },
   {
@@ -67,8 +81,10 @@ export const MATERIAL_TYPES: readonly MaterialType[] = [
     label: "Kraft paperboard",
     color: "#c9a574",
     grades: [
-      { id: "kp-250", label: "250 g (0.33 mm)", thickness: 0.33 },
-      { id: "kp-350", label: "350 g (0.46 mm)", thickness: 0.46 },
+      fixed("kp-190", "190g kraft paperboard", 0.26),
+      fixed("kp-250", "250g kraft paperboard", 0.33),
+      fixed("kp-350", "350g kraft paperboard", 0.46),
+      adjustable(CUSTOM_GRADE, "Custom kraft paperboard", 0.5, [0.2, 0.8]),
     ],
   },
   {
@@ -76,8 +92,9 @@ export const MATERIAL_TYPES: readonly MaterialType[] = [
     label: "Art paper",
     color: "#fbfbf8",
     grades: [
-      { id: "ap-200", label: "200 g (0.2 mm)", thickness: 0.2 },
-      { id: "ap-350", label: "350 g (0.32 mm)", thickness: 0.32 },
+      fixed("ap-200", "200g art paper", 0.2),
+      fixed("ap-350", "350g art paper", 0.32),
+      adjustable(CUSTOM_GRADE, "Custom art paper", 0.2, [0.2, 0.5]),
     ],
   },
   {
@@ -85,23 +102,48 @@ export const MATERIAL_TYPES: readonly MaterialType[] = [
     label: "Corrugated board",
     color: "#c9a574",
     grades: [
-      { id: "cb-n", label: "N-flute (0.5 mm)", thickness: 0.5 },
-      { id: "cb-f", label: "F-flute (0.8 mm)", thickness: 0.8 },
-      { id: "cb-e", label: "E-flute (1.5 mm)", thickness: 1.5 },
-      { id: "cb-b", label: "B-flute (3 mm)", thickness: 3 },
-      { id: "cb-c", label: "C-flute (4 mm)", thickness: 4 },
-      { id: "cb-a", label: "A-flute (4.8 mm)", thickness: 4.8 },
+      adjustable("cb-n", "N-flute", mid([0.8, 1]), [0.8, 1]),
+      adjustable("cb-f", "F-flute", mid([1, 1.2]), [1, 1.2]),
+      adjustable("cb-e", "E-flute", 1.5, [1.1, 2]),
+      adjustable("cb-b", "B-flute", 2.8, [2.5, 3]),
+      adjustable(CUSTOM_GRADE, "Custom corrugated board", 1.5, [0.8, 3]),
     ],
   },
 ];
 
-export const CUSTOM_GRADE = "custom";
+const trim = (n: number, digits: number) => String(Math.round(n * 10 ** digits) / 10 ** digits);
 
-/** Starting selection for a stored thickness: the first grade with that caliper, else custom in the closest family. */
-export function materialFor(thickness: number): { typeId: string; gradeId: string } {
-  for (const t of MATERIAL_TYPES) {
-    const g = t.grades.find((x) => Math.abs(x.thickness - thickness) < 1e-9);
+/** A length in mm shown in the chosen unit: "0.27 mm" or "0.0106 in". */
+export function fmtLength(mm: number, unit: Unit): string {
+  return unit === "mm" ? `${trim(mm, 3)} mm` : `${trim(mm / MM_PER_INCH, 4)} in`;
+}
+
+/** A range in mm shown in the chosen unit: "0.8~3 mm". */
+export function fmtRange(r: readonly [number, number], unit: Unit): string {
+  const f = (v: number) => (unit === "mm" ? trim(v, 3) : trim(v / MM_PER_INCH, 4));
+  return `${f(r[0])}~${f(r[1])} ${unit}`;
+}
+
+/** Label of a grade in the sub-item list; a fixed grade shows its thickness. */
+export const gradeLabel = (g: MaterialGrade, unit: Unit): string => (g.fixed ? `${g.name} (${fmtLength(g.thickness, unit)})` : g.name);
+
+/**
+ * The families and grades a template can use. A grade is offered when its thickness fits the
+ * template's range (a slotted shipping box takes corrugated board, not 0.3 mm paperboard);
+ * a family only when it has at least one such grade that is not "Custom".
+ */
+export function materialsFor(min: number, max: number): MaterialType[] {
+  const ok = (g: MaterialGrade) => g.thickness >= min - 1e-9 && g.thickness <= max + 1e-9;
+  return MATERIAL_TYPES.map((t) => ({ ...t, grades: t.grades.filter(ok) })).filter((t) => t.grades.some((g) => g.id !== CUSTOM_GRADE));
+}
+
+/** Starting selection for a stored thickness: the first fixed grade with that caliper, else "Custom" in the closest family. */
+export function materialFor(thickness: number, types: readonly MaterialType[] = MATERIAL_TYPES): { typeId: string; gradeId: string } {
+  for (const t of types) {
+    const g = t.grades.find((x) => x.fixed && Math.abs(x.thickness - thickness) < 1e-9);
     if (g) return { typeId: t.id, gradeId: g.id };
   }
-  return { typeId: thickness >= 0.8 ? "corrugated" : "white-paperboard", gradeId: CUSTOM_GRADE };
+  const pref = thickness >= 0.8 ? "corrugated" : "white-paperboard";
+  const t = types.find((x) => x.id === pref && x.grades.some((g) => g.id === CUSTOM_GRADE)) ?? types.find((x) => x.grades.some((g) => g.id === CUSTOM_GRADE)) ?? types[0]!;
+  return { typeId: t.id, gradeId: t.grades.some((g) => g.id === CUSTOM_GRADE) ? CUSTOM_GRADE : t.grades[0]!.id };
 }

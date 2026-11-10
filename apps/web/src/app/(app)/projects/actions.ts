@@ -95,7 +95,8 @@ async function insertProject(formData: FormData): Promise<{ id: string } | Desig
 /** Create a project from a catalogue preset, then open it. */
 export async function createProject(_prev: DesignState, formData: FormData): Promise<DesignState> {
   const r = await insertProject(formData);
-  if ("id" in r) redirect(`/projects/${r.id}`);
+  // "Design online" creates the project and goes straight to the artwork editor.
+  if ("id" in r) redirect(formData.get("next") === "editor" ? `/editor/${r.id}` : `/projects/${r.id}`);
   return r;
 }
 

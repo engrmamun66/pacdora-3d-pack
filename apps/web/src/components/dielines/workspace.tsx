@@ -1,27 +1,25 @@
 "use client";
 
 import { useActionState, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Boxes, Info, Layers, Printer, Ruler, SlidersHorizontal, type LucideIcon } from "lucide-react";
+import { Info } from "lucide-react";
 import { ParamValidationError, createImportedGenerator, scaleImportedPaths, getGenerator, type DielineGeometry, type FlatDieline, type FoldSetup, type ParamDescriptor, type ParamGroup } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { STYLE, dielineViewBox, renderDielineSvg } from "@packaging/render-svg";
-import { DeleteProjectButton } from "@/components/projects/delete-project-button";
 import { notify } from "@/lib/notify";
 import type { ViewSettings } from "@/lib/view-settings";
 import { svgDataUrl } from "@/lib/dieline-preview";
 import { pathData } from "@/lib/template-import";
 import { createProject, createProjectDraft, updateProject, type DesignState } from "@/app/(app)/projects/actions";
 import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
-import { MaterialPicker, ParamField } from "./settings-fields";
+import { DielineTopBar } from "./dieline-top-bar";
+import { MaterialPicker, ParamField, ThicknessField } from "./settings-fields";
 import { DIELINE_TOGGLES, SheetCanvas, type ViewToggles } from "./sheet-canvas";
 import { DOWNLOAD_FORMATS, FormatCard, FoldPreview, type DownloadFormat } from "./side-cards";
-import { CUSTOM_GRADE, MATERIAL_TYPES, materialFor, withUnitLabels, type Unit } from "./units";
+import { materialFor, materialsFor, withUnitLabels, type Unit } from "./units";
 
 type Values = Record<string, string>;
 type Mode = { kind: "create"; presetId: string } | { kind: "edit"; projectId: string };
-type TabId = ParamGroup | "Info";
 
 interface Props {
   mode: Mode;
@@ -34,18 +32,7 @@ interface Props {
   description: string;
   initialName: string;
   initialParams: Record<string, unknown>;
-  backHref: string;
-  backLabel: string;
 }
-
-const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
-  { id: "Dimensions", label: "Size", icon: Ruler },
-  { id: "Structure", label: "Structure", icon: Boxes },
-  { id: "Material", label: "Material", icon: Layers },
-  { id: "Print", label: "Print", icon: Printer },
-  { id: "Flaps (advanced)", label: "Flaps", icon: SlidersHorizontal },
-  { id: "Info", label: "Info", icon: Info },
-];
 
 const IDLE: DesignState = { ok: false, message: null, issues: [] };
 
@@ -76,7 +63,7 @@ function saveBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-export function DielineWorkspace({ mode, generatorId, imported, initialView = null, title, description, initialName, initialParams, backHref, backLabel }: Props) {
+export function DielineWorkspace({ mode, generatorId, imported, initialView = null, title, description, initialName, initialParams }: Props) {
   const router = useRouter();
   const gen = useMemo(() => (imported ? createImportedGenerator(imported.templateId, imported.flat as FlatDieline, imported.fold ?? null) : getGenerator(generatorId)), [generatorId, imported]);
   const [values, setValues] = useState<Values>(() =>
@@ -84,12 +71,13 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   );
   const [name, setName] = useState(initialName);
   const [unit, setUnit] = useState<Unit>("mm");
-  const [tab, setTab] = useState<TabId>("Dimensions");
   const [toggles, setToggles] = useState<ViewToggles>({ bleed: true, safe: false, glue: true, dimensions: true, labels: false, reference: false });
   const [progress, setProgress] = useState(initialView?.progress ?? 1);
+  const thickness = gen.params.find((p): p is ParamDescriptor & { kind: "number" } => p.key === "thickness" && p.kind === "number");
+  const materialTypes = useMemo(() => (thickness ? materialsFor(thickness.min, thickness.max) : []), [thickness]);
   const [material, setMaterial] = useState(() => {
     const t = Number(initialParams.thickness);
-    return materialFor(Number.isFinite(t) && t > 0 ? t : 0.5);
+    return materialFor(Number.isFinite(t) && t > 0 ? t : 0.5, materialTypes.length ? materialTypes : undefined);
   });
   const [format, setFormat] = useState<DownloadFormat>("pdf");
   const [profile, setProfile] = useState("cc");
@@ -151,25 +139,23 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   const otherIssues = (result.issues ?? []).filter((i) => !gen.params.some((p) => i.path === p.key));
   const resolved = (shown?.params ?? {}) as Record<string, unknown>;
   const sheet = shown ? { w: shown.cutBounds.max.x - shown.cutBounds.min.x, h: shown.cutBounds.max.y - shown.cutBounds.min.y } : null;
-  const hasThickness = gen.params.some((p) => p.key === "thickness");
+  const hasThickness = thickness !== undefined && materialTypes.length > 0;
 
-  const materialType = MATERIAL_TYPES.find((t) => t.id === material.typeId) ?? MATERIAL_TYPES[0]!;
+  const materialType = materialTypes.find((t) => t.id === material.typeId) ?? materialTypes[0];
+  const materialGrade = materialType?.grades.find((g) => g.id === material.gradeId) ?? materialType?.grades[0];
   const setThickness = (mm: number) => setValues((s) => ({ ...s, thickness: String(mm) }));
   const pickType = (typeId: string) => {
-    const t = MATERIAL_TYPES.find((x) => x.id === typeId)!;
-    const g = t.grades[0]!;
+    const g = materialTypes.find((x) => x.id === typeId)?.grades[0];
+    if (!g) return;
     setMaterial({ typeId, gradeId: g.id });
-    if (hasThickness) setThickness(g.thickness);
+    setThickness(g.thickness);
   };
   const pickGrade = (gradeId: string) => {
     setMaterial({ typeId: material.typeId, gradeId });
-    const g = materialType.grades.find((x) => x.id === gradeId);
-    if (g && hasThickness) setThickness(g.thickness);
+    const g = materialType?.grades.find((x) => x.id === gradeId);
+    if (g) setThickness(g.thickness);
   };
-  const customThickness = material.gradeId === CUSTOM_GRADE;
-
-  const tabs = TABS.filter((t) => t.id === "Info" || gen.params.some((p) => p.group === t.id));
-  const activeTab = tabs.some((t) => t.id === tab) ? tab : tabs[0]!.id;
+  const boardColor = materialType?.color ?? "#c9a574";
 
   const formData = (projectId?: string) => {
     const fd = new FormData();
@@ -249,9 +235,9 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
     ...(toggles.safe ? [{ label: "Safe area", color: STYLE.safe.stroke, dashed: true }] : []),
   ];
 
-  const fields = (group: ParamGroup) =>
+  const fields = (group: ParamGroup, only?: (p: ParamDescriptor) => boolean) =>
     gen.params
-      .filter((p) => p.group === group && (!p.showWhen || values[p.showWhen.key] === p.showWhen.equals) && !(group === "Material" && hasThickness && p.key === "thickness"))
+      .filter((p) => p.group === group && (only?.(p) ?? true) && (!p.showWhen || values[p.showWhen.key] === p.showWhen.equals) && !(group === "Material" && hasThickness && p.key === "thickness"))
       .map((p) => (
         <ParamField
           key={p.key}
@@ -263,145 +249,127 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
           onChange={(v) => setValues((s) => ({ ...s, [p.key]: v }))}
         />
       ));
-  const thickness = gen.params.find((p) => p.key === "thickness");
+
+  const sizeFields = fields("Dimensions", (p) => p.kind === "number" && p.key !== "sizeMode");
+  // "Size mode" sits under the thickness (it decides whether the thickness changes the sheet).
+  const sizeModeGroup = gen.params.find((p) => p.key === "sizeMode")?.group;
+  const sizeMode = sizeModeGroup ? fields(sizeModeGroup, (p) => p.key === "sizeMode") : [];
+  const extraGroups: { group: ParamGroup; title: string; open: boolean }[] = [
+    { group: "Structure", title: "Structure", open: true },
+    { group: "Print", title: "Print", open: true },
+    { group: "Flaps (advanced)", title: "Flaps (advanced)", open: false },
+  ];
+  const issueText = result.error ?? (otherIssues.length ? otherIssues.map((i) => `${i.path}: ${i.message}`).join("; ") : state.message);
+  const issueOk = state.ok && !result.error && !otherIssues.length;
 
   return (
     <div className="flex min-h-dvh flex-col bg-background lg:h-dvh">
       <form id="project-form" action={formAction}>
         {mode.kind === "create" ? <input type="hidden" name="presetId" value={mode.presetId} /> : <input type="hidden" name="projectId" value={mode.projectId} />}
+        <input type="hidden" name="name" value={name} />
         <input type="hidden" name="params" value={JSON.stringify(input)} />
       </form>
 
-      <header className="flex flex-wrap items-center gap-3 border-b px-4 py-2">
-        <Link href={backHref} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground" aria-label={`Back to ${backLabel}`}>
-          <ArrowLeft className="size-4" /> {backLabel}
-        </Link>
-        <span className="h-5 w-px bg-border" aria-hidden />
-        <div className="min-w-0">
-          <h1 className="truncate text-sm font-semibold">{title}</h1>
-          <p className="hidden truncate text-xs text-muted-foreground sm:block">{description}</p>
-        </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <label className="sr-only" htmlFor="project-name">Project name</label>
-          <input
-            id="project-name"
-            form="project-form"
-            name="name"
-            value={name}
-            maxLength={120}
-            required
-            onChange={(e) => setName(e.target.value)}
-            className="h-9 w-44 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          />
-          {mode.kind === "edit" ? (
-            <Link href={`/editor/${mode.projectId}`} className="inline-flex h-9 items-center rounded-lg border px-3 text-sm font-medium hover:bg-muted">
-              Design artwork
-            </Link>
-          ) : null}
-          {mode.kind === "edit" ? <DeleteProjectButton projectId={mode.projectId} name={name} /> : null}
-          <button
-            type="submit"
-            form="project-form"
-            disabled={pending || !result.geo}
-            className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80 disabled:opacity-50"
-          >
-            {pending ? "Saving…" : mode.kind === "create" ? "Create project" : "Save changes"}
-          </button>
-        </div>
-      </header>
+      <DielineTopBar
+        title={title}
+        name={name}
+        onName={setName}
+        mode={mode.kind}
+        projectId={mode.kind === "edit" ? mode.projectId : null}
+        saving={pending}
+        canSave={Boolean(result.geo) && name.trim().length > 0}
+        downloading={busy}
+        canDownload={Boolean(result.geo)}
+        downloadLabel="Download the dieline"
+        onDownload={() => void download()}
+      />
 
-      {state.message || result.error || otherIssues.length ? (
-        <div role={state.ok && !result.error && !otherIssues.length ? "status" : "alert"} className={`border-b px-4 py-2 text-sm ${state.ok && !result.error && !otherIssues.length ? "text-green-700" : "bg-destructive/10 text-destructive"}`}>
-          {result.error ?? (otherIssues.length ? otherIssues.map((i) => `${i.path}: ${i.message}`).join("; ") : state.message)}
+      {issueText ? (
+        <div role={issueOk ? "status" : "alert"} className={`border-b px-4 py-2 text-sm ${issueOk ? "text-green-700" : "bg-destructive/10 text-destructive"}`}>
+          {issueText}
         </div>
       ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[372px_minmax(0,1fr)_340px]">
-        {/* Left: icon rail + settings */}
-        <aside className="flex min-h-0 flex-col border-b lg:flex-row lg:border-r lg:border-b-0">
-          <div role="tablist" aria-label="Settings sections" aria-orientation="vertical" className="flex shrink-0 gap-1 overflow-x-auto border-b p-2 lg:w-[72px] lg:flex-col lg:border-r lg:border-b-0">
-            {tabs.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                id={`tab-${t.id}`}
-                aria-selected={activeTab === t.id}
-                aria-controls="settings-panel"
-                onClick={() => setTab(t.id)}
-                className={`flex min-w-16 flex-col items-center gap-1 rounded-lg px-2 py-2 text-xs transition-colors ${activeTab === t.id ? "bg-primary/10 font-medium text-primary" : "text-muted-foreground hover:bg-muted"}`}
-              >
-                <t.icon className="size-5" aria-hidden />
-                {t.label}
-              </button>
-            ))}
-          </div>
+        {/* Left: all settings in one scrolling panel (no icon rail) */}
+        <aside aria-label="Settings" className="flex min-h-0 flex-col gap-6 overflow-y-auto border-b p-4 lg:border-r lg:border-b-0">
+          <section aria-labelledby="sec-size" className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h2 id="sec-size" className="font-semibold">Custom size</h2>
+              <div role="radiogroup" aria-label="Units" className="flex rounded-lg border p-0.5 text-xs">
+                {(["mm", "in"] as const).map((u) => (
+                  <button
+                    key={u}
+                    type="button"
+                    role="radio"
+                    aria-checked={unit === u}
+                    onClick={() => setUnit(u)}
+                    className={`rounded-md px-2.5 py-1 ${unit === u ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted"}`}
+                  >
+                    {u}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">{sizeFields}</div>
+            {!(hasThickness && thickness) ? sizeMode : null}
+            {sheet ? <p className="text-xs text-muted-foreground">Flat sheet {(unit === "mm" ? sheet.w : sheet.w / 25.4).toFixed(unit === "mm" ? 1 : 2)} × {(unit === "mm" ? sheet.h : sheet.h / 25.4).toFixed(unit === "mm" ? 1 : 2)} {unit}, without bleed.</p> : null}
+          </section>
 
-          <div id="settings-panel" role="tabpanel" aria-labelledby={`tab-${activeTab}`} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-            {activeTab === "Dimensions" ? (
-              <>
-                <div className="flex items-center justify-between">
-                  <h2 className="font-semibold">Custom size</h2>
-                  <div role="radiogroup" aria-label="Units" className="flex rounded-lg border p-0.5 text-xs">
-                    {(["mm", "in"] as const).map((u) => (
-                      <button
-                        key={u}
-                        type="button"
-                        role="radio"
-                        aria-checked={unit === u}
-                        onClick={() => setUnit(u)}
-                        className={`rounded-md px-2.5 py-1 ${unit === u ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-                      >
-                        {u}
-                      </button>
-                    ))}
-                  </div>
+          {hasThickness && thickness ? (
+            <section aria-labelledby="sec-material" className="flex flex-col gap-3 border-t pt-5">
+              <h2 id="sec-material" className="font-semibold">Choose material</h2>
+              <MaterialPicker types={materialTypes} typeId={material.typeId} gradeId={material.gradeId} unit={unit} onType={pickType} onGrade={pickGrade} />
+              <ThicknessField
+                p={thickness}
+                value={values.thickness || (typeof resolved.thickness === "number" ? String(resolved.thickness) : "")}
+                unit={unit}
+                grade={materialGrade}
+                {...(issueFor("thickness") ? { error: issueFor("thickness")! } : {})}
+                onChange={(v) => setValues((s) => ({ ...s, thickness: v }))}
+              />
+              {sizeMode}
+              {fields("Material")}
+            </section>
+          ) : null}
+
+          {extraGroups.map(({ group, title: groupTitle, open }) => {
+            const list = fields(group, (p) => p.key !== "sizeMode");
+            if (list.length === 0) return null;
+            return (
+              <details key={group} open={open} className="group border-t pt-4">
+                <summary className="flex cursor-pointer list-none items-center justify-between font-semibold [&::-webkit-details-marker]:hidden">
+                  {groupTitle}
+                  <span aria-hidden className="text-base leading-none text-muted-foreground transition-transform group-open:rotate-180">⌄</span>
+                </summary>
+                <div className="mt-3 flex flex-col gap-3">{list}</div>
+              </details>
+            );
+          })}
+
+          <details className="group border-t pt-4">
+            <summary className="flex cursor-pointer list-none items-center justify-between font-semibold [&::-webkit-details-marker]:hidden">
+              <span className="flex items-center gap-2"><Info className="size-4" aria-hidden /> Info</span>
+              <span aria-hidden className="text-base leading-none text-muted-foreground transition-transform group-open:rotate-180">⌄</span>
+            </summary>
+            <div className="mt-3 flex flex-col gap-3">
+              <p className="text-sm text-muted-foreground">{description}</p>
+              {shown && shown.unverifiedDefaultsUsed.length > 0 ? (
+                <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  Built-in defaults used for: {shown.unverifiedDefaultsUsed.join(", ")}. They are not taken from an industry standard; confirm them with your printer before production.
                 </div>
-                {fields("Dimensions")}
-                {sheet ? <p className="text-xs text-muted-foreground">Flat sheet {(unit === "mm" ? sheet.w : sheet.w / 25.4).toFixed(unit === "mm" ? 1 : 2)} × {(unit === "mm" ? sheet.h : sheet.h / 25.4).toFixed(unit === "mm" ? 1 : 2)} {unit}, without bleed.</p> : null}
-              </>
-            ) : activeTab === "Material" ? (
-              <>
-                <h2 className="font-semibold">Choose material</h2>
-                {hasThickness ? <MaterialPicker typeId={material.typeId} gradeId={material.gradeId} onType={pickType} onGrade={pickGrade} /> : null}
-                {thickness ? (
-                  <ParamField
-                    p={thickness}
-                    value={values.thickness ?? ""}
-                    unit={unit}
-                    disabled={!customThickness}
-                    {...(issueFor("thickness") ? { error: issueFor("thickness")! } : {})}
-                    onChange={(v) => setValues((s) => ({ ...s, thickness: v }))}
-                  />
-                ) : null}
-                {fields("Material")}
-              </>
-            ) : activeTab === "Info" ? (
-              <>
-                <h2 className="font-semibold">Info</h2>
-                <p className="text-sm text-muted-foreground">{description}</p>
-                {shown && shown.unverifiedDefaultsUsed.length > 0 ? (
-                  <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                    Built-in defaults used for: {shown.unverifiedDefaultsUsed.join(", ")}. They are not taken from an industry standard; confirm them with your printer before production.
-                  </div>
-                ) : null}
-                <h3 className="text-sm font-medium">Geometry checks</h3>
-                <ul className="flex flex-col gap-1.5 text-xs">
-                  {(shown?.checks ?? []).map((c) => (
-                    <li key={c.name} className="flex gap-2">
-                      <span className={c.pass ? "text-green-700" : "font-semibold text-destructive"} aria-label={c.pass ? "Pass" : "Fail"}>{c.pass ? "✓" : "✗"}</span>
-                      <span><span className="font-medium">{c.name}</span>{c.detail ? <span className="text-muted-foreground"> — {c.detail}</span> : null}</span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : (
-              <>
-                <h2 className="font-semibold">{activeTab === "Flaps (advanced)" ? "Flaps (advanced)" : activeTab}</h2>
-                {fields(activeTab)}
-              </>
-            )}
-          </div>
+              ) : null}
+              <h3 className="text-sm font-medium">Geometry checks</h3>
+              <ul className="flex flex-col gap-1.5 text-xs">
+                {(shown?.checks ?? []).map((c) => (
+                  <li key={c.name} className="flex gap-2">
+                    <span className={c.pass ? "text-green-700" : "font-semibold text-destructive"} aria-label={c.pass ? "Pass" : "Fail"}>{c.pass ? "✓" : "✗"}</span>
+                    <span><span className="font-medium">{c.name}</span>{c.detail ? <span className="text-muted-foreground"> — {c.detail}</span> : null}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </details>
         </aside>
 
         {/* Centre: sheet */}
@@ -414,11 +382,11 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
           {!result.geo && shown ? <p role="status" className="border-t px-4 py-1.5 text-xs text-destructive">Showing the last valid shape.</p> : null}
         </main>
 
-        {/* Right: 3D + download */}
+        {/* Right: 3D + file formats */}
         <aside className="flex min-h-0 flex-col gap-4 overflow-y-auto border-t p-4 lg:border-t-0 lg:border-l">
-          {shown && foldable ? <FoldPreview initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={materialType.color} viewRef={viewRef} /> : null}
+          {shown && foldable ? <FoldPreview initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} /> : null}
           {shown && !foldable ? (
-            <section aria-label="Imported dieline" className="rounded-2xl border p-4 text-sm">
+            <section aria-label="Imported dieline" className="shrink-0 rounded-2xl border p-4 text-sm">
               <h2 className="font-semibold">Imported dieline</h2>
               <p className="mt-1 text-xs text-muted-foreground">The shape is fixed: you can change its overall size, bleed and artwork. The 3D fold preview is not available for it.</p>
             </section>
@@ -434,8 +402,6 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
             onProfile={setProfile}
             checks={{ pass: shown?.checks.filter((c) => c.pass).length ?? 0, total: shown?.checks.length ?? 0 }}
             unverified={shown?.unverifiedDefaultsUsed ?? []}
-            busy={busy}
-            onDownload={() => void download()}
             result={dl}
           />
         </aside>

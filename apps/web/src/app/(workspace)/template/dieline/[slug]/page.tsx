@@ -43,8 +43,6 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
         description={row.description}
         initialName={row.name}
         initialParams={importedStartParams(imported.flat)}
-        backHref="/templates"
-        backLabel="Templates"
       />
     );
   }
@@ -62,8 +60,6 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
       description={row.description}
       initialName={row.name}
       initialParams={{ ...preset.defaults, ...prefill }}
-      backHref="/templates"
-      backLabel="Templates"
     />
   );
 }
