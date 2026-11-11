@@ -7,6 +7,7 @@ import type { Artwork, ProjectDoc } from "@packaging/schema";
 import { renderArtwork, type RasterRect } from "@/components/editor/artwork-raster";
 import type { ViewSettings } from "@/lib/view-settings";
 import { CartonView, type CartonViewHandle } from "./carton-view";
+import { GridToggle } from "./grid-toggle";
 import { RotationControls } from "./rotation-controls";
 
 export type ThreeDSettings = ProjectDoc["threeD"];
@@ -78,6 +79,7 @@ export function Preview3D({
         outsideColor={settings.outsideColor}
         insideColor={settings.insideColor}
       />
+      <GridToggle viewRef={inner} />
       <RotationControls viewRef={inner} />
       <div className="flex flex-wrap items-center gap-3 border-t px-3 py-2 text-xs">
         <label className="flex items-center gap-2">

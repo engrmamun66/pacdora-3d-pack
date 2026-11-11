@@ -706,3 +706,12 @@ Ignored line styles stay dropped from geometry, exports and 3D. In the template 
 - `RotationControls` (src/components/viewer3d/rotation-controls.tsx): three sliders in the top right corner of a 3D view (collapsed to an icon until opened), X = tilt up/down, Y = turn left/right, Z = roll (a real camera roll: camera.up is rolled and OrbitControls' private _quat/_quatInverse are updated to match, so mouse drags still turn about the screen's vertical; three is pinned at 0.187.0 for this; reset view clears it). They follow the camera while the box is dragged and move it when dragged (`getRotation/setRotation/onRotation` on `CartonViewHandle`). Added to the dieline page preview, the editor 3D preview and the admin fold preview. Not added to the home page hero (decorative) or the admin starting-view editor (already has Turn/Tilt fields).
 
 - Starting 3D view now includes roll (`rollDeg`, old saved views read as 0). Every output starts from the saved view: the dieline page and the editor/project 3D previews take the camera (turn, tilt, roll, zoom, move) from the template; new projects also start at the saved fold amount (`threeD.foldProgress` seeded in createProject).
+
+- The admin 3D fold preview (template edit page) opens with the saved Starting 3D view and follows it at once when it is saved or removed in the "Starting 3D view" section (`startView` state in the wizard, `onSaved` from `ViewSettingsInline`).
+
+- `GridToggle` (src/components/viewer3d/grid-toggle.tsx): icon button in the top left of the dieline-page, editor and admin fold 3D views; shows/hides a floor grid (cells are round mm sizes; `setGridVisible` on `CartonViewHandle`). Off by default.
+
+### Ground panel (which panel is the bottom in 3D)
+- `FoldSetup.groundId` / `FoldTree.groundId` (optional; absent = automatic, old behaviour). `buildCartonModel` turns the closed carton so that panel's printed side faces down, keeps the front facing the viewer, and re-centres / re-measures it (`size` follows the turn).
+- Admin 3D fold step: "Bottom (on the ground)" select under the 3D preview, plus a "Put this on the ground" button on a selected panel. Saved with the fold (`foldSchema` in template-actions).
+- Existing templates are unchanged until a ground panel is chosen. A saved Starting 3D view was set for the old orientation, so set it again after choosing a ground panel.

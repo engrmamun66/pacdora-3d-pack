@@ -55,6 +55,11 @@ export interface FoldSetup {
   readonly hinges: readonly FoldHingeSpec[];
   /** Extra pieces (lid, insert...), each with its own base panel. Absent or empty for a single piece. */
   readonly parts?: readonly FoldPartSpec[];
+  /**
+   * The panel that lies flat on the ground in 3D, printed side down (the bottom of the box).
+   * Absent = automatic.
+   */
+  readonly groundId?: string;
 }
 
 export const MAX_FOLD_PARTS = 8;
@@ -87,6 +92,7 @@ export function validateFoldSetup(setup: FoldSetup): string[] {
   }
   for (const id of dupPanels) problems.push(`Panel id "${id}" is used more than once.`);
   if (!byId.has(setup.rootId)) problems.push(`The root panel "${setup.rootId}" does not exist.`);
+  if (setup.groundId !== undefined && !byId.has(setup.groundId)) problems.push(`The ground panel "${setup.groundId}" does not exist.`);
 
   for (const p of panels) {
     const poly = p.polygon ?? [];

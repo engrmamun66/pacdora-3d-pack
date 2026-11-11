@@ -232,6 +232,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
     let hinges: Hinge[];
     let rootId: string;
     let parts: FoldPart[] = [];
+    let groundId: string | undefined;
     let safeAreas: SafeArea[];
     if (fold) {
       panels = fold.panels.map((p) => {
@@ -249,6 +250,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
         foldOrder: h.order,
       }));
       rootId = fold.rootId;
+      groundId = fold.groundId;
       parts = (fold.parts ?? []).map((q) => ({ rootId: q.rootId, placement: q.placement }));
       // A guide belongs to the panel that contains its first point (else its centre, else the root panel).
       safeAreas = guides.map((polygon) => {
@@ -285,7 +287,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
       engineVersion: ENGINE_VERSION,
       params: { width, bleed },
       unverifiedDefaultsUsed: [],
-      foldTree: { rootId, panels, hinges, ...(parts.length > 0 ? { parts } : {}) },
+      foldTree: { rootId, panels, hinges, ...(parts.length > 0 ? { parts } : {}), ...(groundId ? { groundId } : {}) },
       cutLoops,
       slitLines,
       creaseLines,

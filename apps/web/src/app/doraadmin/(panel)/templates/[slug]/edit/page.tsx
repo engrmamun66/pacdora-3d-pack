@@ -6,6 +6,7 @@ import type { ImportedDieline, Role } from "@packaging/svg-import";
 import { TemplateWizard } from "@/components/templates-admin/template-wizard";
 import { db } from "@/server/db";
 import { requireSuperAdmin } from "@/server/admin";
+import { readViewSettings } from "@/lib/view-settings";
 import { readSvgColors } from "@/server/site-settings";
 
 export const metadata = { title: "Edit template" };
@@ -15,7 +16,7 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
   const { slug } = await params;
   if (slug.length > 80) notFound();
   const [t, categories] = await Promise.all([
-    db.template.findUnique({ where: { id: slug }, select: { id: true, name: true, description: true, published: true, sortOrder: true, defaultThickness: true, generatorId: true, backgroundKey: true, updatedAt: true, source: true, geometry: true, categories: { select: { id: true } } } }),
+    db.template.findUnique({ where: { id: slug }, select: { id: true, name: true, description: true, published: true, sortOrder: true, defaultThickness: true, generatorId: true, backgroundKey: true, viewSettings: true, updatedAt: true, source: true, geometry: true, categories: { select: { id: true } } } }),
     db.templateCategory.findMany({ orderBy: [{ kind: "asc" }, { sortOrder: "asc" }, { name: "asc" }], select: { id: true, kind: true, name: true } }),
   ]);
   if (!t) notFound();
@@ -51,6 +52,7 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
           fold: g?.fold ?? null,
           referenceStyles: g?.referenceStyles ?? [],
           material,
+          view: readViewSettings(t.viewSettings),
         }}
       />
     </div>

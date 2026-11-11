@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, X } from "lucide-react";
 import { loadTemplateViewData, type TemplateViewData } from "@/app/doraadmin/template-view-actions";
+import type { ViewSettings } from "@/lib/view-settings";
 import { ViewSettingsEditor } from "./view-settings-editor";
 
 type State = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; data: TemplateViewData };
@@ -59,7 +60,7 @@ export function ViewSettingsButton({ slug, name, className }: { slug: string; na
 }
 
 /** The same editor inside a page section: it loads the saved template when the admin asks for it. */
-export function ViewSettingsInline({ slug }: { slug: string }) {
+export function ViewSettingsInline({ slug, onSaved }: { slug: string; onSaved?: (v: ViewSettings | null) => void }) {
   const [state, setState] = useState<State | null>(null);
   const load = () => {
     setState({ status: "loading" });
@@ -76,5 +77,5 @@ export function ViewSettingsInline({ slug }: { slug: string }) {
   }
   if (state.status === "loading") return <p className="py-10 text-center text-sm text-muted-foreground">Loading…</p>;
   if (state.status === "error") return <p role="alert" className="text-sm text-destructive">{state.message}</p>;
-  return <ViewSettingsEditor slug={slug} data={state.data} />;
+  return <ViewSettingsEditor slug={slug} data={state.data} {...(onSaved ? { onSaved } : {})} />;
 }

@@ -13,6 +13,29 @@ const worldBox = (o: THREE.Object3D) => {
   return new THREE.Box3().setFromObject(o);
 };
 
+describe("buildCartonModel with a ground panel", () => {
+  const onFront = { ...geo, foldTree: { ...geo.foldTree, groundId: "front" } };
+
+  it("lays the chosen panel flat on the floor, printed side down, and centres the carton", () => {
+    const { object, size } = buildCartonModel(onFront, { progress: 1 });
+    // The front panel (100 x 150) is the bottom now, so the carton is 50 tall.
+    expect(size.x).toBeCloseTo(100, 4);
+    expect(size.y).toBeCloseTo(50, 4);
+    expect(size.z).toBeCloseTo(150, 4);
+    const box = worldBox(object);
+    expect(box.getSize(new THREE.Vector3()).y).toBeCloseTo(50, 4);
+    expect(box.getCenter(new THREE.Vector3()).length()).toBeLessThan(1e-4);
+    const front = worldBox(object.getObjectByName("front")!);
+    expect(front.min.y).toBeCloseTo(-25, 4);
+    expect(front.max.y).toBeCloseTo(-25, 4);
+  });
+
+  it("keeps the usual orientation when no ground panel is set", () => {
+    const { size } = buildCartonModel(geo, { progress: 1 });
+    expect(size.y).toBeCloseTo(150, 4);
+  });
+});
+
 describe("buildCartonModel", () => {
   it("has one group per panel with outside, inside and edge objects", () => {
     const { object } = buildCartonModel(geo);

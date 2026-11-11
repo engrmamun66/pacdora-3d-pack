@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FoldSetup } from "@packaging/dieline-engine";
-import { applyFoldSequence, compactOrders, depthOf, linesKey, makeMain, moveHinge, pieceOf, rootAt, rootsOf, sortedHinges, stepsOf, updateHinge, updatePanel } from "./fold-edit";
+import { applyFoldSequence, compactOrders, depthOf, linesKey, makeMain, moveHinge, pieceOf, rootAt, rootsOf, setGround, sortedHinges, stepsOf, updateHinge, updatePanel } from "./fold-edit";
 
 const sq = [0, 0, 10, 0, 10, 10, 0, 10];
 const setup: FoldSetup = {
@@ -109,5 +109,16 @@ describe("fold edits", () => {
     expect(applyFoldSequence(four, ["zzz", "h2", "h2"]).hinges.find((h) => h.id === "h2")!.order).toBe(1);
     expect(applyFoldSequence(four, [])).toBe(four);
     expect(four.hinges[0]!.order).toBe(1);
+  });
+});
+
+describe("setGround", () => {
+  it("sets, replaces and clears the ground panel", () => {
+    expect(setGround(setup, "b").groundId).toBe("b");
+    expect(setGround(setGround(setup, "b"), "a").groundId).toBe("a");
+    expect("groundId" in setGround(setGround(setup, "b"), null)).toBe(false);
+  });
+  it("ignores a panel that does not exist", () => {
+    expect("groundId" in setGround(setup, "zzz")).toBe(false);
   });
 });

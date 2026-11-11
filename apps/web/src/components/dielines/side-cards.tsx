@@ -5,6 +5,7 @@ import { Box, Check, DraftingCompass, FileText, PenTool, Play, RotateCcw, Spline
 import type { DielineGeometry } from "@packaging/dieline-engine";
 import { ILLUSTRATOR_PROFILES } from "@packaging/render-print/profiles";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
+import { GridToggle } from "@/components/viewer3d/grid-toggle";
 import { RotationControls } from "@/components/viewer3d/rotation-controls";
 import type { ViewSettings } from "@/lib/view-settings";
 
@@ -122,6 +123,7 @@ export function FoldPreview({
           <RotateCcw className="size-3.5" />
         </button>
       </div>
+      <GridToggle viewRef={viewRef} />
       <RotationControls viewRef={viewRef} />
     </section>
   );

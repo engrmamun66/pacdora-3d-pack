@@ -1,15 +1,17 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ListOrdered, Play, RotateCcw, Wand2 } from "lucide-react";
 import { createImportedGenerator, detectFoldSetup, importedDefaults, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldHingeSpec, type FoldSetup, type PanelRole, type PartPlacementMode } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
-import { applyFoldSequence, compactOrders, depthOf, makeMain, moveHinge, pieceOf, rootAt, rootsOf, sortedHinges, stepsOf, updateHinge, updatePanel, updatePart } from "@/lib/fold-edit";
+import { applyFoldSequence, compactOrders, depthOf, makeMain, moveHinge, pieceOf, rootAt, rootsOf, setGround, sortedHinges, stepsOf, updateHinge, updatePanel, updatePart } from "@/lib/fold-edit";
 import { HingeList } from "./hinge-list";
 import { PanelKindHelp } from "./panel-kind-help";
 import { QuickSortBar } from "./quick-sort-bar";
+import type { ViewSettings } from "@/lib/view-settings";
+import { GridToggle } from "@/components/viewer3d/grid-toggle";
 import { RotationControls } from "@/components/viewer3d/rotation-controls";
 import { pathData } from "@/lib/template-import";
 
@@ -62,6 +64,7 @@ export function FoldSetupEditor({
   onChange,
   stale,
   barBottom = "0.75rem",
+  startView = null,
 }: {
   flat: FlatDielineData;
   fold: FoldSetup | null;
@@ -70,15 +73,31 @@ export function FoldSetupEditor({
   stale: boolean;
   /** Distance of the quick sort bar from the window bottom, so it clears a sticky save bar. */
   barBottom?: string;
+  /** The template's saved starting 3D view: the preview opens with it, returns to it on reset, and moves to it when it changes. */
+  startView?: ViewSettings | null;
 }) {
   const [sel, setSel] = useState<Sel>(null);
   // Quick sort: while on, a click on a fold line (or the panel it swings) adds it to `queue`.
   const [quick, setQuick] = useState(false);
   const [queue, setQueue] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<readonly string[]>([]);
-  const [progress, setProgress] = useState(1);
+  const [progress, setProgress] = useState(startView?.progress ?? 1);
   const view = useRef<CartonViewHandle>(null);
   const anim = useRef<number | null>(null);
+
+  // A newly saved (or removed) starting view shows in this preview at once: the fold amount is set while rendering, the camera in an effect.
+  const [seenView, setSeenView] = useState(startView);
+  if (seenView !== startView) {
+    setSeenView(startView);
+    if (startView) setProgress(startView.progress);
+  }
+  const cameraView = useRef(startView);
+  useEffect(() => {
+    if (cameraView.current === startView) return;
+    cameraView.current = startView;
+    if (startView) view.current?.setView(startView);
+    else view.current?.resetView();
+  }, [startView]);
 
   const detect = () => {
     const r = detectFoldSetup(flat as FlatDieline);
@@ -236,7 +255,7 @@ export function FoldSetupEditor({
         <div className="flex min-w-0 flex-col gap-2">
           <div className="relative overflow-hidden rounded-xl border bg-muted/40">
             {geo.geo ? (
-              <CartonView ref={view} className="h-[min(420px,50vh)] w-full" geo={geo.geo} texture={null} textureRect={null} progress={progress} outsideColor="#ffffff" insideColor="#c8a97e" />
+              <CartonView ref={view} className="h-[min(420px,50vh)] w-full" geo={geo.geo} texture={null} textureRect={null} progress={progress} outsideColor="#ffffff" insideColor="#c8a97e" initialView={startView} />
             ) : (
               <p className="grid h-48 place-items-center px-4 text-center text-sm text-muted-foreground">{geo.error ?? "Fix the problems above to see the 3D preview."}</p>
             )}
@@ -249,7 +268,15 @@ export function FoldSetupEditor({
               <button type="button" aria-label="Play the fold step by step" className="grid size-7 place-items-center rounded-md border hover:bg-muted" onClick={play}><Play className="size-3.5" /></button>
               <button type="button" aria-label="Reset camera" className="grid size-7 place-items-center rounded-md border hover:bg-muted" onClick={() => view.current?.resetView()}><RotateCcw className="size-3.5" /></button>
             </div>
-            {geo.geo ? <RotationControls viewRef={view} /> : null}
+            {geo.geo ? <><GridToggle viewRef={view} /><RotationControls viewRef={view} /></> : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+            <label htmlFor="ground-panel" className="font-medium">Bottom (on the ground)</label>
+            <select id="ground-panel" className={`${field} min-w-0 flex-1 basis-40`} value={fold.groundId ?? ""} onChange={(e) => onChange(setGround(fold, e.target.value || null))}>
+              <option value="">Automatic</option>
+              {fold.panels.map((p) => <option key={p.id} value={p.id}>{p.label || p.id}</option>)}
+            </select>
+            <p className="basis-full text-xs text-muted-foreground">The panel chosen here lies flat on the floor with its printed side down, like the bottom of a box. Pick the panel that is the base, and the box stands up on it.</p>
           </div>
           <p className="text-xs text-muted-foreground">Steps fold one after another. If the box looks wrong, check the angles, directions and steps on the left.</p>
         </div>
@@ -324,7 +351,8 @@ export function FoldSetupEditor({
           <p className="text-sm text-muted-foreground sm:col-span-2 lg:col-span-4">
             Size: <strong className="text-foreground tabular-nums">{panelSize(selPanel.polygon).w.toFixed(1)} × {panelSize(selPanel.polygon).h.toFixed(1)} mm</strong> at the imported size, {selPanel.polygon.length / 2} corners.
           </p>
-          <div className="self-end pb-1">
+          <div className="flex flex-col items-start gap-2 self-end pb-1">
+            <Button type="button" variant={fold.groundId === selPanel.id ? "default" : "outline"} size="sm" aria-pressed={fold.groundId === selPanel.id} onClick={() => onChange(setGround(fold, fold.groundId === selPanel.id ? null : selPanel.id))}>{fold.groundId === selPanel.id ? "On the ground (click to undo)" : "Put this on the ground"}</Button>
             {roots.includes(selPanel.id) ? <p className="text-sm text-muted-foreground">{parts.length ? `This is the base panel of the ${pieceName(selPanel.id).toLowerCase()}.` : "This is the base panel."}</p> : <Button type="button" variant="outline" size="sm" onClick={() => onChange(rootAt(fold, selPanel.id))}>{parts.length ? `Make this the base of its piece (${pieceName(roots[Math.max(0, pieceOf(fold, selPanel.id))]!).toLowerCase()})` : "Make this the base (stays flat)"}</Button>}
           </div>
         </section>

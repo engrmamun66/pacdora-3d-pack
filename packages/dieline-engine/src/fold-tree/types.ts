@@ -73,6 +73,11 @@ export interface FoldTree {
   /** Extra separately folded pieces, placed relative to the main body (see FoldPart). */
   readonly parts?: readonly FoldPart[];
   /**
+   * The panel that lies flat on the ground in 3D (its printed side faces down), e.g. the bottom
+   * of a box. Absent = automatic (the sheet's own up direction, or the main base with extra parts).
+   */
+  readonly groundId?: string;
+  /**
    * Cut segments lying on an edge shared by two panels (e.g. tuck-lock slits at
    * the ends of a tuck crease). Each must coincide exactly with one shared edge.
    */

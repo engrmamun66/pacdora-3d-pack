@@ -179,3 +179,10 @@ export function linesKey(flat: { cut: readonly { pts: readonly number[]; closed:
   }
   return (h >>> 0).toString(36);
 }
+
+/** Choose the panel that lies flat on the ground in 3D (its printed side down); null = automatic. */
+export function setGround(fold: FoldSetup, panelId: string | null): FoldSetup {
+  const { groundId: _old, ...rest } = fold;
+  void _old;
+  return panelId && fold.panels.some((p) => p.id === panelId) ? { ...rest, groundId: panelId } : rest;
+}

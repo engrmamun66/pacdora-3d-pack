@@ -53,15 +53,30 @@ const LAYER: Readonly<Partial<Record<string, number>>> = {
   "lock-flap": 2,
 };
 
-function foldedBounds(geo: DielineGeometry, world: Map<string, Mat4>) {
+function foldedBounds(geo: DielineGeometry, world: Map<string, Mat4>, turn?: THREE.Quaternion) {
   const box = new THREE.Box3();
   for (const p of geo.foldTree.panels) {
     for (const v of flattenOutline(panelOutline(p))) {
       const q = transformPoint(world.get(p.id)!, flatPoint(v));
-      box.expandByPoint(new THREE.Vector3(q.x, q.y, q.z));
+      const point = new THREE.Vector3(q.x, q.y, q.z);
+      box.expandByPoint(turn ? point.applyQuaternion(turn) : point);
     }
   }
   return box;
+}
+
+/**
+ * Turn that puts the chosen ground panel flat on the floor, printed side down, starting from the
+ * usual "flat frame is y-down" flip so the front keeps facing the viewer. Null if no ground panel is set.
+ */
+function groundTurn(geo: DielineGeometry, closed: Map<string, Mat4>): THREE.Quaternion | null {
+  const id = geo.foldTree.groundId;
+  const m = id ? closed.get(id) : undefined;
+  if (!m) return null;
+  const n = transformDirection(m, PRINTED_NORMAL);
+  const flip = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
+  const down = new THREE.Vector3(n.x, n.y, n.z).normalize().applyQuaternion(flip);
+  return new THREE.Quaternion().setFromUnitVectors(down, new THREE.Vector3(0, -1, 0)).multiply(flip);
 }
 
 /**
@@ -74,13 +89,17 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
   if (opts.outsideTexture && !opts.textureRect) throw new Error("textureRect is required with outsideTexture");
   const world = foldTree(geo.foldTree, opts);
   // Centre on the CLOSED carton so the model does not jump while animating.
-  const closedBox = foldedBounds(geo, foldTree(geo.foldTree, { progress: 1 }));
+  const closedWorld = foldTree(geo.foldTree, { progress: 1 });
+  const closedBox = foldedBounds(geo, closedWorld);
   const centre = closedBox.getCenter(new THREE.Vector3());
   const flatSize = closedBox.getSize(new THREE.Vector3());
-  // With extra parts (a lid on a box) the parts are stacked along the sheet's normal, so that is "up":
-  // the model stands on its base. Without parts the sheet's own y axis is up, as always.
-  const standUp = (geo.foldTree.parts?.length ?? 0) > 0;
-  const size = standUp ? new THREE.Vector3(flatSize.x, flatSize.z, flatSize.y) : flatSize;
+  // A chosen ground panel decides which way is down. Otherwise, with extra parts (a lid on a box) the
+  // parts are stacked along the sheet's normal, so that is "up": the model stands on its base.
+  // Without parts the sheet's own y axis is up, as always.
+  const turn = groundTurn(geo, closedWorld);
+  const turnedBox = turn ? foldedBounds(geo, closedWorld, turn) : null;
+  const standUp = !turn && (geo.foldTree.parts?.length ?? 0) > 0;
+  const size = turnedBox ? turnedBox.getSize(new THREE.Vector3()) : standUp ? new THREE.Vector3(flatSize.x, flatSize.z, flatSize.y) : flatSize;
   const gap = opts.layerGap ?? 0.3;
   const rect = opts.textureRect;
 
@@ -100,7 +119,13 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
   const edgeMat = new THREE.LineBasicMaterial({ color: opts.edgeColor ?? 0x444444 });
 
   const inner = new THREE.Group();
-  inner.position.set(-centre.x, -centre.y, -centre.z);
+  if (turn && turnedBox) {
+    // Centre the turned carton: undo the turn on its bounding-box centre.
+    const c = turnedBox.getCenter(new THREE.Vector3()).applyQuaternion(turn.clone().invert());
+    inner.position.set(-c.x, -c.y, -c.z);
+  } else {
+    inner.position.set(-centre.x, -centre.y, -centre.z);
+  }
 
   for (const panel of geo.foldTree.panels) {
     const outline = flattenOutline(panelOutline(panel), 0.05); // arcs as fine polylines for display
@@ -155,7 +180,8 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
   const object = new THREE.Group();
   object.name = "carton";
   // Flat frame is y-down. Make it y-up with the print facing +z, or (with parts) stand it on its base.
-  object.rotation.x = standUp ? -Math.PI / 2 : Math.PI;
+  if (turn) object.quaternion.copy(turn);
+  else object.rotation.x = standUp ? -Math.PI / 2 : Math.PI;
   object.add(inner);
   return { object, size };
 }

@@ -98,6 +98,8 @@ interface StoredGeometry {
 
 const foldSchema = z.object({
   rootId: z.string().min(1).max(40),
+  /** The panel lying flat on the ground in 3D; absent = automatic. */
+  groundId: z.string().min(1).max(40).optional(),
   parts: z
     .array(
       z.object({

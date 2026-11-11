@@ -20,6 +20,7 @@ import { ViewSettingsInline } from "./view-settings-dialog";
 import { PageHeader } from "@/components/admin/page-header";
 import { linesKey } from "@/lib/fold-edit";
 import { colorRoles, type SvgColorSettings } from "@/lib/svg-colors";
+import type { ViewSettings } from "@/lib/view-settings";
 
 type Unit = "auto" | "mm" | "cm" | "in" | "pt" | "px";
 interface Options {
@@ -47,6 +48,8 @@ export interface WizardInitial {
   referenceStyles: string[];
   /** Built-in templates with a board thickness: the generator's limits (mm) and the saved default (null = the template's own). */
   material: { min: number; max: number; value: number | null } | null;
+  /** The saved starting 3D view (null = standard). The fold preview starts from it and follows it when it is saved. */
+  view: ViewSettings | null;
 }
 
 export interface WizardCategory {
@@ -94,6 +97,8 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   const [description, setDescription] = useState(initial.description);
   const [published, setPublished] = useState(initial.published);
   const [sortOrder, setSortOrder] = useState(initial.sortOrder);
+  // The starting 3D view: the fold preview below shows it, and changes to it (saved in its own section) show at once.
+  const [startView, setStartView] = useState<ViewSettings | null>(initial.view);
   const [defaultThickness, setDefaultThickness] = useState<number | null>(initial.material?.value ?? null);
   const [bgFile, setBgFile] = useState<File | null>(null);
   const [bgRemoved, setBgRemoved] = useState(false);
@@ -466,7 +471,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   ) : null;
   const foldSection = flat ? (
     <section aria-label="3D fold" className="flex flex-col gap-4">
-      <FoldSetupEditor flat={flat} fold={fold} stale={foldStale} barBottom={mode === "edit" ? "4.75rem" : "0.75rem"} onChange={(f) => { setFold(f); setFoldKey(flatKey); }} />
+      <FoldSetupEditor flat={flat} fold={fold} stale={foldStale} startView={startView} barBottom={mode === "edit" ? "4.75rem" : "0.75rem"} onChange={(f) => { setFold(f); setFoldKey(flatKey); }} />
     </section>
   ) : null;
   const detailsFields = (
@@ -629,7 +634,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
               <section id="sec-view" aria-labelledby="s-view" className={card}>
                 <h2 id="s-view" className="mb-1 text-lg font-semibold">Starting 3D view</h2>
                 <p className="mb-4 text-sm text-muted-foreground">Set how the 3D preview looks when a customer opens this template. It is saved on its own, not with the Save button below.{!builtin && !foldOk ? " Save the 3D fold first." : ""}</p>
-                <ViewSettingsInline slug={initial.slug} />
+                <ViewSettingsInline slug={initial.slug} onSaved={setStartView} />
               </section>
             ) : null}
           </div>

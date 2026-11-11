@@ -56,6 +56,9 @@ export interface CartonViewHandle {
   getRotation(): Rotation | null;
   /** Turn the camera to this tilt (x), turn (y) and/or roll (z), in degrees. Zoom and position are kept. */
   setRotation(r: Partial<Rotation>): void;
+  /** Show or hide a floor grid (10 mm-style cells) behind the carton. */
+  setGridVisible(on: boolean): void;
+  isGridVisible(): boolean;
   /** Be told when the camera moves (dragging, buttons, reset). Returns the way to stop. */
   onRotation(cb: (r: Rotation) => void): () => void;
   /**
@@ -89,6 +92,10 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     onViewChangeRef.current = onViewChange;
     progressRef.current = progress;
   });
+  const gridObj = useRef<THREE.GridHelper | null>(null);
+  const gridOn = useRef(false);
+  /** Cell size (mm) of the floor grid; set when the camera is framed. */
+  const gridStep = useRef(10);
   const rotationListeners = useRef(new Set<(r: Rotation) => void>());
   const rebuild = useRef<(p: number, hingeProgress?: Readonly<Record<string, number>>) => void>(() => {});
   const three = useRef<{
@@ -180,6 +187,28 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     return v ? { x: v.elevationDeg, y: v.azimuthDeg, z: v.rollDeg } : null;
   };
 
+  /** (Re)build the floor grid, or remove it. Cells are round millimetre sizes, so they read as a scale. */
+  const rebuildGrid = () => {
+    const t = three.current;
+    if (!t) return;
+    if (gridObj.current) {
+      t.scene.remove(gridObj.current);
+      gridObj.current.geometry.dispose();
+      (gridObj.current.material as THREE.Material).dispose();
+      gridObj.current = null;
+    }
+    if (!gridOn.current) return;
+    const cells = 40;
+    const g = new THREE.GridHelper(gridStep.current * cells, cells, 0x8f8f8a, 0xc4c4bf);
+    const m = g.material as THREE.LineBasicMaterial;
+    m.transparent = true;
+    m.opacity = 0.8;
+    m.depthWrite = false;
+    g.position.y = 0.3; // just under the carton's bottom, above the shadow plane
+    t.scene.add(g);
+    gridObj.current = g;
+  };
+
   const notifyRotation = () => {
     if (!rotationListeners.current.size) return;
     const r = getRotation();
@@ -191,6 +220,8 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     if (!t?.model) return;
     setCameraUp(new THREE.Vector3(0, 1, 0)); // back to upright
     const r = frameMm ?? Math.max(t.model.size.x, t.model.size.y, t.model.size.z);
+    gridStep.current = Math.max(5, Math.round(r / 4 / 10) * 10);
+    rebuildGrid();
     t.camera.position.set(r * 1.6, r * 1.3, r * 2.2);
     t.camera.near = r / 100;
     t.camera.far = r * 50;
@@ -213,6 +244,11 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     resetView: frame,
     getView,
     setView: (v) => applyView(v),
+    setGridVisible: (on) => {
+      gridOn.current = on;
+      rebuildGrid();
+    },
+    isGridVisible: () => gridOn.current,
     getRotation,
     setRotation: (r) => {
       const v = getView();
@@ -340,6 +376,11 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       controls.removeEventListener("change", onChange);
       renderer.setAnimationLoop(null);
       const t = three.current;
+      if (gridObj.current) {
+        gridObj.current.geometry.dispose();
+        (gridObj.current.material as THREE.Material).dispose();
+        gridObj.current = null;
+      }
       if (t?.model) disposeCartonModel(t.model);
       t?.tex?.dispose();
       ground.geometry.dispose();
