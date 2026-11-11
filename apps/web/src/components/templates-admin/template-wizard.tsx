@@ -17,6 +17,7 @@ import { RoleSampleButton } from "./role-sample";
 import { SvgPreviewButton } from "./svg-preview";
 import { FoldSetupEditor } from "./fold-setup-editor";
 import { ViewSettingsInline } from "./view-settings-dialog";
+import { PageHeader } from "@/components/admin/page-header";
 import { linesKey } from "@/lib/fold-edit";
 import { colorRoles, type SvgColorSettings } from "@/lib/svg-colors";
 
@@ -296,23 +297,37 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
             <h2 id="s-cat" className="text-lg font-semibold">{mode === "create" ? "Choose categories" : "Categories"}</h2>
             <p className="text-sm text-muted-foreground">A template can be in several: for example Food (by use) and Tuck End Boxes (by model). Pick at least one.</p>
           </div>
-          {(["use", "model"] as const).map((k) => (
-            <fieldset key={k} className="flex flex-col gap-2">
-              <legend className="mb-1 text-sm font-medium">{k === "use" ? "By uses" : "By models"}</legend>
-              <div className="flex flex-wrap gap-2">
-                {categories.filter((c) => c.kind === k).map((c) => {
-                  const on = categoryIds.includes(c.id);
-                  return (
-                    <label key={c.id} className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${on ? "border-primary bg-primary/5" : "hover:bg-muted"}`}>
-                      <input type="checkbox" className="sr-only" checked={on} onChange={() => toggleCategory(c.id)} />
-                      {on ? <Check className="size-3.5 text-primary" aria-hidden /> : null}
-                      {c.name}
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
-          ))}
+          <div className="flex flex-col divide-y">
+            {(["use", "model"] as const).map((k) => {
+              const group = categories.filter((c) => c.kind === k);
+              const picked = group.filter((c) => categoryIds.includes(c.id)).length;
+              return (
+                <fieldset key={k} className="flex flex-col gap-3 py-5 first:pt-0 last:pb-0">
+                  <legend className="float-left flex w-full items-center gap-2 text-sm font-medium">
+                    {k === "use" ? "By uses" : "By models"}
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-normal ${picked ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                      {picked ? `${picked} of ${group.length} selected` : `${group.length} options`}
+                    </span>
+                  </legend>
+                  <div className="flex flex-wrap gap-2">
+                    {group.map((c) => {
+                      const on = categoryIds.includes(c.id);
+                      return (
+                        <label
+                          key={c.id}
+                          className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm transition-colors has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50 ${on ? "border-primary bg-primary text-primary-foreground shadow-xs" : "bg-background hover:border-primary/50 hover:bg-primary/5"}`}
+                        >
+                          <input type="checkbox" className="sr-only" checked={on} onChange={() => toggleCategory(c.id)} />
+                          {on ? <Check className="size-3.5" strokeWidth={3} aria-hidden /> : null}
+                          {c.name}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              );
+            })}
+          </div>
         </section>
   );
   const svgSection = (
@@ -450,11 +465,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
         </section>
   ) : null;
   const foldSection = flat ? (
-    <section aria-labelledby="s-fold" className="flex flex-col gap-4">
-      <div>
-        <h2 id="s-fold" className="text-lg font-semibold">3D fold</h2>
-        <p className="text-sm text-muted-foreground">Tell us how the sheet folds into a box: which panel stays flat, which fold goes first, in which direction and by how many degrees. This is optional; without it the template is flat only.</p>
-      </div>
+    <section aria-label="3D fold" className="flex flex-col gap-4">
       <FoldSetupEditor flat={flat} fold={fold} stale={foldStale} onChange={(f) => { setFold(f); setFoldKey(flatKey); }} />
     </section>
   ) : null;
@@ -642,23 +653,26 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   // ---- create mode: the stepper
   return (
     <div className="flex flex-col gap-6">
-      <ol className="flex flex-wrap gap-2" aria-label="Steps">
+      <PageHeader title="Add template" description="Upload an SVG dieline, choose what each line means, and set how it folds in 3D." actions={
+      <ol className="flex max-w-full gap-1 overflow-x-auto rounded-xl border bg-card p-1 shadow-xs" aria-label="Steps">
         {steps.map((s, i) => (
-          <li key={s}>
+          <li key={s} className="shrink-0">
             <button
               type="button"
               disabled={i > step}
               onClick={() => setStep(i)}
               aria-current={i === step ? "step" : undefined}
-              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${i === step ? "border-primary bg-primary/5 font-medium" : i < step ? "hover:bg-muted" : "text-muted-foreground"}`}
+              className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm whitespace-nowrap transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${i === step ? "bg-accent font-medium text-accent-foreground" : i < step ? "text-foreground hover:bg-muted" : "cursor-not-allowed text-muted-foreground/70"}`}
             >
-              <span className={`grid size-5 place-items-center rounded-full text-xs ${i < step ? "bg-primary text-primary-foreground" : "border"}`}>{i < step ? <Check className="size-3" aria-hidden /> : i + 1}</span>
+              <span className={`grid size-5 place-items-center rounded-full text-xs ${i < step ? "bg-primary text-primary-foreground" : i === step ? "bg-primary text-primary-foreground" : "border"}`}>{i < step ? <Check className="size-3" strokeWidth={3} aria-hidden /> : i + 1}</span>
               {s}
             </button>
           </li>
         ))}
       </ol>
+      } />
 
+      <div className="rounded-2xl border bg-card p-5 shadow-xs sm:p-7">
       {stepName === "Categories" ? categoriesSection : null}
       {stepName === "SVG file" ? svgSection : null}
       {stepName === "Customize" ? customizeSection : null}
@@ -674,12 +688,12 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
         </section>
       ) : null}
 
-      <div className="flex items-center justify-between gap-3 border-t pt-4">
+      <div className="mt-7 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
         <div className="flex items-center gap-2">
           <Link href="/doraadmin/templates" className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">Cancel</Link>
         </div>
         <div className="flex items-center gap-3">
-          {blocker ? <span className="text-xs text-muted-foreground">{blocker}</span> : null}
+          {blocker ? <span className="text-sm text-muted-foreground">{blocker}</span> : stepName === "Categories" ? <span className="text-sm text-muted-foreground">{categoryIds.length} selected</span> : null}
           {step > 0 ? <Button type="button" variant="outline" className="h-10" onClick={() => setStep(step - 1)}>Back</Button> : null}
           {step < steps.length - 1 ? (
             <Button type="button" className="h-10" disabled={!canNext} onClick={() => setStep(step + 1)}>Next</Button>
@@ -689,6 +703,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
             </Button>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

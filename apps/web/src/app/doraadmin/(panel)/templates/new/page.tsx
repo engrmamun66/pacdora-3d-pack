@@ -1,4 +1,3 @@
-import { PageHeader } from "@/components/admin/page-header";
 import { TemplateWizard } from "@/components/templates-admin/template-wizard";
 import { db } from "@/server/db";
 import { requireSuperAdmin } from "@/server/admin";
@@ -12,7 +11,6 @@ export default async function NewTemplatePage() {
   const { settings: svgColors } = await readSvgColors();
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Add template" description="Upload an SVG dieline, choose what each line means, and set how it folds in 3D." />
       <TemplateWizard
         svgColors={svgColors}
         mode="create"
