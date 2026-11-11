@@ -114,8 +114,16 @@ export type WatermarkFormState = { ok: boolean; message: string | null };
 /** Save the watermark drawn inside the cut area of the dieline sheet. */
 export async function saveWatermark(_prev: WatermarkFormState, formData: FormData): Promise<WatermarkFormState> {
   const admin = await requireSuperAdmin();
-  const parsed = watermarkSchema.safeParse({ enabled: formData.get("enabled") === "on", text: String(formData.get("text") ?? "") });
-  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the watermark text." };
+  const field = (k: string) => String(formData.get(k) ?? "");
+  const parsed = watermarkSchema.safeParse({
+    enabled: field("enabled") === "on",
+    text: field("text"),
+    textColor: field("textColor"),
+    lineColor: field("lineColor"),
+    fontSize: Number(field("fontSize")),
+    lineWidth: Number(field("lineWidth")),
+  });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the watermark settings." };
   await db.siteSetting.upsert({
     where: { key: "watermark" },
     create: { key: "watermark", value: parsed.data, updatedById: admin.id },

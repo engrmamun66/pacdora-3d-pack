@@ -726,3 +726,4 @@ Ignored line styles stay dropped from geometry, exports and 3D. In the template 
 ### Watermark on the dieline sheet
 - Faint text on the diagonal lattice, drawn only inside the cut outline (`components/dielines/sheet-watermark.tsx`, clipped by the cut loops). On screen only: downloads stay clean.
 - Admin setting: Settings > Watermark (`/doraadmin/settings/watermark`): on/off and text (empty = `pacdorabd.com`). Stored in `site_setting` key `watermark` (`lib/watermark-settings.ts`); read per request by the dieline pages (`getWatermarkText`).
+- The look is set there too: text colour, line colour, font size (1.5-12 mm) and line thickness (0-2 mm, 0 = no lines), with a live preview and a reset button. The repeat grows with the font size, so bigger text never touches its neighbours.

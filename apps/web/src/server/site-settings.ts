@@ -2,7 +2,7 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "./db";
 import { DEFAULT_HERO, parseHeroSettings, type HeroSettings } from "@/lib/hero-settings";
-import { DEFAULT_WATERMARK_SETTINGS, parseWatermark, watermarkText, type WatermarkSettings } from "@/lib/watermark-settings";
+import { DEFAULT_WATERMARK_SETTINGS, parseWatermark, watermarkStyle, watermarkText, type WatermarkSettings, type WatermarkStyle } from "@/lib/watermark-settings";
 import { EMPTY_SVG_COLORS, parseSvgColors, type SvgColorSettings } from "@/lib/svg-colors";
 
 export const HERO_TAG = "site-hero";
@@ -42,11 +42,13 @@ export async function readWatermark(): Promise<{ settings: WatermarkSettings; up
   return { settings: row ? parseWatermark(row.value) : DEFAULT_WATERMARK_SETTINGS, updatedAt: row?.updatedAt ?? null };
 }
 
-/** The text drawn on the dieline sheet ("" = none). If the database cannot be read, the default text is used so the page never breaks. */
-export async function getWatermarkText(): Promise<string> {
+/** What is drawn on the dieline sheet: the text ("" = none) and its look. If the database cannot be read, the defaults are used so the page never breaks. */
+export async function getWatermark(): Promise<{ text: string; style: WatermarkStyle }> {
+  let s = DEFAULT_WATERMARK_SETTINGS;
   try {
-    return watermarkText((await readWatermark()).settings);
+    s = (await readWatermark()).settings;
   } catch {
-    return watermarkText(DEFAULT_WATERMARK_SETTINGS);
+    // keep the defaults
   }
+  return { text: watermarkText(s), style: watermarkStyle(s) };
 }

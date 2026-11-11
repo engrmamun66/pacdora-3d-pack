@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Hand, Maximize, Minus, Plus } from "lucide-react";
+import type { WatermarkStyle } from "@/lib/watermark-settings";
 import { DEFAULT_WATERMARK, SheetWatermark } from "./sheet-watermark";
 
 export type ViewToggles = {
@@ -51,6 +52,7 @@ export function SheetCanvas<T extends Record<string, boolean>>({
   onToggles,
   legend,
   watermark = DEFAULT_WATERMARK,
+  watermarkStyle,
   watermarkClip,
 }: {
   /** Size (mm) of the picture `src` shows, margins included. */
@@ -62,6 +64,8 @@ export function SheetCanvas<T extends Record<string, boolean>>({
   legend: { label: string; color: string; dashed?: boolean }[];
   /** Text tiled faintly behind the dieline; an empty string turns it off. */
   watermark?: string;
+  /** Colours, letter size and line thickness of the watermark; the default look when absent. */
+  watermarkStyle?: WatermarkStyle;
   /** Path data (sheet mm) that limits the watermark to the cut outline. */
   watermarkClip?: string;
 }) {
@@ -168,7 +172,7 @@ export function SheetCanvas<T extends Record<string, boolean>>({
             {/* eslint-disable-next-line @next/next/no-img-element -- generated SVG data URL */}
             <img src={src} alt="Flat dieline" draggable={false} className="absolute inset-0 size-full max-w-none" />
             {/* Above the picture: its SVG paints an opaque white sheet, which would hide a watermark under it. */}
-            <SheetWatermark bounds={vb} text={watermark} {...(watermarkClip ? { clip: watermarkClip } : {})} />
+            <SheetWatermark bounds={vb} text={watermark} {...(watermarkStyle ? { style: watermarkStyle } : {})} {...(watermarkClip ? { clip: watermarkClip } : {})} />
           </div>
         ) : null}
       </div>
