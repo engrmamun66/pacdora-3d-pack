@@ -46,7 +46,7 @@ async function main() {
     };
     await db.template.upsert({
       where: { id: t.id },
-      create: { id: t.id, name: t.name, description: t.description, published: true, source: "builtin", ...codeOwned },
+      create: { id: t.id, name: t.name, description: t.description, status: "published", published: true, source: "builtin", ...codeOwned },
       update: codeOwned,
     });
     // First seeding only: start each built-in in its categories.

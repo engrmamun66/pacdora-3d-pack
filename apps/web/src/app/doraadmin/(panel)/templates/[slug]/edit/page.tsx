@@ -7,6 +7,7 @@ import { TemplateWizard } from "@/components/templates-admin/template-wizard";
 import { db } from "@/server/db";
 import { requireSuperAdmin } from "@/server/admin";
 import { readViewSettings } from "@/lib/view-settings";
+import { templateStatus } from "@/lib/template-status";
 import { readSvgColors } from "@/server/site-settings";
 
 export const metadata = { title: "Edit template" };
@@ -16,7 +17,7 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
   const { slug } = await params;
   if (slug.length > 80) notFound();
   const [t, categories] = await Promise.all([
-    db.template.findUnique({ where: { id: slug }, select: { id: true, name: true, description: true, published: true, sortOrder: true, defaultThickness: true, generatorId: true, backgroundKey: true, viewSettings: true, updatedAt: true, source: true, geometry: true, categories: { select: { id: true } } } }),
+    db.template.findUnique({ where: { id: slug }, select: { id: true, name: true, description: true, status: true, published: true, sortOrder: true, defaultThickness: true, generatorId: true, backgroundKey: true, viewSettings: true, updatedAt: true, source: true, geometry: true, categories: { select: { id: true } } } }),
     db.templateCategory.findMany({ orderBy: [{ kind: "asc" }, { sortOrder: "asc" }, { name: "asc" }], select: { id: true, kind: true, name: true } }),
   ]);
   if (!t) notFound();
@@ -30,7 +31,7 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
       <PageHeader
         title={`Edit ${t.name}`}
         description={t.source === "builtin" ? "Built-in parametric template: you can change its name, description, categories, order, default material, background image and visibility. Its shape comes from the dieline generator in code." : undefined}
-        actions={t.published ? <Link href={`/template/dieline/${t.id}`} target="_blank" rel="noreferrer" className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">Open public page ↗</Link> : <span className="text-sm text-muted-foreground">Hidden: not shown to customers</span>}
+        actions={t.published ? <Link href={`/template/dieline/${t.id}`} target="_blank" rel="noreferrer" className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">Open public page ↗</Link> : <span className="text-sm text-muted-foreground">Not published: not shown to customers</span>}
       />
       <TemplateWizard
         svgColors={svgColors}
@@ -41,7 +42,7 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
           slug: t.id,
           name: t.name,
           description: t.description,
-          published: t.published,
+          status: templateStatus(t.status),
           sortOrder: t.sortOrder,
           backgroundUrl: t.backgroundKey ? `/api/templates/${encodeURIComponent(t.id)}/background?v=${encodeURIComponent(t.backgroundKey.slice("templates/".length, -4))}` : null,
           categoryIds: t.categories.map((c) => c.id),

@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ExternalLink, Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
-import { deleteTemplate, setTemplatePublished } from "@/app/doraadmin/template-actions";
+import { ExternalLink, Pencil, Trash2 } from "lucide-react";
+import { deleteTemplate, setTemplateStatus } from "@/app/doraadmin/template-actions";
 import { notify } from "@/lib/notify";
+import { TEMPLATE_STATUSES, type TemplateStatus } from "@/lib/template-status";
 import { ViewSettingsButton } from "@/components/templates-admin/view-settings-dialog";
 
-export function TemplateRowActions({ slug, name, source, published, has3d }: { slug: string; name: string; source: string; published: boolean; has3d: boolean }) {
+export function TemplateRowActions({ slug, name, source, status, has3d }: { slug: string; name: string; source: string; status: TemplateStatus; has3d: boolean }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const run = (fn: () => Promise<{ ok: boolean; message: string }>) =>
@@ -29,9 +30,15 @@ export function TemplateRowActions({ slug, name, source, published, has3d }: { s
       <a href={`/template/dieline/${slug}`} target="_blank" rel="noopener noreferrer" aria-label={`View ${name} (new tab)`} className={btn}><ExternalLink className="size-4" /></a>
       {has3d ? <ViewSettingsButton slug={slug} name={name} className={btn} /> : null}
       <Link href={`/doraadmin/templates/${slug}/edit`} aria-label={`Edit ${name}`} className={btn}><Pencil className="size-4" /></Link>
-      <button type="button" disabled={pending} aria-label={published ? `Hide ${name}` : `Publish ${name}`} className={btn} onClick={() => run(() => setTemplatePublished(slug, !published))}>
-        {published ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-      </button>
+      <select
+        aria-label={`Status of ${name}`}
+        disabled={pending}
+        value={status}
+        className="h-8 rounded-md border bg-background px-1.5 text-xs disabled:opacity-50"
+        onChange={(e) => run(() => setTemplateStatus(slug, e.target.value))}
+      >
+        {TEMPLATE_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+      </select>
       {source === "svg" ? (
         <button
           type="button"

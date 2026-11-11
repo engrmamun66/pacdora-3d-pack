@@ -15,7 +15,7 @@ export default async function NewTemplatePage() {
         svgColors={svgColors}
         mode="create"
         categories={categories.map((c) => ({ id: c.id, kind: c.kind as "use" | "model", name: c.name }))}
-        initial={{ slug: "", name: "", description: "", published: true, sortOrder: 0, backgroundUrl: null, categoryIds: [], source: null, dieline: null, roles: {}, options: { unit: "px", scale: 1, pxPerInch: 96 }, fold: null, referenceStyles: [], material: null, view: null }}
+        initial={{ slug: "", name: "", description: "", status: "draft", sortOrder: 0, backgroundUrl: null, categoryIds: [], source: null, dieline: null, roles: {}, options: { unit: "px", scale: 1, pxPerInch: 96 }, fold: null, referenceStyles: [], material: null, view: null }}
       />
     </div>
   );

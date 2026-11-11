@@ -7,6 +7,7 @@ import { ImportedDielineError, assertImportable, createImportedGenerator, getGen
 import { SvgImportError, importSvg, toFlatDieline, type ImportedDieline, type Role } from "@packaging/svg-import";
 import { MAX_SVG_CHARS, thumbnailSvg } from "@/lib/template-import";
 import { isValidSlug } from "@/lib/slug";
+import { TEMPLATE_STATUS_VALUES, isPublicStatus, isTemplateStatus, templateStatusLabel } from "@/lib/template-status";
 import { db } from "@/server/db";
 import { requireSuperAdmin } from "@/server/admin";
 import { storage } from "@/server/storage";
@@ -23,15 +24,15 @@ function refresh(slug?: string) {
 
 const slugParam = z.string().min(2).max(80);
 
-/** Show or hide a template on the public site. */
-export async function setTemplatePublished(slug: string, published: boolean): Promise<ActionResult> {
+/** Move a template to another status. Only "published" shows it on the public site (`published` follows). */
+export async function setTemplateStatus(slug: string, status: string): Promise<ActionResult> {
   await requireSuperAdmin();
   const s = slugParam.safeParse(slug);
-  if (!s.success || typeof published !== "boolean") return { ok: false, message: "Invalid request." };
-  const r = await db.template.updateMany({ where: { id: s.data }, data: { published } });
+  if (!s.success || !isTemplateStatus(status)) return { ok: false, message: "Invalid request." };
+  const r = await db.template.updateMany({ where: { id: s.data }, data: { status, published: isPublicStatus(status) } });
   if (r.count === 0) return { ok: false, message: "Template not found." };
   refresh(s.data);
-  return { ok: true, message: published ? "Template is now published." : "Template is now hidden." };
+  return { ok: true, message: isPublicStatus(status) ? "Template is now published." : `Status set to ${templateStatusLabel(status)}. Customers do not see it.` };
 }
 
 /**
@@ -67,7 +68,7 @@ const saveSchema = z.object({
   sortOrder: z.number().int().min(0).max(100000).default(0),
   name: z.string().trim().min(2, "Name must be at least 2 characters.").max(120, "Name is too long (120 characters max)."),
   description: z.string().trim().max(500, "Description is too long (500 characters max).").default(""),
-  published: z.boolean(),
+  status: z.enum(TEMPLATE_STATUS_VALUES),
   categoryIds: z.array(z.string().min(1).max(60)).min(1, "Choose at least one category.").max(24),
   /** SVG text. Required when creating; when editing, send it only to replace the geometry. */
   svg: z.string().max(MAX_SVG_CHARS, "That SVG is too large (3 MB max).").optional(),
@@ -176,7 +177,7 @@ export async function saveTemplate(input: unknown): Promise<SaveTemplateResult> 
     await db.template.update({
       where: { id: current },
       data: {
-        name: v.name, description: v.description, published: v.published, sortOrder: v.sortOrder, categories: { set: categories },
+        name: v.name, description: v.description, status: v.status, published: isPublicStatus(v.status), sortOrder: v.sortOrder, categories: { set: categories },
         ...(v.defaultThickness !== undefined ? { defaultThickness: v.defaultThickness } : {}),
       },
     });
@@ -251,7 +252,8 @@ export async function saveTemplate(input: unknown): Promise<SaveTemplateResult> 
   const data = {
     name: v.name,
     description: v.description,
-    published: v.published,
+    status: v.status,
+    published: isPublicStatus(v.status),
     sortOrder: v.sortOrder,
     hasFold: fold !== null,
     geometry: geometry as unknown as Prisma.InputJsonValue,

@@ -21,6 +21,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { linesKey } from "@/lib/fold-edit";
 import { colorRoles, type SvgColorSettings } from "@/lib/svg-colors";
 import type { ViewSettings } from "@/lib/view-settings";
+import { TEMPLATE_STATUSES, type TemplateStatus } from "@/lib/template-status";
 
 type Unit = "auto" | "mm" | "cm" | "in" | "pt" | "px";
 interface Options {
@@ -33,7 +34,7 @@ export interface WizardInitial {
   slug: string;
   name: string;
   description: string;
-  published: boolean;
+  status: TemplateStatus;
   sortOrder: number;
   /** URL of the current box background picture, or null. */
   backgroundUrl: string | null;
@@ -95,7 +96,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   const [slug, setSlug] = useState(initial.slug);
   const [slugTouched, setSlugTouched] = useState(mode === "edit");
   const [description, setDescription] = useState(initial.description);
-  const [published, setPublished] = useState(initial.published);
+  const [status, setStatus] = useState<TemplateStatus>(initial.status);
   const [sortOrder, setSortOrder] = useState(initial.sortOrder);
   // The starting 3D view: the fold preview below shows it, and changes to it (saved in its own section) show at once.
   const [startView, setStartView] = useState<ViewSettings | null>(initial.view);
@@ -144,13 +145,13 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   // Edit mode: has anything changed since the page loaded? (Compared as plain data.)
   const sortedRoles = (r: Record<string, Role>) => Object.fromEntries(Object.entries(r).sort(([a], [b]) => a.localeCompare(b)));
   const snapshot = JSON.stringify({
-    name: name.trim(), slug, description: description.trim(), published, sortOrder,
+    name: name.trim(), slug, description: description.trim(), status, sortOrder,
     cats: [...categoryIds].sort(), roles: sortedRoles(roles), opts, dt: defaultThickness,
     newSvg: text !== null, bg: bgFile ? "new" : bgRemoved ? "removed" : "same", fold, refs: [...refStyles].sort(),
   });
   const [baseline] = useState(() =>
     JSON.stringify({
-      name: initial.name.trim(), slug: initial.slug, description: initial.description.trim(), published: initial.published, sortOrder: initial.sortOrder,
+      name: initial.name.trim(), slug: initial.slug, description: initial.description.trim(), status: initial.status, sortOrder: initial.sortOrder,
       cats: [...initial.categoryIds].sort(), roles: sortedRoles(initial.roles), opts: initial.options, dt: initial.material?.value ?? null,
       newSvg: false, bg: "same", fold: initial.fold, refs: [...initial.referenceStyles].sort(),
     }),
@@ -243,7 +244,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
     setSaving(true);
     try {
       const r = await saveTemplate({
-        mode, slug, name, description, published, categoryIds, sortOrder,
+        mode, slug, name, description, status, categoryIds, sortOrder,
         ...(initial.material ? { defaultThickness } : {}),
         ...(mode === "edit" ? { originalSlug: initial.slug } : {}),
         ...(text ? { svg: text } : {}),
@@ -523,11 +524,14 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
               <span className="text-xs font-normal text-muted-foreground">Lower numbers come first in the template library.</span>
             </label>
             {initial.material ? <DefaultMaterialField min={initial.material.min} max={initial.material.max} value={defaultThickness} onChange={setDefaultThickness} /> : null}
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={published} onChange={(e) => setPublished(e.target.checked)} />
-              Published (visible on the public site)
+            <label className="flex flex-col gap-1 text-sm font-medium">
+              Status
+              <select id="template-status" className={`${field} w-48`} value={status} onChange={(e) => setStatus(e.target.value as TemplateStatus)}>
+                {TEMPLATE_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+              <span className="text-xs font-normal text-muted-foreground">Only Published templates are visible on the public site.</span>
             </label>
-            {!published ? <p role="status" className="-mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">Not published: customers will not see this template in the library until you publish it.</p> : null}
+            {status !== "published" ? <p role="status" className="-mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">Not published: customers will not see this template in the library until its status is Published.</p> : null}
             
     </>
   );

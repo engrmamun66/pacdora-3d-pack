@@ -5,6 +5,7 @@ import { TemplateRowActions } from "@/components/admin/template-row-actions";
 import { svgDataUrl, tryThumbnail } from "@/lib/dieline-preview";
 import { db } from "@/server/db";
 import { requireSuperAdmin } from "@/server/admin";
+import { TEMPLATE_STATUSES, isTemplateStatus, templateStatus, templateStatusLabel } from "@/lib/template-status";
 
 export const metadata = { title: "Templates" };
 
@@ -18,14 +19,14 @@ export default async function AdminTemplates({ searchParams }: PageProps<"/doraa
   const q = str("q").trim().slice(0, 100);
   const cat = str("cat").slice(0, 60);
   const source = ["builtin", "svg"].includes(str("source")) ? str("source") : "";
-  const status = ["published", "hidden"].includes(str("status")) ? str("status") : "";
+  const status = isTemplateStatus(str("status")) ? str("status") : "";
   const page = Math.min(10_000, Math.max(1, Math.floor(Number(str("page") || "1")) || 1));
 
   const where = {
     ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" as const } }, { id: { contains: q, mode: "insensitive" as const } }] } : {}),
     ...(cat ? { categories: { some: { id: cat } } } : {}),
     ...(source ? { source } : {}),
-    ...(status ? { published: status === "published" } : {}),
+    ...(status ? { status } : {}),
   };
 
   const [rows, total, cats] = await Promise.all([
@@ -35,7 +36,7 @@ export default async function AdminTemplates({ searchParams }: PageProps<"/doraa
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       select: {
-        id: true, name: true, source: true, published: true, updatedAt: true, generatorId: true, hasFold: true, defaultParameters: true, thumbnail: true, widthMm: true, heightMm: true,
+        id: true, name: true, source: true, status: true, published: true, updatedAt: true, generatorId: true, hasFold: true, defaultParameters: true, thumbnail: true, widthMm: true, heightMm: true,
         categories: { select: { id: true, name: true, kind: true }, orderBy: [{ kind: "asc" }, { sortOrder: "asc" }] },
         _count: { select: { projects: true } },
       },
@@ -80,8 +81,7 @@ export default async function AdminTemplates({ searchParams }: PageProps<"/doraa
         <label className="sr-only" htmlFor="status">Status</label>
         <select id="status" name="status" defaultValue={status} className={select}>
           <option value="">Any status</option>
-          <option value="published">Published</option>
-          <option value="hidden">Hidden</option>
+          {TEMPLATE_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
         <button type="submit" className="h-9 rounded-lg border bg-card px-3 text-sm hover:bg-muted">Filter</button>
       </form>
@@ -125,9 +125,9 @@ export default async function AdminTemplates({ searchParams }: PageProps<"/doraa
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs">{t.source === "svg" ? "Imported SVG" : "Built-in"}</td>
-                  <td className="px-4 py-3"><span className={`rounded-full px-2 py-0.5 text-xs ${t.published ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300" : "bg-muted text-muted-foreground"}`}>{t.published ? "Published" : "Hidden"}</span></td>
+                  <td className="px-4 py-3"><span className={`rounded-full px-2 py-0.5 text-xs ${t.status === "published" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300" : "bg-muted text-muted-foreground"}`}>{templateStatusLabel(t.status)}</span></td>
                   <td className="px-4 py-3 whitespace-nowrap text-xs">{date(t.updatedAt)}</td>
-                  <td className="px-4 py-3"><TemplateRowActions slug={t.id} name={t.name} source={t.source} published={t.published} has3d={t.source === "builtin" || t.hasFold} /></td>
+                  <td className="px-4 py-3"><TemplateRowActions slug={t.id} name={t.name} source={t.source} status={templateStatus(t.status)} has3d={t.source === "builtin" || t.hasFold} /></td>
                 </tr>
               );
             })}

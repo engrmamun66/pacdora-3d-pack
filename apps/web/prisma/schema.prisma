@@ -110,6 +110,9 @@ model Template {
   schemaVersion     Int
   defaultParameters Json      @db.JsonB
   previewUrl        String?
+  /// Where the template is in the admin's workflow: draft, step-1, step-2, step-3, published, sealed (see lib/template-status.ts).
+  status            String    @default("published")
+  /// Public on the site. Always equals (status == "published"); kept as its own column so public queries stay simple and indexed.
   published         Boolean   @default(true)
   /// "builtin" = parametric generator in code (seeded); "svg" = imported from an SVG by an admin.
   source            String    @default("builtin")
