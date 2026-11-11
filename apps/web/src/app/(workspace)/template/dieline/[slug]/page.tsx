@@ -4,6 +4,7 @@ import { z } from "zod";
 import { IMPORTED_GENERATOR_ID, getGenerator, getPreset } from "@packaging/dieline-engine";
 import { DielineWorkspace } from "@/components/dielines/workspace";
 import { getWatermark } from "@/server/site-settings";
+import { getSession } from "@/server/session";
 import { db } from "@/server/db";
 import { importedStartParams, loadImportedSource } from "@/server/imported-templates";
 import { readViewSettings } from "@/lib/view-settings";
@@ -29,7 +30,11 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
     select: { id: true, name: true, description: true, source: true, published: true, viewSettings: true, defaultThickness: true, categories: { where: { active: true }, select: { name: true } } },
   });
   if (!row || !row.published) notFound();
-  const watermark = await getWatermark();
+  // Signed in or not: the page is open to everyone. A signed-in visitor gets their profile icon in the header.
+  const session = await getSession();
+  const user = session?.user ?? null;
+  const viewer = user ? { name: user.name, email: user.email, image: user.image ?? null } : null;
+  const watermark = await getWatermark(user);
 
   // Imported SVG template: a fixed shape you can resize, add artwork to and export (no 3D fold).
   if (row.source === "svg") {
@@ -45,8 +50,9 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
         title={row.name}
         description={row.description}
         initialName={row.name}
-        initialParams={importedStartParams(imported.flat)}
+        initialParams={importedStartParams(imported.flat, imported.fold)}
         watermark={watermark}
+        viewer={viewer}
       />
     );
   }
@@ -66,6 +72,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
       initialName={row.name}
       initialParams={{ ...preset.defaults, ...(row.defaultThickness ? { thickness: row.defaultThickness } : {}), ...prefill }}
       watermark={watermark}
+      viewer={viewer}
     />
   );
 }

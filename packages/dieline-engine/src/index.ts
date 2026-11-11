@@ -18,6 +18,28 @@ export * from "./templates/registry";
 export * from "./templates/imported";
 export * from "./templates/imported-fold";
 export { planResize, resizeRatios, sheetMap, type PartSizes, type ResizePlan, type SizeClass } from "./templates/imported-resize";
+export {
+  CONSTRUCTION_DEFAULTS,
+  DIM_KEYS,
+  DIM_NAMES,
+  FACTOR_RANGE,
+  FLAP_SIZE_KEYS,
+  THICKNESS_RANGE,
+  creaseSizesOf,
+  fullPlan,
+  importedPlan,
+  predictNames,
+  resolveConstruction,
+  sizeOffset,
+  sizeTargets,
+  validateConstruction,
+  type Construction,
+  type DimKey,
+  type DimName,
+  type FlapKey,
+  type ResolvedConstruction,
+  type SizeMode,
+} from "./templates/imported-construction";
 
 import { type DielineGeometry } from "./geometry-types";
 import { getGenerator } from "./templates/registry";

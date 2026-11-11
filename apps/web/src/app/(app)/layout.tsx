@@ -5,7 +5,7 @@ import { SiteTitle } from "@/components/site-brand";
 import { UserMenu } from "@/components/app/user-menu";
 
 const nav = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/my-dashboard", label: "My dashboard", icon: LayoutDashboard },
   { href: "/templates", label: "Templates", icon: Shapes },
   { href: "/projects", label: "Projects", icon: FolderOpen },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -20,7 +20,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="grid min-h-screen grid-cols-[220px_1fr]">
       <aside className="flex flex-col border-r bg-muted/30">
-        <Link href="/dashboard" className="px-5 py-4 font-semibold">
+        <Link href="/my-dashboard" className="px-5 py-4 font-semibold">
           <Suspense fallback={null}>
             <SiteTitle />
           </Suspense>

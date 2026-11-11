@@ -5,8 +5,9 @@ import type { Outline } from "../primitives/arc";
 import { area, bounds, offsetPolygon } from "../primitives/polygon";
 import { type Vec2, vec } from "../primitives/vec2";
 import { ENGINE_VERSION, ParamValidationError } from "./carton-common";
+import { DIM_KEYS, DIM_NAMES, FACTOR_RANGE, FLAP_SIZE_KEYS, THICKNESS_RANGE, type DimKey, type SizeMode, importedPlan, resolveConstruction, sizeTargets } from "./imported-construction";
 import { type FoldSetup, validateFoldSetup } from "./imported-fold";
-import { type PartSizes, planResize, sheetMap } from "./imported-resize";
+import { type PartSizes, type ResizePlan, sheetMap } from "./imported-resize";
 import type { GeneratorDefinition, ParamDescriptor } from "./registry";
 
 /**
@@ -147,7 +148,7 @@ export function scaleImportedPaths(flat: FlatDieline, width: number, paths: read
   if (loops.length === 0) return [];
   const ob = unionBounds(sheetPieces(loops));
   const k = width / (ob.max.x - ob.min.x);
-  const map = sheetMap(ob.min, k, planResize(fold), sizes);
+  const map = sheetMap(ob.min, k, importedPlan(fold), sizes);
   return paths.map((p) => {
     const pts: number[] = [];
     for (let i = 0; i + 1 < p.pts.length; i += 2) {
@@ -169,46 +170,56 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
   }
   const { width: baseW } = importedCutSize(flat);
   const defaults = importedDefaults(flat);
-  const plan = planResize(fold);
+  const plan = importedPlan(fold);
+  const cons = plan ? resolveConstruction(fold?.construction, plan) : null;
   const minW = Math.max(10, round1(baseW * 0.05));
   const maxW = Math.min(5000, Math.max(minW + 1, round1(baseW * 20)));
 
   const generate = (input: unknown): DielineGeometry => {
     const raw = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
     const issues: { path: string; message: string }[] = [];
-    const read = (key: "width" | "bleed", fallback: number, min: number, max: number) => {
+    const read = (key: string, fallback: number, min: number, max: number, unit = " mm") => {
       const v = raw[key];
       if (v === undefined || v === "") return fallback;
       if (typeof v !== "number" || !Number.isFinite(v)) {
         issues.push({ path: key, message: "must be a number" });
         return fallback;
       }
-      if (v < min || v > max) issues.push({ path: key, message: `must be between ${min} and ${max} mm` });
+      if (v < min || v > max) issues.push({ path: key, message: `must be between ${min} and ${max}${unit}` });
       return v;
     };
     const width = read("width", defaults.width, minW, maxW);
     const bleed = read("bleed", defaults.bleed, 0, 20);
-    // The part sizes: left empty they follow the overall scale; typed, they must stay within 0.1x..10x of it.
+    // The box settings: size mode, board thickness and the allowance used by the inner mode.
+    let mode: SizeMode = cons?.sizeMode ?? "manufacture";
+    if (plan && raw.sizeMode !== undefined && raw.sizeMode !== "") {
+      if (raw.sizeMode === "manufacture" || raw.sizeMode === "inner") mode = raw.sizeMode;
+      else issues.push({ path: "sizeMode", message: "must be manufacture or inner" });
+    }
+    const thickness = plan ? read("thickness", cons!.thickness, THICKNESS_RANGE.min, THICKNESS_RANGE.max) : 0;
+    const allowance = plan ? read("allowanceFactor", cons!.allowanceFactor, FACTOR_RANGE.min, FACTOR_RANGE.max, "") : 0;
+    // The part sizes: left empty they start as the admin set (else as drawn, scaled with the sheet); typed, they must stay within 0.1x..10x of the scaled drawing.
     const scale0 = width / baseW;
-    const readSize = (key: keyof PartSizes, natural: number): number | undefined => {
-      const v = raw[key];
-      if (!plan || v === undefined || v === "") return undefined;
-      if (typeof v !== "number" || !Number.isFinite(v)) {
-        issues.push({ path: key, message: "must be a number" });
-        return undefined;
-      }
-      const lo = round1(natural * scale0 * 0.1);
-      const hi = round1(natural * scale0 * 10);
-      if (v < lo || v > hi) issues.push({ path: key, message: `must be between ${lo} and ${hi} mm` });
-      return v;
-    };
-    const sizes: PartSizes = plan
-      ? {
-          ...optionalSize("baseWidth", readSize("baseWidth", plan.natural.baseWidth)),
-          ...optionalSize("baseHeight", readSize("baseHeight", plan.natural.baseHeight)),
-          ...optionalSize("boxHeight", readSize("boxHeight", plan.natural.boxHeight)),
+    const typed: PartSizes = {};
+    let targets: ReturnType<typeof sizeTargets> | null = null;
+    if (plan && cons) {
+      const limits = sizeTargets(plan, cons, scale0, { mode, thickness, allowance, typed: {} }).range;
+      for (const key of [...DIM_KEYS, ...FLAP_SIZE_KEYS]) {
+        const lim = limits[key];
+        const v = raw[key];
+        if (!lim || v === undefined || v === "") continue;
+        if (typeof v !== "number" || !Number.isFinite(v)) {
+          issues.push({ path: key, message: "must be a number" });
+          continue;
         }
-      : {};
+        const lo = round1(lim.min);
+        const hi = round1(lim.max);
+        if (v < lo || v > hi) issues.push({ path: key, message: `must be between ${lo} and ${hi} mm` });
+        (typed as Record<string, number>)[key] = v;
+      }
+      targets = sizeTargets(plan, cons, scale0, { mode, thickness, allowance, typed });
+    }
+    const sizes: PartSizes = targets?.sizes ?? {};
     if (issues.length) throw new ParamValidationError(issues);
 
     const loops = closedCutLoops(flat);
@@ -311,6 +322,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
         ? { name: "Imported shape", pass: true, detail: "Fixed shape from an SVG file: only the overall size can change." }
         : { name: "Imported shape", pass: true, detail: "Fixed shape from an SVG file: only the overall size can change. No 3D fold." },
     ];
+    if (cons) checks.push({ name: "Cut gap", pass: true, detail: `${round2(cons.cutGapFactor * thickness)} mm (${round2(cons.cutGapFactor)} x board thickness). Set by the template; the drawing keeps its own slots.` });
     if (fold) checks.push({ name: "Folds into 3D", pass: true, detail: `${panels.length} ${panels.length === 1 ? "panel" : "panels"}, ${hinges.length} ${hinges.length === 1 ? "hinge" : "hinges"}` });
 
     return {
@@ -320,11 +332,13 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
       params: {
         width,
         bleed,
-        ...(plan
+        ...(targets && cons
           ? {
-              baseWidth: round2(sizes.baseWidth ?? plan.natural.baseWidth * k),
-              baseHeight: round2(sizes.baseHeight ?? plan.natural.baseHeight * k),
-              boxHeight: round2(sizes.boxHeight ?? plan.natural.boxHeight * k),
+              ...Object.fromEntries(Object.entries(targets.shown).map(([key, v]) => [key, round2(v)])),
+              sizeMode: mode,
+              thickness: round2(thickness),
+              allowanceFactor: round2(allowance),
+              cutGapFactor: round2(cons.cutGapFactor),
             }
           : {}),
       },
@@ -347,13 +361,13 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
     id: IMPORTED_GENERATOR_ID,
     name: "Imported dieline",
     schemaVersion: 1,
-    schemaKeys: plan ? ["width", "bleed", "baseWidth", "baseHeight", "boxHeight"] : ["width", "bleed"],
+    schemaKeys: plan && cons ? ["width", "bleed", ...DIM_KEYS, ...FLAP_SIZE_KEYS.filter((k) => plan.natural[k] !== undefined), "sizeMode", "thickness", "allowanceFactor"] : ["width", "bleed"],
     generate,
     params: [
       {
         key: "width",
         kind: "number",
-        label: "Width",
+        label: plan ? "Sheet width" : "Width",
         unit: "mm",
         group: "Dimensions",
         min: minW,
@@ -362,18 +376,55 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
         optional: true,
         help: `Overall width of the flat shape. Height follows the original proportions (original ${round1(baseW)} mm wide). The whole sheet is scaled.`,
       },
-      ...(plan
-        ? [
-            sizeParam("baseWidth", "Base width", "Width of the base panel. The panels along it follow."),
-            sizeParam("baseHeight", "Base height", "Height of the base panel. The panels along it follow."),
-            sizeParam("boxHeight", "Box height", "How tall the box stands: the height of the side walls."),
-          ]
-        : []),
+      ...(plan && cons ? boxParams(plan, cons) : []),
       { key: "bleed", kind: "number", label: "Bleed", unit: "mm", group: "Print", min: 0, max: 20, step: 0.5, optional: true, help: "Print area outside the cut line." },
     ],
   };
 }
 
-const optionalSize = (key: keyof PartSizes, v: number | undefined): PartSizes => (v === undefined ? {} : { [key]: v });
+const sizeParam = (key: string, label: string, help: string, group: ParamDescriptor["group"] = "Dimensions"): ParamDescriptor => ({ key, kind: "number", label, unit: "mm", group, min: 1, max: 5000, step: 1, optional: true, help });
 
-const sizeParam = (key: string, label: string, help: string): ParamDescriptor => ({ key, kind: "number", label, unit: "mm", group: "Dimensions", min: 1, max: 5000, step: 1, optional: true, help });
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** The options of the dieline page that come from the box settings: sizes, size mode, material thickness, flaps. */
+function boxParams(plan: ResizePlan, cons: NonNullable<ReturnType<typeof resolveConstruction>>): ParamDescriptor[] {
+  const dims = [...DIM_KEYS].sort((a, b) => DIM_NAMES.indexOf(cons.names[a]) - DIM_NAMES.indexOf(cons.names[b]));
+  const dimHelp: Record<string, string> = {
+    width: "Front/back panel width.",
+    depth: "Side panel width.",
+    height: "How tall the box stands.",
+  };
+  const out: ParamDescriptor[] = dims.map((key: DimKey) => sizeParam(key, cap(cons.names[key]), `${dimHelp[cons.names[key]]} Measured as Size mode says.`));
+  const flapLabels = { tuckDepth: "Tuck flap depth", glueFlapWidth: "Glue flap width", dustFlapDepth: "Dust flap depth" } as const;
+  for (const key of FLAP_SIZE_KEYS) {
+    if (plan.natural[key] === undefined) continue;
+    out.push(sizeParam(key, flapLabels[key], `As drawn: ${round1(plan.natural[key]!)} mm.`, "Flaps (advanced)"));
+  }
+  out.push(
+    {
+      key: "sizeMode",
+      kind: "enum",
+      label: "Size mode",
+      group: "Structure",
+      options: [
+        { value: "manufacture", label: "Manufacture (crease-to-crease)" },
+        { value: "inner", label: "Inner (inside of the box)" },
+      ],
+    },
+    { key: "thickness", kind: "number", label: "Board thickness", unit: "mm", group: "Material", min: THICKNESS_RANGE.min, max: THICKNESS_RANGE.max, step: 0.05, optional: true },
+    {
+      key: "allowanceFactor",
+      kind: "number",
+      label: "Allowance (x thickness)",
+      unit: "factor",
+      group: "Material",
+      min: FACTOR_RANGE.min,
+      max: FACTOR_RANGE.max,
+      step: 0.1,
+      optional: true,
+      help: "Added to each dimension in inner size mode. Confirm with your printer.",
+      showWhen: { key: "sizeMode", equals: "inner" },
+    },
+  );
+  return out;
+}

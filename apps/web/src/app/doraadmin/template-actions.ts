@@ -97,8 +97,22 @@ interface StoredGeometry {
   referenceStyles: string[];
 }
 
+const dimName = z.enum(["width", "depth", "height"]);
+const sizeMm = z.number().finite().min(0.1).max(10000).optional();
+/** Box settings of an imported template (see engine imported-construction.ts). */
+const constructionSchema = z.object({
+  sizeMode: z.enum(["manufacture", "inner"]).optional(),
+  thickness: z.number().finite().min(0.05).max(5).optional(),
+  allowanceFactor: z.number().finite().min(0).max(5).optional(),
+  cutGapFactor: z.number().finite().min(0).max(5).optional(),
+  names: z.object({ baseWidth: dimName.optional(), baseHeight: dimName.optional(), boxHeight: dimName.optional() }).optional(),
+  start: z.object({ baseWidth: sizeMm, baseHeight: sizeMm, boxHeight: sizeMm, tuckDepth: sizeMm, glueFlapWidth: sizeMm, dustFlapDepth: sizeMm }).optional(),
+  flaps: z.array(z.enum(["tuckDepth", "glueFlapWidth", "dustFlapDepth"])).max(3).optional(),
+});
+
 const foldSchema = z.object({
   rootId: z.string().min(1).max(40),
+  construction: constructionSchema.optional(),
   /** The panel lying flat on the ground in 3D; absent = automatic. */
   groundId: z.string().min(1).max(40).optional(),
   parts: z

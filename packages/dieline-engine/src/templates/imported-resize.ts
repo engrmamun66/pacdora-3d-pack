@@ -1,5 +1,5 @@
 import { foldTree } from "../fold-tree/fold3d";
-import type { FoldTree } from "../fold-tree/types";
+import type { FoldTree, PanelRole } from "../fold-tree/types";
 import { type Vec2, vec } from "../primitives/vec2";
 import type { FoldSetup } from "./imported-fold";
 import { flatSignedArea } from "./imported-fold-util";
@@ -12,22 +12,35 @@ import { flatSignedArea } from "./imported-fold-util";
  *   W  base width   (the base panel's own x extent)
  *   H  base height  (the base panel's own y extent)
  *   D  box height   (how far the side walls stand up from the base)
+ * and, for the flap kinds the admin switched on (box settings), three more that only move a stretch of the sheet that
+ * nothing but those flaps covers (so changing them never moves a wall):
+ *   T  tuck flap depth        G  glue flap width        F  dust flap depth
  * Which one is found from how each panel ends up once the box is closed: a panel
  * edge direction that points along the box's x, y or z axis belongs to W, H or D.
  * Because every point of the sheet (panels, hinges, cut and fold lines) goes through
  * the same map, panels still share exactly the same edges after resizing.
  */
 
-export type SizeClass = "W" | "H" | "D";
+export type SizeClass = "W" | "H" | "D" | "T" | "G" | "F";
 
 export interface ResizePlan {
   /** Size (mm, as imported) of the base width, base height and box height. */
-  readonly natural: { readonly baseWidth: number; readonly baseHeight: number; readonly boxHeight: number };
+  readonly natural: {
+    readonly baseWidth: number;
+    readonly baseHeight: number;
+    readonly boxHeight: number;
+    /** Only present when some stretch of the sheet is covered by flaps of that kind alone. */
+    readonly tuckDepth?: number;
+    readonly glueFlapWidth?: number;
+    readonly dustFlapDepth?: number;
+  };
   /** Sorted places (imported x) where the stretching can change, and the size each gap between them follows. */
   readonly xs: readonly number[];
   readonly xClass: readonly (SizeClass | null)[];
   readonly ys: readonly number[];
   readonly yClass: readonly (SizeClass | null)[];
+  /** True when the admin marked tuck flaps: a tube carton (taller than wide) rather than a tray. */
+  readonly tube: boolean;
 }
 
 /** The three sizes the customer may set (mm); a missing one follows the overall scale. */
@@ -35,7 +48,16 @@ export interface PartSizes {
   readonly baseWidth?: number;
   readonly baseHeight?: number;
   readonly boxHeight?: number;
+  readonly tuckDepth?: number;
+  readonly glueFlapWidth?: number;
+  readonly dustFlapDepth?: number;
 }
+
+/** The size key of each flap class. */
+export const FLAP_KEYS = { T: "tuckDepth", G: "glueFlapWidth", F: "dustFlapDepth" } as const;
+const FLAP_OF_ROLE: Partial<Record<PanelRole, SizeClass>> = { tuck: "T", "glue-flap": "G", "dust-flap": "F" };
+/** The flap classes (not W, H or D). */
+export type FlapClass = "T" | "G" | "F";
 
 const AXIS_CLASS: readonly SizeClass[] = ["W", "H", "D"];
 /** Gaps between places closer than this (imported mm) are merged. */
@@ -52,6 +74,7 @@ interface Box {
   /** Class of the panel's flat x direction and flat y direction, once folded. */
   cx: SizeClass | null;
   cy: SizeClass | null;
+  role: PanelRole;
 }
 
 function axisOf(a: number, b: number, c: number): SizeClass | null {
@@ -70,11 +93,18 @@ function places(values: number[]): number[] {
 }
 
 /** The gap classes along one axis: the class with the most panel area covering each gap. */
-function gapClasses(breaks: readonly number[], boxes: readonly Box[], axis: "x" | "y"): (SizeClass | null)[] {
+function gapClasses(breaks: readonly number[], boxes: readonly Box[], axis: "x" | "y", flapOf: Partial<Record<PanelRole, SizeClass>>): (SizeClass | null)[] {
   const out: (SizeClass | null)[] = [];
   for (let i = 0; i + 1 < breaks.length; i++) {
     const mid = (breaks[i]! + breaks[i + 1]!) / 2;
-    const weight: Record<SizeClass, number> = { W: 0, H: 0, D: 0 };
+    // Covered by flaps of one kind only: that stretch belongs to the flap, not to a wall.
+    const cover = boxes.filter((b) => (axis === "x" ? mid >= b.x0 - MERGE && mid <= b.x1 + MERGE : mid >= b.y0 - MERGE && mid <= b.y1 + MERGE));
+    const flap = cover.length > 0 ? flapOf[cover[0]!.role] : undefined;
+    if (flap && cover.every((b) => flapOf[b.role] === flap)) {
+      out.push(flap);
+      continue;
+    }
+    const weight: Record<SizeClass, number> = { W: 0, H: 0, D: 0, T: 0, G: 0, F: 0 };
     for (const b of boxes) {
       const [lo, hi, cls] = axis === "x" ? [b.x0, b.x1, b.cx] : [b.y0, b.y1, b.cy];
       if (cls && mid >= lo - MERGE && mid <= hi + MERGE) weight[cls] += b.area;
@@ -90,7 +120,8 @@ function gapClasses(breaks: readonly number[], boxes: readonly Box[], axis: "x" 
  * Work out how the sheet can be stretched. Null if it cannot (no fold, extra parts such as a lid
  * piece, no walls on the base, or a fold that does not close along the box's axes).
  */
-export function planResize(setup: FoldSetup | null | undefined): ResizePlan | null {
+export function planResize(setup: FoldSetup | null | undefined, enabled: readonly FlapClass[] = []): ResizePlan | null {
+  const flapOf = Object.fromEntries(Object.entries(FLAP_OF_ROLE).filter(([, c]) => enabled.includes(c as FlapClass))) as Partial<Record<PanelRole, SizeClass>>;
   if (!setup || setup.hinges.length === 0 || (setup.parts?.length ?? 0) > 0) return null;
   const root = setup.panels.find((p) => p.id === setup.rootId);
   if (!root) return null;
@@ -122,6 +153,7 @@ export function planResize(setup: FoldSetup | null | undefined): ResizePlan | nu
       area: Math.abs(flatSignedArea(p.polygon)),
       cx: axisOf(m[0]!, m[1]!, m[2]!),
       cy: axisOf(m[4]!, m[5]!, m[6]!),
+      role: p.role,
     });
   }
   const all = [...boxes.values()];
@@ -148,20 +180,40 @@ export function planResize(setup: FoldSetup | null | undefined): ResizePlan | nu
   const xs = places(all.flatMap((b) => [b.x0, b.x1]).concat(setup.panels.flatMap((p) => (polys.get(p.id) ?? []).map((v) => v.x))));
   const ys = places(all.flatMap((b) => [b.y0, b.y1]).concat(setup.panels.flatMap((p) => (polys.get(p.id) ?? []).map((v) => v.y))));
   if (xs.length < 2 || ys.length < 2) return null;
-  const xClass = gapClasses(xs, all, "x");
-  const yClass = gapClasses(ys, all, "y");
+  const xClass = gapClasses(xs, all, "x", flapOf);
+  const yClass = gapClasses(ys, all, "y", flapOf);
   // Nothing to stretch if one of the three sizes does not move any part of the sheet.
   const used = new Set<SizeClass>([...xClass, ...yClass].filter((c): c is SizeClass => c !== null));
   if (!used.has("W") || !used.has("H") || !used.has("D")) return null;
-  return { natural: { baseWidth, baseHeight, boxHeight }, xs, xClass, ys, yClass };
+  const flaps: Partial<Record<(typeof FLAP_KEYS)[keyof typeof FLAP_KEYS], number>> = {};
+  for (const cls of ["T", "G", "F"] as const) {
+    const longest = Math.max(runLength(xs, xClass, cls), runLength(ys, yClass, cls));
+    if (longest > 0) flaps[FLAP_KEYS[cls]] = longest;
+  }
+  return { natural: { baseWidth, baseHeight, boxHeight, ...flaps }, xs, xClass, ys, yClass, tube: setup.panels.some((p) => p.role === "tuck") };
+}
+
+/** Length of the longest unbroken stretch of one class along an axis (0 if none). */
+function runLength(breaks: readonly number[], classes: readonly (SizeClass | null)[], cls: SizeClass): number {
+  let best = 0;
+  let run = 0;
+  for (let i = 0; i < classes.length; i++) {
+    run = classes[i] === cls ? run + (breaks[i + 1]! - breaks[i]!) : 0;
+    best = Math.max(best, run);
+  }
+  return best;
 }
 
 /** How much each size is stretched compared with the overall scale `k` (1 = not at all). */
 export function resizeRatios(plan: ResizePlan, k: number, sizes: PartSizes): Record<SizeClass, number> {
+  const ratio = (size: number | undefined, natural: number | undefined) => (size === undefined || natural === undefined ? 1 : size / (natural * k));
   return {
-    W: sizes.baseWidth === undefined ? 1 : sizes.baseWidth / (plan.natural.baseWidth * k),
-    H: sizes.baseHeight === undefined ? 1 : sizes.baseHeight / (plan.natural.baseHeight * k),
-    D: sizes.boxHeight === undefined ? 1 : sizes.boxHeight / (plan.natural.boxHeight * k),
+    W: ratio(sizes.baseWidth, plan.natural.baseWidth),
+    H: ratio(sizes.baseHeight, plan.natural.baseHeight),
+    D: ratio(sizes.boxHeight, plan.natural.boxHeight),
+    T: ratio(sizes.tuckDepth, plan.natural.tuckDepth),
+    G: ratio(sizes.glueFlapWidth, plan.natural.glueFlapWidth),
+    F: ratio(sizes.dustFlapDepth, plan.natural.dustFlapDepth),
   };
 }
 
@@ -190,7 +242,7 @@ function axisMap(breaks: readonly number[], classes: readonly (SizeClass | null)
  */
 export function sheetMap(origin: Vec2, k: number, plan: ResizePlan | null, sizes: PartSizes): (p: Vec2) => Vec2 {
   const ratio = plan ? resizeRatios(plan, k, sizes) : null;
-  if (!plan || !ratio || (ratio.W === 1 && ratio.H === 1 && ratio.D === 1)) {
+  if (!plan || !ratio || (ratio.W === 1 && ratio.H === 1 && ratio.D === 1 && ratio.T === 1 && ratio.G === 1 && ratio.F === 1)) {
     return (p) => vec(origin.x + (p.x - origin.x) * k, origin.y + (p.y - origin.y) * k);
   }
   const fx = axisMap(plan.xs, plan.xClass, origin.x, k, ratio);

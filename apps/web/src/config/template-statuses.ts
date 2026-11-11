@@ -9,7 +9,7 @@ export const templateStatusConfig = [
   { value: "draft", label: "Draft" },
   { value: "step-1", label: "Step 1" },
   { value: "step-2", label: "Step 2" },
-  { value: "step-3", label: "Step 3" },
+  { value: "hide", label: "Hide" },
   { value: "published", label: "Published" },
   { value: "sealed", label: "Sealed" },
 ] as const;

@@ -24,7 +24,7 @@ async function AuthButtons() {
     signedIn = false;
   }
   return signedIn ? (
-    <ButtonLink href="/dashboard">Open dashboard</ButtonLink>
+    <ButtonLink href="/my-dashboard">Open dashboard</ButtonLink>
   ) : (
     <>
       <ButtonLink variant="ghost" href="/login">Log in</ButtonLink>

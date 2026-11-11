@@ -1,5 +1,5 @@
 import "server-only";
-import { type FlatDieline, type FoldSetup, type GeneratorDefinition, IMPORTED_GENERATOR_ID, createImportedGenerator, getGenerator, importedDefaults } from "@packaging/dieline-engine";
+import { type FlatDieline, type FoldSetup, type GeneratorDefinition, IMPORTED_GENERATOR_ID, createImportedGenerator, getGenerator, importedDefaults, importedPlan, resolveConstruction } from "@packaging/dieline-engine";
 import { type FlatDielineData, type ImportedDieline, type Role, toFlatDieline } from "@packaging/svg-import";
 import { db } from "./db";
 
@@ -57,4 +57,9 @@ export async function resolveGenerator(generatorId: string, presetId: string): P
 }
 
 /** Starting parameters of an imported template. */
-export const importedStartParams = (flat: FlatDielineData) => importedDefaults(flat as FlatDieline);
+/** Starting parameters of an imported template: its size and bleed, plus the board and size mode the admin chose. */
+export function importedStartParams(flat: FlatDielineData, fold?: FoldSetup | null) {
+  const plan = importedPlan(fold);
+  const cons = plan ? resolveConstruction(fold?.construction, plan) : null;
+  return { ...importedDefaults(flat as FlatDieline), ...(cons ? { thickness: cons.thickness, sizeMode: cons.sizeMode } : {}) };
+}

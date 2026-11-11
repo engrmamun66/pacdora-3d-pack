@@ -11,7 +11,7 @@ const LABELS: Record<string, string> = {
   settings: "Settings",
   profile: "Profile",
 };
-const LAST: Record<string, string> = { new: "Add template", edit: "Edit" };
+const LAST: Record<string, string> = { new: "Add template", edit: "Edit", templates: "Customer Templates" };
 
 /** Where you are, in the top bar: Admin / Section / (Add template | Edit). */
 export function AdminCrumbs() {

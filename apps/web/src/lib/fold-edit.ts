@@ -1,4 +1,4 @@
-import type { FoldHingeSpec, FoldPanelSpec, FoldSetup, PartPlacement } from "@packaging/dieline-engine";
+import type { Construction, FoldHingeSpec, FoldPanelSpec, FoldSetup, PartPlacement } from "@packaging/dieline-engine";
 
 /** Pure edits of a fold setup, used by the admin fold screen. Every function returns a new setup. */
 
@@ -185,4 +185,15 @@ export function setGround(fold: FoldSetup, panelId: string | null): FoldSetup {
   const { groundId: _old, ...rest } = fold;
   void _old;
   return panelId && fold.panels.some((p) => p.id === panelId) ? { ...rest, groundId: panelId } : rest;
+}
+
+/**
+ * Replace the box settings. Empty fields are dropped, and nothing left removes them (the page then
+ * uses its guessed values).
+ */
+export function setConstruction(fold: FoldSetup, c: Construction | null): FoldSetup {
+  const { construction: _old, ...rest } = fold;
+  void _old;
+  const clean = c ? (Object.fromEntries(Object.entries(c).filter(([, v]) => v !== undefined && !(typeof v === "object" && v !== null && Object.keys(v).length === 0))) as Construction) : null;
+  return clean && Object.keys(clean).length > 0 ? { ...rest, construction: clean } : rest;
 }

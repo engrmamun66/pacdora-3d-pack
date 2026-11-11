@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Cloud, CloudCheck, Download, ExternalLink, Menu, Pencil, Share2 } from "lucide-react";
+import { ChevronRight, Download, ExternalLink, Menu, Pencil, Share2 } from "lucide-react";
 import { deleteProject } from "@/app/(app)/projects/actions";
 import { authClient } from "@/lib/auth-client";
 import { notify } from "@/lib/notify";
 import { site } from "@/config/site";
+import { UserMenuClient } from "@/components/app/user-menu-client";
 
 const row = "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm";
 const rowLive = `${row} hover:bg-muted focus-visible:bg-muted focus-visible:outline-none`;
@@ -148,6 +149,7 @@ export function DielineTopBar({
   canDownload,
   downloadLabel,
   onDownload,
+  viewer = null,
 }: {
   title: string;
   name: string;
@@ -160,6 +162,8 @@ export function DielineTopBar({
   canDownload: boolean;
   downloadLabel: string;
   onDownload: () => void;
+  /** Signed-in visitor: shown as a profile icon with an account menu. */
+  viewer?: { name: string; email: string; image: string | null } | null;
 }) {
   const share = async () => {
     try {
@@ -178,14 +182,6 @@ export function DielineTopBar({
       </Link>
       <h1 className="mr-1 hidden min-w-0 max-w-[16rem] truncate text-base font-semibold sm:block" title={title}>{title}</h1>
       <MainMenu name={name} onName={onName} projectId={projectId} />
-      <span
-        role="img"
-        aria-label={mode === "edit" ? "Project saved" : "Not saved yet"}
-        title={mode === "edit" ? "Project saved" : "Not saved yet: create a project to keep your settings"}
-        className="grid size-10 place-items-center text-muted-foreground"
-      >
-        {mode === "edit" ? <CloudCheck className="size-5" /> : <Cloud className="size-5" />}
-      </span>
 
       <div className="ml-auto flex items-center gap-2">
         {mode === "edit" ? (
@@ -210,6 +206,7 @@ export function DielineTopBar({
         <button type="button" disabled={!canDownload || downloading} onClick={onDownload} className={primary}>
           <Download className="size-4" aria-hidden /> {downloading ? "Preparing…" : downloadLabel}
         </button>
+        {viewer ? <UserMenuClient name={viewer.name} email={viewer.email} image={viewer.image} /> : null}
       </div>
     </header>
   );

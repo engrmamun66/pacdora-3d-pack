@@ -34,6 +34,7 @@ export function UserMenuClient({ name, email, image }: { name: string; email: st
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => router.push("/my-dashboard")}>My dashboard</DropdownMenuItem>
         <DropdownMenuItem onClick={() => router.push("/settings")}>Settings</DropdownMenuItem>
         <DropdownMenuItem
           onClick={async () => {

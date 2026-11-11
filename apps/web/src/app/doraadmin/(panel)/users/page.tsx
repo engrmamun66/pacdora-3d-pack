@@ -4,7 +4,7 @@ import { BanButton } from "@/components/admin/ban-button";
 import { db } from "@/server/db";
 import { SUPERADMIN, requireSuperAdmin } from "@/server/admin";
 
-export const metadata = { title: "Users" };
+export const metadata = { title: "All Customers" };
 
 const PAGE_SIZE = 25;
 const date = (d: Date) => d.toISOString().slice(0, 16).replace("T", " ");
@@ -14,7 +14,11 @@ export default async function AdminUsers({ searchParams }: PageProps<"/doraadmin
   const sp = await searchParams;
   const q = (typeof sp.q === "string" ? sp.q : "").trim().slice(0, 100);
   const page = Math.min(10_000, Math.max(1, Math.floor(Number(typeof sp.page === "string" ? sp.page : "1")) || 1));
-  const where = q ? { OR: [{ email: { contains: q, mode: "insensitive" as const } }, { name: { contains: q, mode: "insensitive" as const } }] } : {};
+  // Customers are the people who signed up; super admins are staff and are not listed.
+  const where = {
+    role: { not: SUPERADMIN },
+    ...(q ? { OR: [{ email: { contains: q, mode: "insensitive" as const } }, { name: { contains: q, mode: "insensitive" as const } }] } : {}),
+  };
 
   const [rows, total] = await Promise.all([
     db.user.findMany({
@@ -43,8 +47,8 @@ export default async function AdminUsers({ searchParams }: PageProps<"/doraadmin
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Users"
-        description={`${total} ${total === 1 ? "user" : "users"}${q ? ` matching "${q}"` : ""}. Times are UTC.`}
+        title="All Customers"
+        description={`${total} ${total === 1 ? "customer" : "customers"}${q ? ` matching "${q}"` : ""}. Times are UTC.`}
         actions={
           <form className="flex gap-2" role="search">
             <label className="sr-only" htmlFor="q">Search by name or email</label>
@@ -58,7 +62,7 @@ export default async function AdminUsers({ searchParams }: PageProps<"/doraadmin
         <table className="w-full text-left text-sm">
           <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
-              <th scope="col" className="px-4 py-2.5 font-medium">User</th>
+              <th scope="col" className="px-4 py-2.5 font-medium">Customer</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Status</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Projects</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Images</th>
@@ -93,7 +97,7 @@ export default async function AdminUsers({ searchParams }: PageProps<"/doraadmin
             ))}
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">No users found.</td>
+                <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">No customers found.</td>
               </tr>
             ) : null}
           </tbody>

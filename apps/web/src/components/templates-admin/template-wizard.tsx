@@ -18,6 +18,7 @@ import { SvgPreviewButton } from "./svg-preview";
 import { FoldSetupEditor } from "./fold-setup-editor";
 import { ViewSettingsInline } from "./view-settings-dialog";
 import { PageHeader } from "@/components/admin/page-header";
+import { ConstructionEditor } from "./construction-editor";
 import { linesKey } from "@/lib/fold-edit";
 import { colorRoles, type SvgColorSettings } from "@/lib/svg-colors";
 import type { ViewSettings } from "@/lib/view-settings";
@@ -473,6 +474,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   const foldSection = flat ? (
     <section aria-label="3D fold" className="flex flex-col gap-4">
       <FoldSetupEditor flat={flat} fold={fold} stale={foldStale} startView={startView} barBottom={mode === "edit" ? "4.75rem" : "0.75rem"} onChange={(f) => { setFold(f); setFoldKey(flatKey); }} />
+      {fold && !foldStale ? <ConstructionEditor fold={fold} onChange={(f) => setFold(f)} /> : null}
     </section>
   ) : null;
   const detailsFields = (

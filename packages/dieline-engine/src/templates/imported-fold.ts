@@ -1,5 +1,6 @@
 import type { FlatDieline } from "./imported";
 import type { PanelRole, PartPlacement } from "../fold-tree/types";
+import { type Construction, validateConstruction } from "./imported-construction";
 import { detectFoldSetup as detect } from "./imported-fold-detect";
 import { HINGE_TOLERANCE, flatSignedArea, segmentOnPolygonEdge } from "./imported-fold-util";
 
@@ -60,6 +61,8 @@ export interface FoldSetup {
    * Absent = automatic.
    */
   readonly groundId?: string;
+  /** Box settings (thickness, size mode, names of the sizes, flap sizes) the admin set. Absent = guessed. */
+  readonly construction?: Construction;
 }
 
 export const MAX_FOLD_PARTS = 8;
@@ -193,5 +196,6 @@ export function validateFoldSetup(setup: FoldSetup): string[] {
       problems.push(`The folds do not form one connected tree from the root (a loop, or no fold reaches): ${lost.map(name).join(", ")}.`);
     }
   }
+  problems.push(...validateConstruction(setup.construction));
   return problems;
 }

@@ -60,7 +60,7 @@ export function RegisterForm({ googleEnabled }: { googleEnabled: boolean }) {
       name,
       email,
       password,
-      callbackURL: "/dashboard",
+      callbackURL: "/my-dashboard",
       fetchOptions: { headers: captchaHeaders(captcha.token) },
     });
     captcha.reset();
@@ -90,7 +90,7 @@ export function RegisterForm({ googleEnabled }: { googleEnabled: boolean }) {
     <>
       {googleEnabled ? (
         <>
-          <GoogleButton next="/dashboard" />
+          <GoogleButton next="/my-dashboard" />
           <OrDivider />
         </>
       ) : null}

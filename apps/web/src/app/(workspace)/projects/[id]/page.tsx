@@ -33,6 +33,7 @@ async function ProjectView({ params }: { params: PageProps<"/projects/[id]">["pa
       initialName={project.name}
       initialParams={project.doc.template.params}
       watermark={watermark}
+      viewer={{ name: user.name, email: user.email, image: user.image ?? null }}
     />
   );
 }

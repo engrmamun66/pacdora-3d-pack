@@ -3,7 +3,7 @@
 import { useActionState, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Box, CircleAlert, CircleEllipsis, Ruler, type LucideIcon } from "lucide-react";
-import { ParamValidationError, type WatermarkSpec, createImportedGenerator, scaleImportedPaths, getGenerator, type DielineGeometry, type FlatDieline, type FoldSetup, type ParamDescriptor, type ParamGroup } from "@packaging/dieline-engine";
+import { ParamValidationError, type WatermarkSpec, createImportedGenerator, creaseSizesOf, scaleImportedPaths, getGenerator, type DielineGeometry, type FlatDieline, type FoldSetup, type ParamDescriptor, type ParamGroup } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { STYLE, dielineViewBox, outlinePathD, renderDielineSvg } from "@packaging/render-svg";
 import { notify } from "@/lib/notify";
@@ -40,6 +40,8 @@ interface Props {
   modelId: string;
   /** The watermark on the sheet and in downloads; null = none. Absent = the default look on screen only. */
   watermark?: WatermarkSpec | null;
+  /** The signed-in visitor (profile icon in the header); null/absent = signed out. */
+  viewer?: { name: string; email: string; image: string | null } | null;
 }
 
 type TabId = "dielines" | "basic" | "info" | "more";
@@ -73,7 +75,7 @@ function saveBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-export function DielineWorkspace({ mode, generatorId, imported, initialView = null, title, description, initialName, initialParams, modelId, watermark }: Props) {
+export function DielineWorkspace({ mode, generatorId, imported, initialView = null, title, description, initialName, initialParams, modelId, watermark, viewer = null }: Props) {
   const router = useRouter();
   const gen = useMemo(() => (imported ? createImportedGenerator(imported.templateId, imported.flat as FlatDieline, imported.fold ?? null) : getGenerator(generatorId)), [generatorId, imported]);
   const [values, setValues] = useState<Values>(() =>
@@ -128,8 +130,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
       const ref = imported?.flat.reference;
       const width = (shown.params as { width?: number }).width;
       if (toggles.reference && ref?.length && typeof width === "number") {
-        const sizes = shown.params as { baseWidth?: number; baseHeight?: number; boxHeight?: number };
-        const d = scaleImportedPaths(imported!.flat as FlatDieline, width, ref, imported!.fold ?? null, { ...(typeof sizes.baseWidth === "number" ? { baseWidth: sizes.baseWidth } : {}), ...(typeof sizes.baseHeight === "number" ? { baseHeight: sizes.baseHeight } : {}), ...(typeof sizes.boxHeight === "number" ? { boxHeight: sizes.boxHeight } : {}) }).map((p) => pathData(p.pts, p.closed)).join("");
+        const d = scaleImportedPaths(imported!.flat as FlatDieline, width, ref, imported!.fold ?? null, creaseSizesOf(shown.params)).map((p) => pathData(p.pts, p.closed)).join("");
         const layer = `<g id="reference" fill="none" stroke="#6b7280" stroke-width="0.3" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"><path d="${d}"/></g>`;
         svg = svg.replace(/<\/svg>\s*$/, () => `${layer}\n</svg>\n`); // after the white background, so it shows
       }
@@ -307,6 +308,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
         canDownload={Boolean(result.geo)}
         downloadLabel="Download the dieline"
         onDownload={() => void download()}
+        viewer={viewer}
       />
 
       {issueText ? (
@@ -340,7 +342,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
 
           <div id="settings-panel" role="tabpanel" aria-labelledby={`tab-${activeTab}`} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4">
             {activeTab === "dielines" ? (
-              <TemplatePicker currentId={mode.kind === "create" ? mode.presetId : ""} mode={mode.kind} />
+              <TemplatePicker currentId={mode.kind === "create" ? mode.presetId : ""} currentProjectId={mode.kind === "edit" ? mode.projectId : null} mode={mode.kind} />
             ) : activeTab === "basic" ? (
               <>
                 <section aria-labelledby="sec-size" className="flex flex-col gap-3">
