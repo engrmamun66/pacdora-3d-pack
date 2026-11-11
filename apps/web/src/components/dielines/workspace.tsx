@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Box, CircleAlert, CircleEllipsis, Ruler, type LucideIcon } from "lucide-react";
 import { ParamValidationError, createImportedGenerator, scaleImportedPaths, getGenerator, type DielineGeometry, type FlatDieline, type FoldSetup, type ParamDescriptor, type ParamGroup } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
-import { STYLE, dielineViewBox, renderDielineSvg } from "@packaging/render-svg";
+import { STYLE, dielineViewBox, outlinePathD, renderDielineSvg } from "@packaging/render-svg";
 import { notify } from "@/lib/notify";
 import type { ViewSettings } from "@/lib/view-settings";
 import { svgDataUrl } from "@/lib/dieline-preview";
@@ -38,6 +38,8 @@ interface Props {
   initialParams: Record<string, unknown>;
   /** Template id shown as "Model ID" in the info tab. */
   modelId: string;
+  /** Faint text drawn inside the cut area of the sheet ("" = none). Absent = the built-in default. */
+  watermark?: string;
 }
 
 type TabId = "dielines" | "basic" | "info" | "more";
@@ -71,7 +73,7 @@ function saveBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-export function DielineWorkspace({ mode, generatorId, imported, initialView = null, title, description, initialName, initialParams, modelId }: Props) {
+export function DielineWorkspace({ mode, generatorId, imported, initialView = null, title, description, initialName, initialParams, modelId, watermark }: Props) {
   const router = useRouter();
   const gen = useMemo(() => (imported ? createImportedGenerator(imported.templateId, imported.flat as FlatDieline, imported.fold ?? null) : getGenerator(generatorId)), [generatorId, imported]);
   const [values, setValues] = useState<Values>(() =>
@@ -80,7 +82,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   const [name, setName] = useState(initialName);
   const [unit, setUnit] = useState<Unit>("mm");
   const [tab, setTab] = useState<TabId>("basic");
-  const [toggles, setToggles] = useState<ViewToggles>({ bleed: true, safe: false, glue: true, dimensions: true, labels: false, reference: false });
+  const [toggles, setToggles] = useState<ViewToggles>({ bleed: true, safe: false, glue: true, dimensions: true, partSizes: false, labels: false, reference: false });
   const [progress, setProgress] = useState(initialView?.progress ?? 1);
   const thickness = gen.params.find((p): p is ParamDescriptor & { kind: "number" } => p.key === "thickness" && p.kind === "number");
   const materialTypes = useMemo(() => (thickness ? materialsFor(thickness.min, thickness.max) : []), [thickness]);
@@ -120,12 +122,14 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
         showGlue: toggles.glue,
         showAnnotations: toggles.dimensions,
         showPanelLabels: toggles.labels,
+        ...(toggles.partSizes ? { showPartSizes: unit } : {}),
       });
       // Reference lines (ignored in the file, kept by the admin): faint, scaled with the sheet, drawn only on request.
       const ref = imported?.flat.reference;
       const width = (shown.params as { width?: number }).width;
       if (toggles.reference && ref?.length && typeof width === "number") {
-        const d = scaleImportedPaths(imported!.flat as FlatDieline, width, ref).map((p) => pathData(p.pts, p.closed)).join("");
+        const sizes = shown.params as { baseWidth?: number; baseHeight?: number; boxHeight?: number };
+        const d = scaleImportedPaths(imported!.flat as FlatDieline, width, ref, imported!.fold ?? null, { ...(typeof sizes.baseWidth === "number" ? { baseWidth: sizes.baseWidth } : {}), ...(typeof sizes.baseHeight === "number" ? { baseHeight: sizes.baseHeight } : {}), ...(typeof sizes.boxHeight === "number" ? { boxHeight: sizes.boxHeight } : {}) }).map((p) => pathData(p.pts, p.closed)).join("");
         const layer = `<g id="reference" fill="none" stroke="#6b7280" stroke-width="0.3" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"><path d="${d}"/></g>`;
         svg = svg.replace(/<\/svg>\s*$/, () => `${layer}\n</svg>\n`); // after the white background, so it shows
       }
@@ -226,7 +230,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   // Imported dielines are flat: no glue areas or panels to show, and no 3D.
   const foldable = (shown?.foldTree.hinges.length ?? 0) > 0;
   const toggleDefs = imported
-    ? [...DIELINE_TOGGLES.filter((t) => t.key === "dimensions" || t.key === "bleed" || (t.key === "safe" && (shown?.safeAreas.length ?? 0) > 0)), ...(hasReference ? [{ key: "reference" as const, label: "Reference" }] : [])]
+    ? [...DIELINE_TOGGLES.filter((t) => t.key === "partSizes" || t.key === "dimensions" || t.key === "bleed" || (t.key === "safe" && (shown?.safeAreas.length ?? 0) > 0)), ...(hasReference ? [{ key: "reference" as const, label: "Reference" }] : [])]
     : DIELINE_TOGGLES;
   const formats = foldable ? DOWNLOAD_FORMATS : DOWNLOAD_FORMATS.filter((f) => f.value !== "glb");
 
@@ -416,7 +420,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
         {/* Centre: sheet */}
         <main className="flex min-h-[55vh] min-w-0 flex-col lg:min-h-0">
           {shown && src ? (
-            <SheetCanvas bounds={dielineViewBox(shown, 22)} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} />
+            <SheetCanvas {...(watermark === undefined ? {} : { watermark })} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} />
           ) : (
             <p className="p-6 text-sm text-muted-foreground">Enter valid dimensions to see the dieline.</p>
           )}

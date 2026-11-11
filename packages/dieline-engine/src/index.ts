@@ -16,6 +16,7 @@ export * from "./templates/slotted-box";
 export * from "./templates/registry";
 export * from "./templates/imported";
 export * from "./templates/imported-fold";
+export { planResize, resizeRatios, sheetMap, type PartSizes, type ResizePlan, type SizeClass } from "./templates/imported-resize";
 
 import { type DielineGeometry } from "./geometry-types";
 import { getGenerator } from "./templates/registry";

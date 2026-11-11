@@ -205,6 +205,17 @@ export function FoldSetupEditor({
                 const d = depth.get(p.id) ?? 0;
                 const on = sel?.kind === "panel" && sel.id === p.id;
                 const [cx, cy] = centroid(p.polygon);
+                // Names are 3x the old size, but never wider than their panel: a narrow panel turns its name or shrinks it.
+                const xs = p.polygon.filter((_, i) => i % 2 === 0);
+                const ys = p.polygon.filter((_, i) => i % 2 === 1);
+                const pw = Math.max(...xs) - Math.min(...xs);
+                const ph = Math.max(...ys) - Math.min(...ys);
+                const nameLen = Math.max(1, p.label.length) * 0.56;
+                const fsMax = (size / 40) * 3;
+                const flatFs = Math.min(fsMax, (pw * 0.92) / nameLen, ph * 0.5);
+                const turnedFs = Math.min(fsMax, (ph * 0.92) / nameLen, pw * 0.8);
+                const turn = turnedFs > flatFs * 1.15;
+                const nameFs = turn ? turnedFs : flatFs;
                 return (
                   <g key={p.id}>
                     <path
@@ -222,8 +233,8 @@ export function FoldSetupEditor({
                         } else setSel({ kind: "panel", id: p.id });
                       }}
                     />
-                    <text x={cx} y={cy} textAnchor="middle" fontSize={size / 40} fill="#18181b" pointerEvents="none">{p.label}</text>
-                    {roots.includes(p.id) ? <text x={cx} y={cy + size / 32} textAnchor="middle" fontSize={size / 55} fill="#2563eb" fontWeight="600" pointerEvents="none">{parts.length ? `BASE of ${pieceName(p.id).toLowerCase()}` : "BASE (stays flat)"}</text> : null}
+                    <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fontSize={nameFs} fill="#18181b" pointerEvents="none" {...(turn ? { transform: `rotate(-90 ${cx} ${cy})` } : {})}>{p.label}</text>
+                    {roots.includes(p.id) ? <text x={cx} y={cy + nameFs * (turn ? 0 : 0.95)} {...(turn ? { dx: nameFs * 0.95 } : {})} textAnchor="middle" dominantBaseline="middle" fontSize={Math.min(size / 55, nameFs * 0.45)} fill="#2563eb" fontWeight="600" pointerEvents="none">{parts.length ? `BASE of ${pieceName(p.id).toLowerCase()}` : "BASE (stays flat)"}</text> : null}
                   </g>
                 );
               })}
@@ -330,11 +341,11 @@ export function FoldSetupEditor({
 
       {/* inspector */}
       {selPanel ? (
-        <section aria-label="Panel settings" className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="flex flex-col gap-1 text-sm font-medium">Name
+        <section aria-label="Panel settings" className="flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border p-4">
+          <label className="flex w-full flex-col gap-1 text-sm font-medium sm:w-56">Name
             <input className={field} value={selPanel.label} maxLength={40} onChange={(e) => onChange(updatePanel(fold, selPanel.id, { label: e.target.value }))} />
           </label>
-          <div className="flex flex-col gap-1 text-sm font-medium">
+          <div className="flex w-full flex-col gap-1 text-sm font-medium sm:w-64">
             <div className="flex items-center gap-1.5">
               <label htmlFor="panel-kind">Kind</label>
               <PanelKindHelp />
@@ -344,14 +355,18 @@ export function FoldSetupEditor({
             </select>
             <span className="text-xs font-normal text-muted-foreground">{ROLE_OPTIONS.find((r) => r.value === selPanel.role)?.hint}</span>
           </div>
-          <label className="flex items-center gap-2 self-end pb-2 text-sm">
-            <input type="checkbox" checked={selPanel.printable} onChange={(e) => onChange(updatePanel(fold, selPanel.id, { printable: e.target.checked }))} />
-            Artwork can be printed here
-          </label>
-          <p className="text-sm text-muted-foreground sm:col-span-2 lg:col-span-4">
+          {/* Same shape as the fields beside it (an empty label line, then a 36px row), so the checkbox sits level with the inputs. */}
+          <div className="flex flex-col gap-1">
+            <span aria-hidden className="h-5" />
+            <label className="flex min-h-9 items-center gap-2 whitespace-nowrap text-sm">
+              <input type="checkbox" className="size-4 shrink-0" checked={selPanel.printable} onChange={(e) => onChange(updatePanel(fold, selPanel.id, { printable: e.target.checked }))} />
+              Artwork can be printed here
+            </label>
+          </div>
+          <p className="basis-full text-sm text-muted-foreground">
             Size: <strong className="text-foreground tabular-nums">{panelSize(selPanel.polygon).w.toFixed(1)} × {panelSize(selPanel.polygon).h.toFixed(1)} mm</strong> at the imported size, {selPanel.polygon.length / 2} corners.
           </p>
-          <div className="flex flex-col items-start gap-2 self-end pb-1">
+          <div className="flex basis-full flex-wrap items-center gap-2">
             <Button type="button" variant={fold.groundId === selPanel.id ? "default" : "outline"} size="sm" aria-pressed={fold.groundId === selPanel.id} onClick={() => onChange(setGround(fold, fold.groundId === selPanel.id ? null : selPanel.id))}>{fold.groundId === selPanel.id ? "On the ground (click to undo)" : "Put this on the ground"}</Button>
             {roots.includes(selPanel.id) ? <p className="text-sm text-muted-foreground">{parts.length ? `This is the base panel of the ${pieceName(selPanel.id).toLowerCase()}.` : "This is the base panel."}</p> : <Button type="button" variant="outline" size="sm" onClick={() => onChange(rootAt(fold, selPanel.id))}>{parts.length ? `Make this the base of its piece (${pieceName(roots[Math.max(0, pieceOf(fold, selPanel.id))]!).toLowerCase()})` : "Make this the base (stays flat)"}</Button>}
           </div>

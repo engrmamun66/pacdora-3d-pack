@@ -715,3 +715,14 @@ Ignored line styles stay dropped from geometry, exports and 3D. In the template 
 - `FoldSetup.groundId` / `FoldTree.groundId` (optional; absent = automatic, old behaviour). `buildCartonModel` turns the closed carton so that panel's printed side faces down, keeps the front facing the viewer, and re-centres / re-measures it (`size` follows the turn).
 - Admin 3D fold step: "Bottom (on the ground)" select under the 3D preview, plus a "Put this on the ground" button on a selected panel. Saved with the fold (`foldSchema` in template-actions).
 - Existing templates are unchanged until a ground panel is chosen. A saved Starting 3D view was set for the old orientation, so set it again after choosing a ground panel.
+- Grid toggle also in the admin "Starting 3D view" editor. `CartonView.snapshot` hides the grid while it renders, so the saved product image and downloads never include it.
+
+### Part sizes on the dieline page (imported templates)
+- **Dimensions** toggle (sheet toolbar; first called "Show dimensions"): writes each panel's width x height in the panel, in the chosen unit (mm / in). `renderDielineSvg({ showPartSizes })`. The old "Dimensions" toggle (overall sheet width/height lines) is now called "Sheet size".
+- **Base width / Base height / Box height** fields next to Width ("Custom size"). Empty = follows the overall width. Only for templates with a 3D fold, one piece (no extra lid parts) that closes along the box axes.
+- Engine: `templates/imported-resize.ts` (`planResize`, `sheetMap`). Each gap of the flat sheet along x and y is tagged W (base width), H (base height) or D (box height) from how the panels end up once the box is closed (panel area votes). Every point of the sheet goes through the same piecewise-linear map, so hinges stay on panel edges. Typed sizes must stay within 0.1x..10x of the scaled original.
+- Typed sizes are absolute (mm): changing the overall Width afterwards scales everything else but keeps typed sizes. Artwork already placed on the old shape is not re-fitted.
+
+### Watermark on the dieline sheet
+- Faint text on the diagonal lattice, drawn only inside the cut outline (`components/dielines/sheet-watermark.tsx`, clipped by the cut loops). On screen only: downloads stay clean.
+- Admin setting: Settings > Watermark (`/doraadmin/settings/watermark`): on/off and text (empty = `pacdorabd.com`). Stored in `site_setting` key `watermark` (`lib/watermark-settings.ts`); read per request by the dieline pages (`getWatermarkText`).

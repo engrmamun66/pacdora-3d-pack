@@ -6,6 +6,8 @@ export interface SvgOptions {
   readonly showGlue?: boolean;
   readonly showAnnotations?: boolean;
   readonly showPanelLabels?: boolean;
+  /** Write each panel's width x height in the panel, in this unit. Off when absent. */
+  readonly showPartSizes?: "mm" | "in";
   /** Extra white space around the artwork area, mm (room for dimension lines). */
   readonly margin?: number;
   /** Multiplies all line widths (e.g. 4 for small thumbnails). Default 1. */
@@ -96,6 +98,50 @@ function annotationSvg(a: LinearAnnotation): string {
   );
 }
 
+const MM_PER_INCH = 25.4;
+const PART_SIZE_STYLE = { fill: "#1d4ed8", halo: "#ffffff" } as const;
+
+/** "62 x 183 mm" / "2.44 x 7.2 in" (no trailing zeros). */
+export function formatPartSize(wMm: number, hMm: number, unit: "mm" | "in"): string {
+  const f = (v: number) => (unit === "mm" ? Math.round(v * 10) / 10 : Math.round((v / MM_PER_INCH) * 100) / 100).toString();
+  return `${f(wMm)} \u00d7 ${f(hMm)} ${unit}`;
+}
+
+/**
+ * Each panel's width x height (its bounding box on the flat sheet) written in the panel. Tall narrow
+ * panels get the text turned; text that is still too long for the panel is made smaller.
+ */
+function partSizesSvg(geo: DielineGeometry, unit: "mm" | "in", labelsOn: boolean | undefined): string {
+  const CHAR = 0.56; // average glyph width, in font sizes
+  const out: string[] = [];
+  for (const p of geo.foldTree.panels) {
+    const xs = p.polygon.map((q) => q.x);
+    const ys = p.polygon.map((q) => q.y);
+    const x0 = Math.min(...xs);
+    const x1 = Math.max(...xs);
+    const y0 = Math.min(...ys);
+    const y1 = Math.max(...ys);
+    const w = x1 - x0;
+    const h = y1 - y0;
+    if (!(w > 0 && h > 0)) continue;
+    const text = formatPartSize(w, h, unit);
+    const long = text.length * CHAR;
+    // Horizontal fits if the text is at most ~92% of the width; otherwise try turning it.
+    const flat = Math.min(3.2, (w * 0.92) / long, h * 0.5);
+    const turned = Math.min(3.2, (h * 0.92) / long, w * 0.5);
+    const rotate = turned > flat * 1.15;
+    const fs = Math.max(0.8, rotate ? turned : flat);
+    const cx = (x0 + x1) / 2;
+    const cy = (y0 + y1) / 2 + (labelsOn ? fs * 1.3 : 0);
+    const rot = rotate ? ` transform="rotate(-90 ${n(cx)} ${n(cy)})"` : "";
+    out.push(
+      `<text x="${n(cx)}" y="${n(cy)}" dominant-baseline="middle" font-size="${n(fs)}" font-family="Arial, Helvetica, sans-serif" font-weight="600" text-anchor="middle" ` +
+        `fill="${PART_SIZE_STYLE.fill}" stroke="${PART_SIZE_STYLE.halo}" stroke-width="${n(fs * 0.22)}" paint-order="stroke" stroke-linejoin="round"${rot}>${esc(text)}</text>`,
+    );
+  }
+  return out.join("");
+}
+
 /**
  * Render a dieline as a standalone SVG. The viewBox is in millimetres and the
  * width/height carry mm units, so the file opens at true physical size.
@@ -158,6 +204,7 @@ export function renderDielineSvg(geo: DielineGeometry, opts: SvgOptions = {}): s
       ),
     );
   }
+  if (o.showPartSizes) layers.push(layer("part-sizes", "Part sizes", partSizesSvg(geo, o.showPartSizes, o.showPanelLabels)));
   if (o.showAnnotations) layers.push(layer("annotations", "Dimensions", geo.annotations.map(annotationSvg).join("")));
 
   return (

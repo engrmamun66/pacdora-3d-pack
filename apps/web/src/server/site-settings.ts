@@ -2,6 +2,7 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "./db";
 import { DEFAULT_HERO, parseHeroSettings, type HeroSettings } from "@/lib/hero-settings";
+import { DEFAULT_WATERMARK_SETTINGS, parseWatermark, watermarkText, type WatermarkSettings } from "@/lib/watermark-settings";
 import { EMPTY_SVG_COLORS, parseSvgColors, type SvgColorSettings } from "@/lib/svg-colors";
 
 export const HERO_TAG = "site-hero";
@@ -33,4 +34,19 @@ export async function readHeroSettings(): Promise<{ settings: HeroSettings; upda
 export async function readSvgColors(): Promise<{ settings: SvgColorSettings; updatedAt: Date | null }> {
   const row = await db.siteSetting.findUnique({ where: { key: "svg-colors" }, select: { value: true, updatedAt: true } });
   return { settings: row ? parseSvgColors(row.value) : EMPTY_SVG_COLORS, updatedAt: row?.updatedAt ?? null };
+}
+
+/** Uncached read for the admin form (always the stored value). */
+export async function readWatermark(): Promise<{ settings: WatermarkSettings; updatedAt: Date | null }> {
+  const row = await db.siteSetting.findUnique({ where: { key: "watermark" }, select: { value: true, updatedAt: true } });
+  return { settings: row ? parseWatermark(row.value) : DEFAULT_WATERMARK_SETTINGS, updatedAt: row?.updatedAt ?? null };
+}
+
+/** The text drawn on the dieline sheet ("" = none). If the database cannot be read, the default text is used so the page never breaks. */
+export async function getWatermarkText(): Promise<string> {
+  try {
+    return watermarkText((await readWatermark()).settings);
+  } catch {
+    return watermarkText(DEFAULT_WATERMARK_SETTINGS);
+  }
 }

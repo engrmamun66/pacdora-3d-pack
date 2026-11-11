@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { z } from "zod";
 import { IMPORTED_GENERATOR_ID, getGenerator, getPreset } from "@packaging/dieline-engine";
 import { DielineWorkspace } from "@/components/dielines/workspace";
+import { getWatermarkText } from "@/server/site-settings";
 import { db } from "@/server/db";
 import { importedStartParams, loadImportedSource } from "@/server/imported-templates";
 import { readViewSettings } from "@/lib/view-settings";
@@ -28,6 +29,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
     select: { id: true, name: true, description: true, source: true, published: true, viewSettings: true, defaultThickness: true, categories: { where: { active: true }, select: { name: true } } },
   });
   if (!row || !row.published) notFound();
+  const watermark = await getWatermarkText();
 
   // Imported SVG template: a fixed shape you can resize, add artwork to and export (no 3D fold).
   if (row.source === "svg") {
@@ -44,6 +46,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
         description={row.description}
         initialName={row.name}
         initialParams={importedStartParams(imported.flat)}
+        watermark={watermark}
       />
     );
   }
@@ -62,6 +65,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
       description={row.description}
       initialName={row.name}
       initialParams={{ ...preset.defaults, ...(row.defaultThickness ? { thickness: row.defaultThickness } : {}), ...prefill }}
+      watermark={watermark}
     />
   );
 }

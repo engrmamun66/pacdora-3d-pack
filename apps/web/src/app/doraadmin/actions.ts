@@ -9,6 +9,7 @@ import { SUPERADMIN, requireSuperAdmin } from "@/server/admin";
 import { HERO_TAG } from "@/server/site-settings";
 import { heroSettingsSchema } from "@/lib/hero-settings";
 import { svgColorSchema } from "@/lib/svg-colors";
+import { watermarkSchema } from "@/lib/watermark-settings";
 import { SITE_TITLE_MAX } from "@/lib/site-identity";
 import { IDENTITY_TAG, readSiteIdentity, writeSiteIdentity } from "@/server/site-identity";
 
@@ -106,6 +107,23 @@ export async function saveSvgColors(_prev: SvgColorsFormState, formData: FormDat
   });
   revalidatePath("/doraadmin/templates", "layout");
   return { ok: true, message: "Saved. New SVG imports use these colours." };
+}
+
+export type WatermarkFormState = { ok: boolean; message: string | null };
+
+/** Save the watermark drawn inside the cut area of the dieline sheet. */
+export async function saveWatermark(_prev: WatermarkFormState, formData: FormData): Promise<WatermarkFormState> {
+  const admin = await requireSuperAdmin();
+  const parsed = watermarkSchema.safeParse({ enabled: formData.get("enabled") === "on", text: String(formData.get("text") ?? "") });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the watermark text." };
+  await db.siteSetting.upsert({
+    where: { key: "watermark" },
+    create: { key: "watermark", value: parsed.data, updatedById: admin.id },
+    update: { value: parsed.data, updatedById: admin.id },
+  });
+  revalidatePath("/template", "layout"); // dieline pages are server rendered with the text
+  revalidatePath("/projects", "layout");
+  return { ok: true, message: parsed.data.enabled ? "Saved. Dieline sheets now show this watermark." : "Saved. Dieline sheets show no watermark." };
 }
 
 export type IdentityFormState = { ok: boolean; message: string | null };

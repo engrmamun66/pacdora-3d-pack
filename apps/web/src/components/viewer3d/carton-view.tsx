@@ -284,27 +284,40 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     snapshot: (size) => {
       const t = three.current;
       if (!t) return null;
-      if (!size) {
-        t.renderer.render(t.scene, t.camera);
-        return t.renderer.domElement.toDataURL("image/png");
+      // Pictures never show the helper grid.
+      const grid = gridObj.current;
+      const gridWas = grid?.visible ?? false;
+      if (grid) grid.visible = false;
+      try {
+        return takeSnapshot(t, size);
+      } finally {
+        if (grid) grid.visible = gridWas;
+        if (gridWas) t.renderer.render(t.scene, t.camera);
       }
-      const shown = t.renderer.getSize(new THREE.Vector2());
-      const ratio = t.renderer.getPixelRatio();
-      const aspect = t.camera.aspect;
-      t.renderer.setPixelRatio(1);
-      t.renderer.setSize(size.width, size.height, false);
-      t.camera.aspect = size.width / size.height;
-      t.camera.updateProjectionMatrix();
-      t.renderer.render(t.scene, t.camera);
-      const url = t.renderer.domElement.toDataURL("image/png");
-      t.renderer.setPixelRatio(ratio);
-      t.renderer.setSize(shown.x, shown.y, false);
-      t.camera.aspect = aspect;
-      t.camera.updateProjectionMatrix();
-      t.renderer.render(t.scene, t.camera);
-      return url;
     },
   }));
+
+  const takeSnapshot = (t: NonNullable<typeof three.current>, size?: { width: number; height: number }): string => {
+    if (!size) {
+      t.renderer.render(t.scene, t.camera);
+      return t.renderer.domElement.toDataURL("image/png");
+    }
+    const shown = t.renderer.getSize(new THREE.Vector2());
+    const ratio = t.renderer.getPixelRatio();
+    const aspect = t.camera.aspect;
+    t.renderer.setPixelRatio(1);
+    t.renderer.setSize(size.width, size.height, false);
+    t.camera.aspect = size.width / size.height;
+    t.camera.updateProjectionMatrix();
+    t.renderer.render(t.scene, t.camera);
+    const url = t.renderer.domElement.toDataURL("image/png");
+    t.renderer.setPixelRatio(ratio);
+    t.renderer.setSize(shown.x, shown.y, false);
+    t.camera.aspect = aspect;
+    t.camera.updateProjectionMatrix();
+    t.renderer.render(t.scene, t.camera);
+    return url;
+  };
 
   // Renderer, scene, lights: once.
   useEffect(() => {

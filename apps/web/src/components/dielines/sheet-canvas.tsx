@@ -2,12 +2,15 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Hand, Maximize, Minus, Plus } from "lucide-react";
+import { DEFAULT_WATERMARK, SheetWatermark } from "./sheet-watermark";
 
 export type ViewToggles = {
   bleed: boolean;
   safe: boolean;
   glue: boolean;
   dimensions: boolean;
+  /** Each part's width x height written in the part. */
+  partSizes: boolean;
   labels: boolean;
   /** Imported dielines: ignored lines the admin kept as a faint picture. */
   reference: boolean;
@@ -21,7 +24,8 @@ export interface ToggleDef<K extends string = string> {
 
 /** Toggles of the parametric dieline workspace. */
 export const DIELINE_TOGGLES: ToggleDef<keyof ViewToggles>[] = [
-  { key: "dimensions", label: "Dimensions" },
+  { key: "partSizes", label: "Dimensions" },
+  { key: "dimensions", label: "Sheet size" },
   { key: "bleed", label: "Bleed" },
   { key: "safe", label: "Safe area" },
   { key: "glue", label: "Glue" },
@@ -46,14 +50,20 @@ export function SheetCanvas<T extends Record<string, boolean>>({
   toggleDefs,
   onToggles,
   legend,
+  watermark = DEFAULT_WATERMARK,
+  watermarkClip,
 }: {
   /** Size (mm) of the picture `src` shows, margins included. */
-  bounds: { width: number; height: number };
+  bounds: { width: number; height: number; minX?: number; minY?: number };
   src: string;
   toggles: T;
   toggleDefs: ToggleDef<Extract<keyof T, string>>[];
   onToggles: (t: T) => void;
   legend: { label: string; color: string; dashed?: boolean }[];
+  /** Text tiled faintly behind the dieline; an empty string turns it off. */
+  watermark?: string;
+  /** Path data (sheet mm) that limits the watermark to the cut outline. */
+  watermarkClip?: string;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View | null>(null);
@@ -151,14 +161,15 @@ export function SheetCanvas<T extends Record<string, boolean>>({
         className="absolute inset-0 cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
       >
         {view ? (
-          // eslint-disable-next-line @next/next/no-img-element -- generated SVG data URL
-          <img
-            src={src}
-            alt="Flat dieline"
-            draggable={false}
-            className="pointer-events-none absolute left-0 top-0 max-w-none select-none rounded-sm bg-white shadow-sm"
+          <div
+            className="pointer-events-none absolute left-0 top-0 select-none overflow-hidden rounded-sm bg-white shadow-sm"
             style={{ width: vb.width * view.k, height: vb.height * view.k, transform: `translate(${view.x}px, ${view.y}px)` }}
-          />
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- generated SVG data URL */}
+            <img src={src} alt="Flat dieline" draggable={false} className="absolute inset-0 size-full max-w-none" />
+            {/* Above the picture: its SVG paints an opaque white sheet, which would hide a watermark under it. */}
+            <SheetWatermark bounds={vb} text={watermark} {...(watermarkClip ? { clip: watermarkClip } : {})} />
+          </div>
         ) : null}
       </div>
 

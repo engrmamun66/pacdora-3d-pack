@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { requireUser } from "@/server/session";
 import { getProject } from "@/server/projects";
 import { DielineWorkspace } from "@/components/dielines/workspace";
+import { getWatermarkText } from "@/server/site-settings";
 import { IMPORTED_GENERATOR_ID } from "@packaging/dieline-engine";
 import { loadImportedSource } from "@/server/imported-templates";
 import { readViewSettings } from "@/lib/view-settings";
@@ -30,6 +31,7 @@ async function ProjectView({ params }: { params: PageProps<"/projects/[id]">["pa
       description={`Last saved ${project.updatedAt.toISOString().replace("T", " ").slice(0, 16)} UTC`}
       initialName={project.name}
       initialParams={project.doc.template.params}
+      watermark={await getWatermarkText()}
     />
   );
 }

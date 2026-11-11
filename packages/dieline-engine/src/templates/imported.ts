@@ -6,7 +6,8 @@ import { area, bounds, offsetPolygon } from "../primitives/polygon";
 import { type Vec2, vec } from "../primitives/vec2";
 import { ENGINE_VERSION, ParamValidationError } from "./carton-common";
 import { type FoldSetup, validateFoldSetup } from "./imported-fold";
-import type { GeneratorDefinition } from "./registry";
+import { type PartSizes, planResize, sheetMap } from "./imported-resize";
+import type { GeneratorDefinition, ParamDescriptor } from "./registry";
 
 /**
  * Dielines that were drawn elsewhere (imported from an SVG) as a generator.
@@ -89,6 +90,7 @@ function pointInPolygon(p: Vec2, poly: readonly Vec2[]): boolean {
 }
 
 const round1 = (v: number) => Math.round(v * 10) / 10;
+const round2 = (v: number) => Math.round(v * 100) / 100;
 
 /**
  * The separate pieces of the sheet: closed cut shapes that are not inside another one
@@ -140,12 +142,20 @@ export function importedDefaults(flat: FlatDieline): { width: number; bleed: num
  * Move paths from the imported frame into the frame of a generated dieline of overall
  * `width` (the same uniform scale about the outline's corner the generator uses).
  */
-export function scaleImportedPaths(flat: FlatDieline, width: number, paths: readonly FlatPath[]): FlatPath[] {
+export function scaleImportedPaths(flat: FlatDieline, width: number, paths: readonly FlatPath[], fold?: FoldSetup | null, sizes: PartSizes = {}): FlatPath[] {
   const loops = closedCutLoops(flat);
   if (loops.length === 0) return [];
   const ob = unionBounds(sheetPieces(loops));
   const k = width / (ob.max.x - ob.min.x);
-  return paths.map((p) => ({ closed: p.closed, pts: p.pts.map((v, i) => (i % 2 === 0 ? ob.min.x + (v - ob.min.x) * k : ob.min.y + (v - ob.min.y) * k)) }));
+  const map = sheetMap(ob.min, k, planResize(fold), sizes);
+  return paths.map((p) => {
+    const pts: number[] = [];
+    for (let i = 0; i + 1 < p.pts.length; i += 2) {
+      const q = map(vec(p.pts[i]!, p.pts[i + 1]!));
+      pts.push(q.x, q.y);
+    }
+    return { closed: p.closed, pts };
+  });
 }
 
 const MAX_SEGMENTS = 60_000;
@@ -159,6 +169,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
   }
   const { width: baseW } = importedCutSize(flat);
   const defaults = importedDefaults(flat);
+  const plan = planResize(fold);
   const minW = Math.max(10, round1(baseW * 0.05));
   const maxW = Math.min(5000, Math.max(minW + 1, round1(baseW * 20)));
 
@@ -177,14 +188,35 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
     };
     const width = read("width", defaults.width, minW, maxW);
     const bleed = read("bleed", defaults.bleed, 0, 20);
+    // The part sizes: left empty they follow the overall scale; typed, they must stay within 0.1x..10x of it.
+    const scale0 = width / baseW;
+    const readSize = (key: keyof PartSizes, natural: number): number | undefined => {
+      const v = raw[key];
+      if (!plan || v === undefined || v === "") return undefined;
+      if (typeof v !== "number" || !Number.isFinite(v)) {
+        issues.push({ path: key, message: "must be a number" });
+        return undefined;
+      }
+      const lo = round1(natural * scale0 * 0.1);
+      const hi = round1(natural * scale0 * 10);
+      if (v < lo || v > hi) issues.push({ path: key, message: `must be between ${lo} and ${hi} mm` });
+      return v;
+    };
+    const sizes: PartSizes = plan
+      ? {
+          ...optionalSize("baseWidth", readSize("baseWidth", plan.natural.baseWidth)),
+          ...optionalSize("baseHeight", readSize("baseHeight", plan.natural.baseHeight)),
+          ...optionalSize("boxHeight", readSize("boxHeight", plan.natural.boxHeight)),
+        }
+      : {};
     if (issues.length) throw new ParamValidationError(issues);
 
     const loops = closedCutLoops(flat);
     const pieces = sheetPieces(loops);
     const ob = unionBounds(pieces);
     const k = width / (ob.max.x - ob.min.x);
-    // Scale about the outline's corner so everything keeps its place relative to it.
-    const map = (p: Vec2): Vec2 => vec(ob.min.x + (p.x - ob.min.x) * k, ob.min.y + (p.y - ob.min.y) * k);
+    // Scale about the outline's corner so everything keeps its place relative to it, then stretch the chosen parts.
+    const map = sheetMap(ob.min, k, plan, sizes);
     const mapAll = (pts: readonly Vec2[]) => pts.map(map);
 
     const cutLoops: Outline[] = loops.map((l) => ({ points: mapAll(l) }));
@@ -211,7 +243,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
     const creaseLines: CreaseLine[] = segs(flat.crease, "fold").map((s) => ({ ...s, hingeId: s.id, foldAngleDeg: 90 }));
 
     // One piece: the cut outline grown by the bleed. Several pieces: one box around all of them.
-    const sheetBox = { min: vec(ob.min.x, ob.min.y), max: vec(ob.min.x + (ob.max.x - ob.min.x) * k, ob.min.y + (ob.max.y - ob.min.y) * k) };
+    const sheetBox = { min: vec(ob.min.x, ob.min.y), max: map(vec(ob.max.x, ob.max.y)) };
     let bleedLoop: readonly Vec2[] = pieces.length > 1 ? rectangle(sheetBox.min, sheetBox.max) : outer;
     if (bleed > 0) {
       if (pieces.length > 1) {
@@ -285,7 +317,17 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
       unit: "mm",
       templateId,
       engineVersion: ENGINE_VERSION,
-      params: { width, bleed },
+      params: {
+        width,
+        bleed,
+        ...(plan
+          ? {
+              baseWidth: round2(sizes.baseWidth ?? plan.natural.baseWidth * k),
+              baseHeight: round2(sizes.baseHeight ?? plan.natural.baseHeight * k),
+              boxHeight: round2(sizes.boxHeight ?? plan.natural.boxHeight * k),
+            }
+          : {}),
+      },
       unverifiedDefaultsUsed: [],
       foldTree: { rootId, panels, hinges, ...(parts.length > 0 ? { parts } : {}), ...(groundId ? { groundId } : {}) },
       cutLoops,
@@ -305,7 +347,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
     id: IMPORTED_GENERATOR_ID,
     name: "Imported dieline",
     schemaVersion: 1,
-    schemaKeys: ["width", "bleed"],
+    schemaKeys: plan ? ["width", "bleed", "baseWidth", "baseHeight", "boxHeight"] : ["width", "bleed"],
     generate,
     params: [
       {
@@ -320,7 +362,18 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
         optional: true,
         help: `Overall width of the flat shape. Height follows the original proportions (original ${round1(baseW)} mm wide). The whole sheet is scaled.`,
       },
+      ...(plan
+        ? [
+            sizeParam("baseWidth", "Base width", "Width of the base panel. The panels along it follow."),
+            sizeParam("baseHeight", "Base height", "Height of the base panel. The panels along it follow."),
+            sizeParam("boxHeight", "Box height", "How tall the box stands: the height of the side walls."),
+          ]
+        : []),
       { key: "bleed", kind: "number", label: "Bleed", unit: "mm", group: "Print", min: 0, max: 20, step: 0.5, optional: true, help: "Print area outside the cut line." },
     ],
   };
 }
+
+const optionalSize = (key: keyof PartSizes, v: number | undefined): PartSizes => (v === undefined ? {} : { [key]: v });
+
+const sizeParam = (key: string, label: string, help: string): ParamDescriptor => ({ key, kind: "number", label, unit: "mm", group: "Dimensions", min: 1, max: 5000, step: 1, optional: true, help });

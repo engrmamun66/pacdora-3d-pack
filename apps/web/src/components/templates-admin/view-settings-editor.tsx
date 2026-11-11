@@ -6,6 +6,7 @@ import { createImportedGenerator, generateDieline, importedDefaults, type Dielin
 import { saveTemplateView, type TemplateViewData } from "@/app/doraadmin/template-view-actions";
 import { Button } from "@/components/ui/button";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
+import { GridToggle } from "@/components/viewer3d/grid-toggle";
 import { notify } from "@/lib/notify";
 import { STANDARD_VIEW, type ViewSettings } from "@/lib/view-settings";
 
@@ -173,6 +174,7 @@ export function ViewSettingsEditor({ slug, data, onSaved }: { slug: string; data
             initialView={startView}
             onViewChange={(v) => setLive((old) => ({ ...v, progress: old.progress }))}
           />
+          <GridToggle viewRef={ref} />
           {/* The template list crops the picture to its middle: these lines show what stays. */}
           <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 w-[71%] -translate-x-1/2 border-x border-dashed border-foreground/30" />
         </div>

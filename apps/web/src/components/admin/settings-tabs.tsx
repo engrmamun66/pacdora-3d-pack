@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Globe, Home, Palette, Server } from "lucide-react";
+import { Bell, Globe, Home, Palette, Server, Stamp } from "lucide-react";
 
 const TABS = [
   { href: "/doraadmin/settings", label: "Home page", icon: Home },
   { href: "/doraadmin/settings/identity", label: "Site Identity", icon: Globe },
   { href: "/doraadmin/settings/svg-colors", label: "SVG Dieline Color", icon: Palette },
+  { href: "/doraadmin/settings/watermark", label: "Watermark", icon: Stamp },
   { href: "/doraadmin/settings/notifications", label: "Notifications", icon: Bell },
   { href: "/doraadmin/settings/system", label: "System status", icon: Server },
 ];

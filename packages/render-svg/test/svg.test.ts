@@ -65,3 +65,23 @@ describe("arc output", () => {
     expect((svg.match(/<line id="slit-/g) ?? []).length).toBe(4);
   });
 });
+
+describe("part sizes", () => {
+  it("is off by default", () => {
+    expect(renderDielineSvg(geo)).not.toContain('id="part-sizes"');
+  });
+
+  it("writes every panel's width x height in millimetres", () => {
+    const svg = renderDielineSvg(geo, { showPartSizes: "mm" });
+    expect(svg).toContain('id="part-sizes"');
+    expect(svg.match(/<text [^>]*font-weight="600"/g)).toHaveLength(geo.foldTree.panels.length);
+    // The front panel of this carton is 100 x 150 mm.
+    expect(svg).toContain("100 × 150 mm");
+  });
+
+  it("converts to inches", () => {
+    const svg = renderDielineSvg(geo, { showPartSizes: "in" });
+    expect(svg).toContain("3.94 × 5.91 in");
+    expect(svg).not.toContain("100 × 150 mm");
+  });
+});
