@@ -45,6 +45,12 @@ export interface CartonViewHandle {
   getView(): ViewSettings | null;
   /** Move the camera to a view. */
   setView(v: ViewSettings): void;
+  /** Where the camera is turned: x = tilt up/down, y = turn left/right, both in degrees; null before the model exists. */
+  getRotation(): { x: number; y: number } | null;
+  /** Turn the camera to this tilt (x) and/or turn (y), in degrees. Zoom and position are kept. */
+  setRotation(r: { x?: number; y?: number }): void;
+  /** Be told when the camera moves (dragging, buttons, reset). Returns the way to stop. */
+  onRotation(cb: (r: { x: number; y: number }) => void): () => void;
   /**
    * PNG (data URL) of the current view. With `size` it is drawn at exactly that many pixels
    * (same camera, the picture is just cut to that shape), and the view on screen is left as it was.
@@ -76,6 +82,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     onViewChangeRef.current = onViewChange;
     progressRef.current = progress;
   });
+  const rotationListeners = useRef(new Set<(r: { x: number; y: number }) => void>());
   const rebuild = useRef<(p: number, hingeProgress?: Readonly<Record<string, number>>) => void>(() => {});
   const three = useRef<{
     renderer: THREE.WebGLRenderer;
@@ -117,6 +124,16 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     return cameraToView([p.x, p.y, p.z], [c.x, c.y, c.z], fb.base, fb.r, progressRef.current);
   };
 
+  const getRotation = (): { x: number; y: number } | null => {
+    const v = getView();
+    return v ? { x: v.elevationDeg, y: v.azimuthDeg } : null;
+  };
+  const notifyRotation = () => {
+    if (!rotationListeners.current.size) return;
+    const r = getRotation();
+    if (r) rotationListeners.current.forEach((cb) => cb(r));
+  };
+
   const frame = () => {
     const t = three.current;
     if (!t?.model) return;
@@ -134,6 +151,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     sc.updateProjectionMatrix();
     t.controls.update();
     if (initialViewRef.current) applyView(initialViewRef.current);
+    notifyRotation();
   };
 
   useImperativeHandle(ref, () => ({
@@ -142,6 +160,22 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     resetView: frame,
     getView,
     setView: applyView,
+    getRotation,
+    setRotation: (r) => {
+      const v = getView();
+      if (!v) return;
+      applyView({
+        ...v,
+        ...(r.y === undefined ? {} : { azimuthDeg: Math.max(-180, Math.min(180, r.y)) }),
+        ...(r.x === undefined ? {} : { elevationDeg: Math.max(-89, Math.min(89, r.x)) }),
+      });
+    },
+    onRotation: (cb) => {
+      rotationListeners.current.add(cb);
+      return () => {
+        rotationListeners.current.delete(cb);
+      };
+    },
     exportGlb: async () => {
       const model = three.current?.model;
       if (!model) throw new Error("No 3D model to export.");
@@ -229,12 +263,14 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     };
     let notifyQueued = false;
     const onChange = () => {
-      if (!onViewChangeRef.current || notifyQueued) return;
+      if ((!onViewChangeRef.current && !rotationListeners.current.size) || notifyQueued) return;
       notifyQueued = true;
       requestAnimationFrame(() => {
         notifyQueued = false;
         const v = getView();
-        if (v) onViewChangeRef.current?.(v);
+        if (!v) return;
+        onViewChangeRef.current?.(v);
+        rotationListeners.current.forEach((cb) => cb({ x: v.elevationDeg, y: v.azimuthDeg }));
       });
     };
     controls.addEventListener("change", onChange);

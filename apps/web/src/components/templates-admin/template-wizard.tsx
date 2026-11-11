@@ -466,7 +466,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   ) : null;
   const foldSection = flat ? (
     <section aria-label="3D fold" className="flex flex-col gap-4">
-      <FoldSetupEditor flat={flat} fold={fold} stale={foldStale} onChange={(f) => { setFold(f); setFoldKey(flatKey); }} />
+      <FoldSetupEditor flat={flat} fold={fold} stale={foldStale} barBottom={mode === "edit" ? "4.75rem" : "0.75rem"} onChange={(f) => { setFold(f); setFoldKey(flatKey); }} />
     </section>
   ) : null;
   const detailsFields = (

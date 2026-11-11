@@ -5,6 +5,7 @@ import { Box, Check, DraftingCompass, FileText, PenTool, Play, RotateCcw, Spline
 import type { DielineGeometry } from "@packaging/dieline-engine";
 import { ILLUSTRATOR_PROFILES } from "@packaging/render-print/profiles";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
+import { RotationControls } from "@/components/viewer3d/rotation-controls";
 import type { ViewSettings } from "@/lib/view-settings";
 
 export type DownloadFormat = "ai" | "pdf" | "dxf" | "svg" | "glb";
@@ -98,7 +99,7 @@ export function FoldPreview({
     anim.current = requestAnimationFrame(step);
   };
   return (
-    <section aria-label="3D preview" className="shrink-0 overflow-hidden rounded-2xl border bg-muted/40">
+    <section aria-label="3D preview" className="relative shrink-0 overflow-hidden rounded-2xl border bg-muted/40">
       <CartonView ref={viewRef} className="h-56 w-full" geo={geo} texture={null} textureRect={null} progress={progress} outsideColor={color} insideColor="#c8a97e" initialView={initialView} />
       <div className="flex items-center gap-2 border-t bg-background px-3 py-2 text-xs">
         <label className="flex flex-1 items-center gap-2">
@@ -121,6 +122,7 @@ export function FoldPreview({
           <RotateCcw className="size-3.5" />
         </button>
       </div>
+      <RotationControls viewRef={viewRef} />
     </section>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FoldSetup } from "@packaging/dieline-engine";
-import { compactOrders, depthOf, linesKey, makeMain, moveHinge, pieceOf, rootAt, rootsOf, sortedHinges, stepsOf, updateHinge, updatePanel } from "./fold-edit";
+import { applyFoldSequence, compactOrders, depthOf, linesKey, makeMain, moveHinge, pieceOf, rootAt, rootsOf, sortedHinges, stepsOf, updateHinge, updatePanel } from "./fold-edit";
 
 const sq = [0, 0, 10, 0, 10, 10, 0, 10];
 const setup: FoldSetup = {
@@ -92,5 +92,22 @@ describe("fold edits", () => {
       expect(m.parts![0]!.rootId).toBe("a");
       expect(makeMain(two, "b")).toBe(two);
     });
+  });
+  it("quick sort: listed lines fold one by one in that order, the rest follow and keep their steps", () => {
+    const four: FoldSetup = {
+      ...setup,
+      hinges: [
+        { id: "h1", parentId: "a", childId: "b", line: [0, 0, 1, 0], angleDeg: 90, order: 1 },
+        { id: "h2", parentId: "b", childId: "c", line: [0, 0, 1, 0], angleDeg: -90, order: 2 },
+        { id: "h3", parentId: "a", childId: "c", line: [0, 0, 1, 0], angleDeg: 90, order: 2 },
+        { id: "h4", parentId: "a", childId: "c", line: [0, 0, 1, 0], angleDeg: 90, order: 5 },
+      ],
+    };
+    const r = applyFoldSequence(four, ["h4", "h1"]);
+    expect(Object.fromEntries(r.hinges.map((h) => [h.id, h.order]))).toEqual({ h4: 1, h1: 2, h2: 3, h3: 3 });
+    // unknown and repeated ids are skipped; nothing listed changes nothing
+    expect(applyFoldSequence(four, ["zzz", "h2", "h2"]).hinges.find((h) => h.id === "h2")!.order).toBe(1);
+    expect(applyFoldSequence(four, [])).toBe(four);
+    expect(four.hinges[0]!.order).toBe(1);
   });
 });

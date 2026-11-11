@@ -1,13 +1,16 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Play, RotateCcw, Wand2 } from "lucide-react";
+import { ListOrdered, Play, RotateCcw, Wand2 } from "lucide-react";
 import { createImportedGenerator, detectFoldSetup, importedDefaults, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldHingeSpec, type FoldSetup, type PanelRole, type PartPlacementMode } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
-import { compactOrders, depthOf, makeMain, moveHinge, pieceOf, rootAt, rootsOf, sortedHinges, stepsOf, updateHinge, updatePanel, updatePart } from "@/lib/fold-edit";
+import { applyFoldSequence, compactOrders, depthOf, makeMain, moveHinge, pieceOf, rootAt, rootsOf, sortedHinges, stepsOf, updateHinge, updatePanel, updatePart } from "@/lib/fold-edit";
 import { HingeList } from "./hinge-list";
+import { PanelKindHelp } from "./panel-kind-help";
+import { QuickSortBar } from "./quick-sort-bar";
+import { RotationControls } from "@/components/viewer3d/rotation-controls";
 import { pathData } from "@/lib/template-import";
 
 const ROLE_OPTIONS: { value: PanelRole; label: string; hint: string }[] = [
@@ -58,14 +61,20 @@ export function FoldSetupEditor({
   fold,
   onChange,
   stale,
+  barBottom = "0.75rem",
 }: {
   flat: FlatDielineData;
   fold: FoldSetup | null;
   onChange: (f: FoldSetup | null) => void;
   /** True when the lines changed after the fold was set up: it must be detected again or removed. */
   stale: boolean;
+  /** Distance of the quick sort bar from the window bottom, so it clears a sticky save bar. */
+  barBottom?: string;
 }) {
   const [sel, setSel] = useState<Sel>(null);
+  // Quick sort: while on, a click on a fold line (or the panel it swings) adds it to `queue`.
+  const [quick, setQuick] = useState(false);
+  const [queue, setQueue] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<readonly string[]>([]);
   const [progress, setProgress] = useState(1);
   const view = useRef<CartonViewHandle>(null);
@@ -75,6 +84,8 @@ export function FoldSetupEditor({
     const r = detectFoldSetup(flat as FlatDieline);
     setWarnings(r.warnings);
     setSel(null);
+    setQuick(false);
+    setQueue([]);
     onChange(r.setup);
   };
 
@@ -130,6 +141,13 @@ export function FoldSetupEditor({
   }
 
   const hinges = sortedHinges(fold);
+  const hingeName = (id: string) => {
+    const h = fold.hinges.find((x) => x.id === id);
+    return h ? `${label(h.parentId)} → ${label(h.childId)}` : id;
+  };
+  const liveQueue = queue.filter((id) => fold.hinges.some((h) => h.id === id));
+  const toggleQueued = (id: string) => setQueue((q) => (q.includes(id) ? q.filter((x) => x !== id) : [...q, id]));
+  const stopQuick = () => { setQuick(false); setQueue([]); };
   const selPanel = sel?.kind === "panel" ? fold.panels.find((p) => p.id === sel.id) : undefined;
   const selHinge = sel?.kind === "hinge" ? fold.hinges.find((h) => h.id === sel.id) : undefined;
   const setHinge = (id: string, patch: Partial<Pick<FoldHingeSpec, "angleDeg" | "order">>) => onChange(updateHinge(fold, id, patch));
@@ -143,8 +161,9 @@ export function FoldSetupEditor({
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <p className="mr-auto text-sm text-muted-foreground">
-          {fold.panels.length} panels, {fold.hinges.length} fold lines, {steps.length} {steps.length === 1 ? "step" : "steps"}{parts.length ? `, ${parts.length + 1} pieces` : ""}. Click a panel or a fold line to edit it.
+          {fold.panels.length} panels, {fold.hinges.length} fold lines, {steps.length} {steps.length === 1 ? "step" : "steps"}{parts.length ? `, ${parts.length + 1} pieces` : ""}.
         </p>
+        <Button type="button" variant={quick ? "default" : "outline"} size="sm" aria-pressed={quick} onClick={() => (quick ? stopQuick() : (setQuick(true), setSel(null)))}><ListOrdered className="size-4" aria-hidden /> Quick sort</Button>
         <Button type="button" variant="outline" size="sm" onClick={detect}><Wand2 className="size-4" aria-hidden /> Detect again</Button>
         <Button type="button" variant="outline" size="sm" onClick={() => { if (window.confirm("Remove the 3D fold? The template becomes flat only.")) { onChange(null); setSel(null); setWarnings([]); } }}>Make flat only</Button>
       </div>
@@ -176,7 +195,13 @@ export function FoldSetupEditor({
                       stroke={on ? "#2563eb" : "#ffffff"}
                       strokeWidth={size / (on ? 120 : 400)}
                       className="cursor-pointer"
-                      onClick={(e) => { e.stopPropagation(); setSel({ kind: "panel", id: p.id }); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (quick) {
+                          const h = fold.hinges.find((x) => x.childId === p.id);
+                          if (h) toggleQueued(h.id);
+                        } else setSel({ kind: "panel", id: p.id });
+                      }}
                     />
                     <text x={cx} y={cy} textAnchor="middle" fontSize={size / 40} fill="#18181b" pointerEvents="none">{p.label}</text>
                     {roots.includes(p.id) ? <text x={cx} y={cy + size / 32} textAnchor="middle" fontSize={size / 55} fill="#2563eb" fontWeight="600" pointerEvents="none">{parts.length ? `BASE of ${pieceName(p.id).toLowerCase()}` : "BASE (stays flat)"}</text> : null}
@@ -188,16 +213,17 @@ export function FoldSetupEditor({
                 <path d={flat.crease.map((p) => pathData(p.pts, p.closed)).join("")} stroke="#00a0e9" strokeWidth={size / 450} strokeDasharray={`${size / 120} ${size / 240}`} />
               </g>
               {fold.hinges.map((h) => {
-                const on = sel?.kind === "hinge" && sel.id === h.id;
+                const at = queue.indexOf(h.id);
+                const on = quick ? at >= 0 : sel?.kind === "hinge" && sel.id === h.id;
                 const [x1, y1, x2, y2] = h.line;
                 const mx = (x1 + x2) / 2;
                 const my = (y1 + y2) / 2;
                 return (
-                  <g key={h.id} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); setSel({ kind: "hinge", id: h.id }); }}>
+                  <g key={h.id} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); if (quick) toggleQueued(h.id); else setSel({ kind: "hinge", id: h.id }); }}>
                     <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={size / 40} />
                     <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={h.angleDeg < 0 ? "#ea580c" : "#0f766e"} strokeWidth={size / (on ? 90 : 170)} strokeLinecap="round" />
-                    <circle cx={mx} cy={my} r={size / 70} fill={on ? "#2563eb" : "#18181b"} />
-                    <text x={mx} y={my + size / 190} textAnchor="middle" fontSize={size / 80} fill="#ffffff" pointerEvents="none">{h.order}</text>
+                    <circle cx={mx} cy={my} r={size / (quick && at >= 0 ? 55 : 70)} fill={on ? "#2563eb" : quick ? "#71717a" : "#18181b"} />
+                    <text x={mx} y={my + size / 190} textAnchor="middle" fontSize={size / 80} fill="#ffffff" pointerEvents="none">{quick ? (at >= 0 ? at + 1 : "") : h.order}</text>
                   </g>
                 );
               })}
@@ -208,7 +234,7 @@ export function FoldSetupEditor({
 
         {/* 3D preview */}
         <div className="flex min-w-0 flex-col gap-2">
-          <div className="overflow-hidden rounded-xl border bg-muted/40">
+          <div className="relative overflow-hidden rounded-xl border bg-muted/40">
             {geo.geo ? (
               <CartonView ref={view} className="h-[min(420px,50vh)] w-full" geo={geo.geo} texture={null} textureRect={null} progress={progress} outsideColor="#ffffff" insideColor="#c8a97e" />
             ) : (
@@ -223,6 +249,7 @@ export function FoldSetupEditor({
               <button type="button" aria-label="Play the fold step by step" className="grid size-7 place-items-center rounded-md border hover:bg-muted" onClick={play}><Play className="size-3.5" /></button>
               <button type="button" aria-label="Reset camera" className="grid size-7 place-items-center rounded-md border hover:bg-muted" onClick={() => view.current?.resetView()}><RotateCcw className="size-3.5" /></button>
             </div>
+            {geo.geo ? <RotationControls viewRef={view} /> : null}
           </div>
           <p className="text-xs text-muted-foreground">Steps fold one after another. If the box looks wrong, check the angles, directions and steps on the left.</p>
         </div>
@@ -280,12 +307,16 @@ export function FoldSetupEditor({
           <label className="flex flex-col gap-1 text-sm font-medium">Name
             <input className={field} value={selPanel.label} maxLength={40} onChange={(e) => onChange(updatePanel(fold, selPanel.id, { label: e.target.value }))} />
           </label>
-          <label className="flex flex-col gap-1 text-sm font-medium">Kind
-            <select className={field} value={selPanel.role} onChange={(e) => onChange(updatePanel(fold, selPanel.id, { role: e.target.value as PanelRole }))}>
+          <div className="flex flex-col gap-1 text-sm font-medium">
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="panel-kind">Kind</label>
+              <PanelKindHelp />
+            </div>
+            <select id="panel-kind" className={field} value={selPanel.role} onChange={(e) => onChange(updatePanel(fold, selPanel.id, { role: e.target.value as PanelRole }))}>
               {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
             <span className="text-xs font-normal text-muted-foreground">{ROLE_OPTIONS.find((r) => r.value === selPanel.role)?.hint}</span>
-          </label>
+          </div>
           <label className="flex items-center gap-2 self-end pb-2 text-sm">
             <input type="checkbox" checked={selPanel.printable} onChange={(e) => onChange(updatePanel(fold, selPanel.id, { printable: e.target.checked }))} />
             Artwork can be printed here
@@ -314,6 +345,17 @@ export function FoldSetupEditor({
         <Button type="button" variant="outline" size="sm" onClick={() => onChange(compactOrders(fold))}>Tidy step numbers</Button>
         <Button type="button" variant="outline" size="sm" onClick={() => onChange({ ...fold, hinges: fold.hinges.map((h) => ({ ...h, angleDeg: Math.sign(h.angleDeg || 1) * 90 })) })}>Set every angle to 90°</Button>
       </div>
+      {quick ? (
+        <QuickSortBar
+          bottom={barBottom}
+          items={liveQueue.map((id) => ({ id, label: hingeName(id) }))}
+          onReorder={setQueue}
+          onRemove={(id) => setQueue((q) => q.filter((x) => x !== id))}
+          onClear={() => setQueue([])}
+          onCancel={stopQuick}
+          onApply={() => { onChange(applyFoldSequence(fold, liveQueue)); stopQuick(); }}
+        />
+      ) : null}
     </div>
   );
 }

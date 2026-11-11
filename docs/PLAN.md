@@ -695,3 +695,12 @@ Ignored line styles stay dropped from geometry, exports and 3D. In the template 
 - Settings > "SVG Dieline Color" (`/doraadmin/settings/svg-colors`): any number of hex colours per meaning (Cut, Fold, Bleed, Guide, Ignore), stored in `SiteSetting` key `svg-colors`. A colour can have one meaning only (client moves it, server rejects duplicates).
 - Template wizard: a style whose stroke colour is listed gets that role as its starting selection; other colours keep the importer's guess (`colorRoles` in `src/lib/svg-colors.ts`, layered over `suggestRoles`). Saved templates keep their saved roles; the admin can still change any line.
 - Matching is by exact stroke colour (case-insensitive), not by dash or width.
+
+## Collapsible admin sidebar
+- Footer button collapses the sidebar to a 72px icon rail (labels move to tooltips and screen-reader text). The choice is saved in localStorage `admin-sidebar` and set on #admin-root as `data-sidebar` before first paint, so it persists across pages and reloads until the admin expands it. Phones keep the drawer and ignore it.
+
+## Quick sort for fold order
+- 3D fold editor: a Quick sort button turns on a mode where each click on a fold line (or the panel that swings on it) is added to a list. The list sits in a 100 px bar stuck to the bottom of the window (container width); chips can be dragged (or Alt + arrow keys) to reorder, x removes one; a grip at the top centre resizes the bar (drag, arrow keys, double-click resets). Apply numbers those lines 1, 2, 3... (`applyFoldSequence` in `src/lib/fold-edit.ts`); lines not listed follow, keeping their steps.
+
+## 3D view rotation controls
+- `RotationControls` (src/components/viewer3d/rotation-controls.tsx): two small sliders in the top right corner of a 3D view, X = tilt up/down, Y = turn left/right. They follow the camera while the box is dragged and move it when dragged (`getRotation/setRotation/onRotation` on `CartonViewHandle`). Added to the dieline page preview, the editor 3D preview and the admin fold preview. Not added to the home page hero (decorative) or the admin starting-view editor (already has Turn/Tilt fields).

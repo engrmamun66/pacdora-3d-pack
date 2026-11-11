@@ -115,6 +115,30 @@ export function moveHinge(setup: FoldSetup, id: string, toIndex: number): FoldSe
   return { ...setup, hinges: setup.hinges.map((h) => ({ ...h, order: order.get(h.id) ?? h.order })) };
 }
 
+/**
+ * Quick sort: fold the listed lines one after another, in the given order (step 1, 2, 3...).
+ * Lines that are not listed come after them and keep their current order and any steps they
+ * share. Unknown and repeated ids in the list are skipped.
+ */
+export function applyFoldSequence(setup: FoldSetup, ids: readonly string[]): FoldSetup {
+  const known = new Set(setup.hinges.map((h) => h.id));
+  const chosen = [...new Set(ids)].filter((id) => known.has(id));
+  if (!chosen.length) return setup;
+  const picked = new Set(chosen);
+  const order = new Map<string, number>();
+  chosen.forEach((id, i) => order.set(id, i + 1));
+  // The rest keep their relative steps: lines with the same old step still share one new step.
+  const rest = sortedHinges(setup).filter((h) => !picked.has(h.id));
+  let n = chosen.length;
+  let last: number | null = null;
+  for (const h of rest) {
+    if (h.order !== last) n += 1;
+    last = h.order;
+    order.set(h.id, n);
+  }
+  return { ...setup, hinges: setup.hinges.map((h) => ({ ...h, order: order.get(h.id) ?? h.order })) };
+}
+
 /** Close gaps in the step numbers (1, 3, 3, 7 becomes 1, 2, 2, 3). */
 export function compactOrders(setup: FoldSetup): FoldSetup {
   const steps = stepsOf(setup);
