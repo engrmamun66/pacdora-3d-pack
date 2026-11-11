@@ -1,7 +1,10 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "./db";
-import { DEFAULT_HERO, parseHeroSettings, type HeroSettings } from "@/lib/hero-settings";
+import { DEFAULT_HERO, parseHeroSettings, type HeroSettings, type HeroTemplate } from "@/lib/hero-settings";
+import { getPreset } from "@packaging/dieline-engine";
+import { loadImportedSource } from "./imported-templates";
+import { TEMPLATES_TAG } from "./templates-public";
 import type { WatermarkSpec } from "@packaging/dieline-engine";
 import { DEFAULT_WATERMARK_SETTINGS, parseWatermark, watermarkSpec, type WatermarkSettings } from "@/lib/watermark-settings";
 import { EMPTY_SVG_COLORS, parseSvgColors, type SvgColorSettings } from "@/lib/svg-colors";
@@ -23,6 +26,38 @@ export async function getHeroSettings(): Promise<HeroSettings> {
   } catch {
     return DEFAULT_HERO;
   }
+}
+
+/**
+ * The box the hero shows when an admin chose a template for it: a published template that has a 3D fold
+ * (built-in, or imported with a fold). Null when none is chosen or the choice is no longer usable, so the hero
+ * falls back to the standard box. Cached like the hero settings; template edits refresh it too.
+ */
+export async function getHeroTemplate(templateId: string | null): Promise<HeroTemplate | null> {
+  "use cache";
+  cacheTag(HERO_TAG, TEMPLATES_TAG);
+  cacheLife({ stale: 30, revalidate: 60, expire: 3600 });
+  if (!templateId) return null;
+  try {
+    const row = await db.template.findUnique({ where: { id: templateId }, select: { id: true, source: true, published: true, hasFold: true } });
+    if (!row || !row.published) return null;
+    if (row.source === "builtin") return getPreset(row.id) ? { kind: "builtin", presetId: row.id } : null;
+    if (!row.hasFold) return null;
+    const src = await loadImportedSource(row.id);
+    return src?.fold ? { kind: "imported", templateId: row.id, flat: src.flat, fold: src.fold } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Templates an admin can show in the hero: published, with a 3D fold. */
+export async function listHeroTemplateChoices(): Promise<{ id: string; name: string }[]> {
+  const rows = await db.template.findMany({
+    where: { published: true, OR: [{ source: "builtin" }, { hasFold: true }] },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    select: { id: true, name: true, source: true },
+  });
+  return rows.filter((r) => r.source !== "builtin" || getPreset(r.id)).map(({ id, name }) => ({ id, name }));
 }
 
 /** Uncached read for the admin form (always the stored value). */

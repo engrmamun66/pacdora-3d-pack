@@ -1,4 +1,6 @@
 import { z } from "zod";
+import type { FoldSetup } from "@packaging/dieline-engine";
+import type { FlatDielineData } from "@packaging/svg-import";
 
 /** Where the hero box starts (and what it shows when animation is off). */
 export const HERO_POSITIONS = [
@@ -15,13 +17,20 @@ export const heroSettingsSchema = z.object({
   boxBackground: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().default(null),
   /** Colour of the animated box itself (outside): #rrggbb, or null for the default indigo. */
   boxColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().default(null),
+  /** The template whose 3D box the hero shows (id), or null for the standard straight tuck end box. Old saved values lack it. */
+  templateId: z.string().min(1).max(80).nullable().default(null),
 });
 export type HeroSettings = z.output<typeof heroSettingsSchema>;
 
 /** Default outside colour of the hero box. */
 export const DEFAULT_BOX_COLOR = "#3f4fd0";
 
-export const DEFAULT_HERO: HeroSettings = { initial: "closed", background: null, boxBackground: null, boxColor: null };
+export const DEFAULT_HERO: HeroSettings = { initial: "closed", background: null, boxBackground: null, boxColor: null, templateId: null };
+
+/** What the hero needs to build the box of the chosen template in the browser. */
+export type HeroTemplate =
+  | { kind: "builtin"; presetId: string }
+  | { kind: "imported"; templateId: string; flat: FlatDielineData; fold: FoldSetup };
 
 /** Tolerant read of a stored value: anything unusable falls back to the defaults. */
 export function parseHeroSettings(raw: unknown): HeroSettings {

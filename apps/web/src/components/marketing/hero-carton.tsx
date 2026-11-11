@@ -1,18 +1,35 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
-import { getGenerator, getPreset, type DielineGeometry } from "@packaging/dieline-engine";
+import { createImportedGenerator, getGenerator, getPreset, importedDefaults, type DielineGeometry, type FlatDieline } from "@packaging/dieline-engine";
 import { outlinePathD } from "@packaging/render-svg";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
-import { DEFAULT_BOX_COLOR, luminance, type HeroSettings } from "@/lib/hero-settings";
+import { DEFAULT_BOX_COLOR, luminance, type HeroSettings, type HeroTemplate } from "@/lib/hero-settings";
 import { START_OFFSET, STILL_STAGE, stageAt, stagedHinges, type HingeInfo } from "@/lib/hero-fold";
 
 const PRESET = "straight-tuck-end-box";
 
-/** The hero box comes from the same generator customers use, so the animation is the product. */
-function heroGeometry(): DielineGeometry {
+/** The standard hero box: it comes from the same generator customers use, so the animation is the product. */
+function defaultGeometry(): DielineGeometry {
   const preset = getPreset(PRESET)!;
   return getGenerator(preset.generatorId).generate({ ...preset.defaults, width: 70, depth: 45, height: 110 });
+}
+
+/** The box of the template the admin chose (at its standard size), or the standard box if that cannot be built. `standard` says which. */
+function heroGeometry(template: HeroTemplate | null): { geo: DielineGeometry; standard: boolean } {
+  try {
+    if (template?.kind === "imported") {
+      const flat = template.flat as FlatDieline;
+      return { geo: createImportedGenerator(template.templateId, flat, template.fold).generate(importedDefaults(flat)), standard: false };
+    }
+    if (template?.kind === "builtin") {
+      const preset = getPreset(template.presetId);
+      if (preset) return { geo: getGenerator(preset.generatorId).generate({ ...preset.defaults }), standard: false };
+    }
+  } catch {
+    // fall through to the standard box
+  }
+  return { geo: defaultGeometry(), standard: true };
 }
 
 const noopSubscribe = () => () => {};
@@ -89,8 +106,20 @@ export function DielineLines({ geo, className }: { geo: DielineGeometry; classNa
   );
 }
 
-export function HeroCarton({ initial = "closed", color = DEFAULT_BOX_COLOR }: { initial?: HeroSettings["initial"]; color?: string }) {
-  const geo = useMemo(() => heroGeometry(), []);
+export function HeroCarton({ initial = "closed", color = DEFAULT_BOX_COLOR, template = null }: { initial?: HeroSettings["initial"]; color?: string; template?: HeroTemplate | null }) {
+  const { geo, standard } = useMemo(() => heroGeometry(template), [template]);
+  // The camera is framed for the sheet, since the animation opens the box flat: 150 mm for the standard box. Another template's box
+  // sits on its root panel, so what counts is how far its sheet reaches from that panel's centre (1.4 x that).
+  const frameMm = useMemo(() => {
+    if (standard) return 150;
+    const root = geo.foldTree.panels.find((p) => p.id === geo.foldTree.rootId);
+    const xs = root?.polygon.map((v) => v.x) ?? [];
+    const ys = root?.polygon.map((v) => v.y) ?? [];
+    const cx = xs.length ? (Math.min(...xs) + Math.max(...xs)) / 2 : (geo.cutBounds.min.x + geo.cutBounds.max.x) / 2;
+    const cy = ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : (geo.cutBounds.min.y + geo.cutBounds.max.y) / 2;
+    const reach = Math.max(cx - geo.cutBounds.min.x, geo.cutBounds.max.x - cx, cy - geo.cutBounds.min.y, geo.cutBounds.max.y - cy);
+    return Math.max(60, reach * 1.4);
+  }, [geo, standard]);
   const reduced = useReducedMotion();
   const webgl = useWebGL();
   const tex = useMemo(() => (webgl ? makeTexture(geo, color) : null), [geo, webgl, color]);
@@ -145,7 +174,7 @@ export function HeroCarton({ initial = "closed", color = DEFAULT_BOX_COLOR }: { 
             transparent
             rotateOnly
             shadows={false}
-            frameMm={150}
+            frameMm={frameMm}
           />
         </>
       ) : null}

@@ -7,7 +7,7 @@ import { SiteHeader } from "@/components/marketing/site-header";
 import { SiteTitle } from "@/components/site-brand";
 import { site } from "@/config/site";
 import { DEFAULT_BOX_COLOR, luminance } from "@/lib/hero-settings";
-import { getHeroSettings } from "@/server/site-settings";
+import { getHeroSettings, getHeroTemplate } from "@/server/site-settings";
 
 const features = [
   { icon: Ruler, title: "Exact dielines", body: "Enter width, depth and height. Cut, crease, glue, bleed and safe areas are calculated by rule, not drawn by hand." },
@@ -30,11 +30,12 @@ const formats = ["PDF", "AI", "EPS", "SVG", "DXF", "PNG", "GLB"];
 /** Header and hero share one wrapper so the chosen background colour (and the light or dark text that goes with it) covers both. */
 async function HomeTop() {
   const hero = await getHeroSettings();
+  const heroTemplate = await getHeroTemplate(hero.templateId);
   const dark = hero.background !== null && luminance(hero.background) < 0.4;
   const panelDark = hero.boxBackground !== null && luminance(hero.boxBackground) < 0.4;
   return (
     <div className={`relative text-foreground ${dark ? "dark" : ""}`} style={hero.background ? { background: hero.background } : undefined}>
-      <SiteHeader />
+      <SiteHeader background={hero.background} />
         {/* Hero: fills the screen */}
         <section className={`relative isolate flex min-h-dvh items-center overflow-hidden pt-16 ${hero.background ? "" : "bg-[radial-gradient(60%_50%_at_75%_40%,color-mix(in_oklch,var(--primary)_10%,transparent),transparent)]"}`}>
           <div aria-hidden className="hero-grid-mask"><div className="hero-grid" /></div>
@@ -64,7 +65,7 @@ async function HomeTop() {
               role="img"
               aria-label="A carton box unfolding into its flat dieline and folding shut again, in a loop"
             >
-              <HeroCarton initial={hero.initial} color={hero.boxColor ?? DEFAULT_BOX_COLOR} />
+              <HeroCarton initial={hero.initial} color={hero.boxColor ?? DEFAULT_BOX_COLOR} template={heroTemplate} />
               <p className="pointer-events-none absolute inset-x-0 bottom-0 text-center text-xs text-muted-foreground">
                 Generated live by the same engine you will use. Drag to turn it.
               </p>

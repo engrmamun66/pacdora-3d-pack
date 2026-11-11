@@ -68,7 +68,7 @@ function ColourField({
 }
 
 /** Choose where the hero box starts and the hero background colour. */
-export function HeroSettingsForm({ initial }: { initial: HeroSettings }) {
+export function HeroSettingsForm({ initial, templates }: { initial: HeroSettings; templates: { id: string; name: string }[] }) {
   const [state, action, pending] = useActionState<HeroFormState, FormData>(saveHeroSettings, { ok: false, message: null });
   useEffect(() => {
     if (!state.message) return;
@@ -76,6 +76,7 @@ export function HeroSettingsForm({ initial }: { initial: HeroSettings }) {
     else notify.error(state.message, { id: "hero-save" });
   }, [state]);
   const [position, setPosition] = useState(initial.initial);
+  const [templateId, setTemplateId] = useState(initial.templateId ?? "");
   const [bg, setBg] = useState<ColourValue>({ useDefault: initial.background === null, color: initial.background ?? FALLBACK_COLOR });
   const [panel, setPanel] = useState<ColourValue>({ useDefault: initial.boxBackground === null, color: initial.boxBackground ?? "#e9ecff" });
   const [boxColor, setBoxColor] = useState<ColourValue>({ useDefault: initial.boxColor === null, color: initial.boxColor ?? DEFAULT_BOX_COLOR });
@@ -83,6 +84,26 @@ export function HeroSettingsForm({ initial }: { initial: HeroSettings }) {
 
   return (
     <form action={action} className="flex max-w-xl flex-col gap-6">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="hero-template" className="text-sm font-medium">Template shown in the 3D view</label>
+        <select
+          id="hero-template"
+          name="templateId"
+          value={templateId}
+          onChange={(e) => setTemplateId(e.target.value)}
+          aria-describedby="hero-template-hint"
+          className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+        >
+          <option value="">Default (straight tuck end box)</option>
+          {/* A template that was hidden since it was chosen stays in the list, so saving does not silently change it. */}
+          {templateId && !templates.some((t) => t.id === templateId) ? <option value={templateId}>{templateId} (no longer available)</option> : null}
+          {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+        <p id="hero-template-hint" className="text-xs text-muted-foreground">
+          The box that folds and unfolds in the home page hero. Only published templates with a 3D view are listed. If the chosen template is hidden or loses its 3D view later, the home page shows the default box.
+        </p>
+      </div>
+
       <div className="flex flex-col gap-1.5">
         <label htmlFor="hero-initial" className="text-sm font-medium">Box initial position</label>
         <select

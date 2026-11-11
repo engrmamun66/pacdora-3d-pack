@@ -6,7 +6,7 @@ import { z } from "zod";
 import { auth } from "@/server/auth";
 import { db } from "@/server/db";
 import { SUPERADMIN, requireSuperAdmin } from "@/server/admin";
-import { HERO_TAG } from "@/server/site-settings";
+import { HERO_TAG, listHeroTemplateChoices } from "@/server/site-settings";
 import { heroSettingsSchema } from "@/lib/hero-settings";
 import { svgColorSchema } from "@/lib/svg-colors";
 import { watermarkSchema } from "@/lib/watermark-settings";
@@ -76,8 +76,12 @@ export async function saveHeroSettings(_prev: HeroFormState, formData: FormData)
     background: useDefault ? null : formData.get("background"),
     boxBackground: formData.get("useDefaultBoxBackground") === "1" ? null : formData.get("boxBackground"),
     boxColor: formData.get("useDefaultBoxColor") === "1" ? null : formData.get("boxColor"),
+    templateId: String(formData.get("templateId") ?? "") || null,
   });
   if (!parsed.success) return { ok: false, message: "Please choose a position and a colour like #1a2b3c." };
+  if (parsed.data.templateId && !(await listHeroTemplateChoices()).some((t) => t.id === parsed.data.templateId)) {
+    return { ok: false, message: "That template cannot be shown on the home page. Choose a published template with a 3D view." };
+  }
   await db.siteSetting.upsert({
     where: { key: "hero" },
     create: { key: "hero", value: parsed.data, updatedById: admin.id },

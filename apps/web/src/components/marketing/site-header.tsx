@@ -5,6 +5,8 @@ import { Menu } from "lucide-react";
 import { ButtonLink } from "@/components/button-link";
 import { SiteBrand } from "@/components/site-brand";
 import { getSession } from "@/server/session";
+import { UserMenu } from "@/components/app/user-menu";
+import { ScrollHeader } from "./scroll-header";
 
 const NAV = [
   { href: "/templates", label: "Templates" },
@@ -14,7 +16,7 @@ const NAV = [
 ];
 
 /** Shows the right buttons for the visitor. If the session lookup fails (e.g. database down) the page still renders signed-out. */
-async function AuthButtons() {
+async function AuthButtons({ inApp = false }: { inApp?: boolean }) {
   // The session is per visitor: read it at request time, so the rest of the page can still be prerendered.
   await connection();
   let signedIn = false;
@@ -23,6 +25,8 @@ async function AuthButtons() {
   } catch {
     signedIn = false;
   }
+  // Inside the customer area the dashboard button would point at the page you are on: show the account menu instead.
+  if (signedIn && inApp) return <UserMenu />;
   return signedIn ? (
     <ButtonLink href="/my-dashboard">Open dashboard</ButtonLink>
   ) : (
@@ -34,9 +38,8 @@ async function AuthButtons() {
 }
 
 /** `solid`: for inner pages. A bar that stays on top of the page, instead of floating over the home hero. */
-export function SiteHeader({ solid = false }: { solid?: boolean }) {
-  return (
-    <header className={solid ? "sticky top-0 z-20 border-b bg-background/90 backdrop-blur" : "absolute inset-x-0 top-0 z-20"}>
+export function SiteHeader({ solid = false, inApp = false, background = null }: { solid?: boolean; /** Customer pages: the signed-in visitor gets the account menu. */ inApp?: boolean; /** Home page: colour the bar takes once the page has scrolled (the hero's colour). */ background?: string | null }) {
+  const bar = (
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-6 px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2 font-semibold">
           <Suspense fallback={<span className="h-7 w-28" />}>
@@ -54,7 +57,7 @@ export function SiteHeader({ solid = false }: { solid?: boolean }) {
 
         <div className="ml-auto hidden items-center gap-2 md:flex">
           <Suspense fallback={<div className="h-8 w-40" />}>
-            <AuthButtons />
+            <AuthButtons inApp={inApp} />
           </Suspense>
         </div>
 
@@ -71,12 +74,12 @@ export function SiteHeader({ solid = false }: { solid?: boolean }) {
             ))}
             <div className="mt-1 flex gap-2 border-t pt-2">
               <Suspense fallback={null}>
-                <AuthButtons />
+                <AuthButtons inApp={inApp} />
               </Suspense>
             </div>
           </div>
         </details>
       </div>
-    </header>
   );
+  return solid ? <header className="sticky top-0 z-20 border-b bg-background/90 backdrop-blur">{bar}</header> : <ScrollHeader background={background}>{bar}</ScrollHeader>;
 }

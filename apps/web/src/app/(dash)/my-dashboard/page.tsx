@@ -4,7 +4,6 @@ import { requireUser } from "@/server/session";
 import { db } from "@/server/db";
 import { CustomerProfileForm } from "@/components/app/customer-profile-form";
 import { loadMyDashboard } from "@/server/my-templates";
-import { ButtonLink } from "@/components/button-link";
 import { DashboardClient } from "@/components/my-dashboard/dashboard-client";
 import { AddSystemDialog } from "@/components/my-dashboard/add-system-dialog";
 
@@ -54,7 +53,6 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/my-dashbo
         {data ? (
           <div className="flex flex-wrap items-center gap-2">
             <AddSystemDialog categories={data.categories} />
-            <ButtonLink href="/templates">Browse all templates</ButtonLink>
           </div>
         ) : null}
       </div>
