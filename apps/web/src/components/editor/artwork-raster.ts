@@ -1,11 +1,12 @@
 import { StaticCanvas } from "fabric";
 import { STYLE, outlinePathD } from "@packaging/render-svg";
 import { anchorIndex } from "@packaging/artwork";
-import type { DielineGeometry } from "@packaging/dieline-engine";
+import type { DielineGeometry, WatermarkSpec } from "@packaging/dieline-engine";
 import type { Artwork } from "@packaging/schema";
 import { loadBackgroundImage, paintBackground } from "./background";
 import { ensureFont } from "./editor-controller";
 import { toFabric } from "./fabric-map";
+import { drawWatermark } from "@/lib/watermark-canvas";
 
 export interface RasterRect {
   readonly minX: number;
@@ -79,7 +80,7 @@ export async function renderArtwork(
 export async function renderPng(
   geo: DielineGeometry,
   artwork: Artwork,
-  opts: { dpi: number; background: string; dieline: boolean },
+  opts: { dpi: number; background: string; dieline: boolean; watermark?: WatermarkSpec | null },
 ): Promise<{ blob: Blob; dpi: number; width: number; height: number }> {
   const r = await renderArtwork(geo, artwork, { pxPerMm: opts.dpi / 25.4, background: opts.background, maxPx: 16384 });
   if (opts.dieline) {
@@ -107,6 +108,7 @@ export async function renderPng(
     ctx.stroke();
     ctx.restore();
   }
+  if (opts.watermark) drawWatermark(r.canvas.getContext("2d")!, geo, opts.watermark, r.rect, r.pxPerMm);
   const blob = await new Promise<Blob>((res, rej) => r.canvas.toBlob((b) => (b ? res(b) : rej(new Error("PNG encoding failed."))), "image/png"));
   return { blob, dpi: Math.round(r.pxPerMm * 25.4), width: r.canvas.width, height: r.canvas.height };
 }

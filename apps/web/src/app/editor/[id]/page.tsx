@@ -7,6 +7,7 @@ import { EditorLoader } from "@/components/editor/editor-loader";
 import { IMPORTED_GENERATOR_ID } from "@packaging/dieline-engine";
 import { loadImportedSource } from "@/server/imported-templates";
 import { readViewSettings } from "@/lib/view-settings";
+import { getWatermark } from "@/server/site-settings";
 
 async function EditorView({ params }: { params: PageProps<"/editor/[id]">["params"] }) {
   const { id } = await params;
@@ -35,6 +36,7 @@ async function EditorView({ params }: { params: PageProps<"/editor/[id]">["param
       artwork={project.doc.artwork}
       assets={assets}
       threeD={project.doc.threeD}
+      watermark={await getWatermark(user)}
     />
   );
 }

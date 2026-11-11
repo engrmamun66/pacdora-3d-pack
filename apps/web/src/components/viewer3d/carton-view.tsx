@@ -4,9 +4,10 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
-import type { DielineGeometry } from "@packaging/dieline-engine";
+import type { DielineGeometry, WatermarkSpec } from "@packaging/dieline-engine";
 import { buildCartonModel, disposeCartonModel, type CartonModel, type TextureRect } from "@packaging/model3d";
 import { cameraToView, viewToCamera, type ViewSettings } from "@/lib/view-settings";
+import { drawWatermark } from "@/lib/watermark-canvas";
 
 export interface CartonViewProps {
   geo: DielineGeometry;
@@ -71,8 +72,11 @@ export interface CartonViewHandle {
    * `hingeProgress` (hinge id -> 0..1) overrides single hinges, for staged folds.
    */
   setProgress(p: number, hingeProgress?: Readonly<Record<string, number>>): void;
-  /** Binary glTF of the carton as shown (metres, y up). */
-  exportGlb(): Promise<Blob>;
+  /**
+   * Binary glTF of the carton as shown (metres, y up). With a watermark, it is printed on the outside
+   * of the panels (over the artwork, if there is any), like on the flat sheet.
+   */
+  exportGlb(watermark?: WatermarkSpec | null): Promise<Blob>;
 }
 
 /** Interactive 3D carton built from the engine's fold tree (three.js, no React renderer). */
@@ -98,6 +102,8 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   const gridStep = useRef(10);
   const rotationListeners = useRef(new Set<(r: Rotation) => void>());
   const rebuild = useRef<(p: number, hingeProgress?: Readonly<Record<string, number>>) => void>(() => {});
+  /** The fold amount the model was last built at (an export rebuilds the model with the same fold). */
+  const lastBuild = useRef<{ p: number; hp?: Readonly<Record<string, number>> }>({ p: progress });
   const three = useRef<{
     renderer: THREE.WebGLRenderer;
     scene: THREE.Scene;
@@ -266,20 +272,59 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
         rotationListeners.current.delete(cb);
       };
     },
-    exportGlb: async () => {
-      const model = three.current?.model;
-      if (!model) throw new Error("No 3D model to export.");
-      // glTF uses metres; the scene is in millimetres. Export a scaled copy, standing on y = 0.
-      const root = new THREE.Group();
-      root.name = "carton";
-      root.scale.setScalar(0.001);
-      const copy = model.object.clone(true);
-      copy.position.set(0, model.size.y / 2, 0);
-      root.add(copy);
-      root.updateMatrixWorld(true);
-      const result = await new GLTFExporter().parseAsync(root, { binary: true, onlyVisible: true });
-      if (!(result instanceof ArrayBuffer)) throw new Error("GLB export failed.");
-      return new Blob([result], { type: "model/gltf-binary" });
+    exportGlb: async (watermark) => {
+      const t = three.current;
+      const shown = t?.model;
+      if (!t || !shown) throw new Error("No 3D model to export.");
+      let model = shown;
+      let temp: { model: CartonModel; tex: THREE.CanvasTexture } | null = null;
+      if (watermark) {
+        // A copy of the model whose outside carries the watermark (and the artwork under it).
+        const canvas = document.createElement("canvas");
+        let rect: TextureRect;
+        let pxPerMm: number;
+        if (t.texSource && textureRect) {
+          rect = textureRect;
+          canvas.width = t.texSource.width;
+          canvas.height = t.texSource.height;
+          pxPerMm = canvas.width / rect.width;
+          canvas.getContext("2d")!.drawImage(t.texSource, 0, 0);
+        } else {
+          const { min, max } = geo.cutBounds;
+          rect = { minX: min.x - 2, minY: min.y - 2, width: max.x - min.x + 4, height: max.y - min.y + 4 };
+          pxPerMm = Math.min(8, 4096 / Math.max(rect.width, rect.height));
+          canvas.width = Math.ceil(rect.width * pxPerMm);
+          canvas.height = Math.ceil(rect.height * pxPerMm);
+          const c = canvas.getContext("2d")!;
+          c.fillStyle = outsideColor;
+          c.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        drawWatermark(canvas.getContext("2d")!, geo, watermark, rect, pxPerMm);
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.anisotropy = t.renderer.capabilities.getMaxAnisotropy();
+        const { p, hp } = lastBuild.current;
+        model = buildCartonModel(geo, { progress: p, ...(hp ? { hingeProgress: hp } : {}), outsideTexture: tex, textureRect: rect, outsideColor: 0xffffff, insideColor });
+        temp = { model, tex };
+      }
+      try {
+        // glTF uses metres; the scene is in millimetres. Export a scaled copy, standing on y = 0.
+        const root = new THREE.Group();
+        root.name = "carton";
+        root.scale.setScalar(0.001);
+        const copy = model.object.clone(true);
+        copy.position.set(0, model.size.y / 2, 0);
+        root.add(copy);
+        root.updateMatrixWorld(true);
+        const result = await new GLTFExporter().parseAsync(root, { binary: true, onlyVisible: true });
+        if (!(result instanceof ArrayBuffer)) throw new Error("GLB export failed.");
+        return new Blob([result], { type: "model/gltf-binary" });
+      } finally {
+        if (temp) {
+          disposeCartonModel(temp.model);
+          temp.tex.dispose();
+        }
+      }
     },
     snapshot: (size) => {
       const t = three.current;
@@ -431,6 +476,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     }
     const useTex = Boolean(t.tex && textureRect);
     const build = (p: number, hingeProgress?: Readonly<Record<string, number>>) => {
+      lastBuild.current = { p, ...(hingeProgress ? { hp: hingeProgress } : {}) };
       if (t.model) {
         t.scene.remove(t.model.object);
         disposeCartonModel(t.model);

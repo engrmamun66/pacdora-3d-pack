@@ -2,7 +2,8 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "./db";
 import { DEFAULT_HERO, parseHeroSettings, type HeroSettings } from "@/lib/hero-settings";
-import { DEFAULT_WATERMARK_SETTINGS, parseWatermark, watermarkStyle, watermarkText, type WatermarkSettings, type WatermarkStyle } from "@/lib/watermark-settings";
+import type { WatermarkSpec } from "@packaging/dieline-engine";
+import { DEFAULT_WATERMARK_SETTINGS, parseWatermark, watermarkSpec, type WatermarkSettings } from "@/lib/watermark-settings";
 import { EMPTY_SVG_COLORS, parseSvgColors, type SvgColorSettings } from "@/lib/svg-colors";
 
 export const HERO_TAG = "site-hero";
@@ -42,13 +43,26 @@ export async function readWatermark(): Promise<{ settings: WatermarkSettings; up
   return { settings: row ? parseWatermark(row.value) : DEFAULT_WATERMARK_SETTINGS, updatedAt: row?.updatedAt ?? null };
 }
 
-/** What is drawn on the dieline sheet: the text ("" = none) and its look. If the database cannot be read, the defaults are used so the page never breaks. */
-export async function getWatermark(): Promise<{ text: string; style: WatermarkStyle }> {
+/**
+ * Does this viewer get a clean sheet and clean downloads? Not yet: everybody gets the watermark.
+ * When paid plans exist, answer true here for subscribers: the pages and every download ask this one place.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- the hook point for paid plans
+export function watermarkSkipped(_viewer: { id: string } | null | undefined): boolean {
+  return false;
+}
+
+/**
+ * The watermark for this viewer: drawn on the dieline sheet and put into every downloadable file (null = none).
+ * If the database cannot be read, the defaults are used so a page or download never breaks.
+ */
+export async function getWatermark(viewer?: { id: string } | null): Promise<WatermarkSpec | null> {
+  if (watermarkSkipped(viewer)) return null;
   let s = DEFAULT_WATERMARK_SETTINGS;
   try {
     s = (await readWatermark()).settings;
   } catch {
     // keep the defaults
   }
-  return { text: watermarkText(s), style: watermarkStyle(s) };
+  return watermarkSpec(s);
 }

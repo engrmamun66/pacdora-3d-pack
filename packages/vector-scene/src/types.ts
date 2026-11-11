@@ -57,7 +57,7 @@ export interface ImageItem {
 
 export type SceneItem = PathItem | ImageItem;
 
-export type LayerId = "artwork" | "glue" | "bleed" | "safe" | "crease" | "cut" | "dimensions";
+export type LayerId = "artwork" | "glue" | "bleed" | "safe" | "crease" | "cut" | "dimensions" | "watermark";
 
 export interface SceneLayer {
   readonly id: LayerId;

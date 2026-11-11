@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Download, X } from "lucide-react";
-import type { DielineGeometry } from "@packaging/dieline-engine";
+import type { DielineGeometry, WatermarkSpec } from "@packaging/dieline-engine";
 import { ILLUSTRATOR_PROFILES } from "@packaging/render-print/profiles";
 import type { Artwork } from "@packaging/schema";
 import { setPngDpi } from "@/lib/png-dpi";
@@ -46,6 +46,7 @@ export function ExportDialog({
   boardColor,
   flushSave,
   getGlb,
+  watermark = null,
   onClose,
 }: {
   projectId: string;
@@ -55,6 +56,8 @@ export function ExportDialog({
   boardColor: string;
   flushSave: () => Promise<void>;
   getGlb: () => Promise<Blob>;
+  /** Drawn on the PNG (and, via `getGlb`, on the 3D model); the server adds it to the other files. */
+  watermark?: WatermarkSpec | null;
   onClose: () => void;
 }) {
   const [format, setFormat] = useState<Format>("pdf");
@@ -107,7 +110,7 @@ export function ExportDialog({
         notify.info("Downloaded GLB", { description: "Panels have zero thickness." });
       } else {
         const want = format === "png-hires" ? 300 : 150;
-        const r = await renderPng(geo, getArtwork(), { dpi: want, background: boardColor, dieline: opts.dieline });
+        const r = await renderPng(geo, getArtwork(), { dpi: want, background: boardColor, dieline: opts.dieline, watermark });
         const bytes = setPngDpi(new Uint8Array(await r.blob.arrayBuffer()), r.dpi);
         download(new Blob([bytes], { type: "image/png" }), `${fileBase(name)}-${r.dpi}dpi.png`);
         if (r.dpi < want) notify.warning(`PNG saved at ${r.dpi} dpi, not ${want}`, { description: "The browser's canvas size limit was reached." });

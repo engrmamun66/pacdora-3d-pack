@@ -46,8 +46,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
         description={row.description}
         initialName={row.name}
         initialParams={importedStartParams(imported.flat)}
-        watermark={watermark.text}
-        watermarkStyle={watermark.style}
+        watermark={watermark}
       />
     );
   }
@@ -66,8 +65,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
       description={row.description}
       initialName={row.name}
       initialParams={{ ...preset.defaults, ...(row.defaultThickness ? { thickness: row.defaultThickness } : {}), ...prefill }}
-      watermark={watermark.text}
-      watermarkStyle={watermark.style}
+      watermark={watermark}
     />
   );
 }

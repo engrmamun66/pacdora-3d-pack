@@ -3,7 +3,7 @@
 import { useActionState, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Box, CircleAlert, CircleEllipsis, Ruler, type LucideIcon } from "lucide-react";
-import { ParamValidationError, createImportedGenerator, scaleImportedPaths, getGenerator, type DielineGeometry, type FlatDieline, type FoldSetup, type ParamDescriptor, type ParamGroup } from "@packaging/dieline-engine";
+import { ParamValidationError, type WatermarkSpec, createImportedGenerator, scaleImportedPaths, getGenerator, type DielineGeometry, type FlatDieline, type FoldSetup, type ParamDescriptor, type ParamGroup } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { STYLE, dielineViewBox, outlinePathD, renderDielineSvg } from "@packaging/render-svg";
 import { notify } from "@/lib/notify";
@@ -18,7 +18,6 @@ import { DielineTopBar } from "./dieline-top-bar";
 import { TemplatePicker } from "./template-picker";
 import { MaterialInfoButton } from "./material-info";
 import { MaterialPicker, ParamField, ThicknessField } from "./settings-fields";
-import type { WatermarkStyle } from "@/lib/watermark-settings";
 import { DIELINE_TOGGLES, SheetCanvas, type ViewToggles } from "./sheet-canvas";
 import { DOWNLOAD_FORMATS, FormatCard, FoldPreview, type DownloadFormat } from "./side-cards";
 import { materialFor, materialsFor, withUnitLabels, type Unit } from "./units";
@@ -39,10 +38,8 @@ interface Props {
   initialParams: Record<string, unknown>;
   /** Template id shown as "Model ID" in the info tab. */
   modelId: string;
-  /** Faint text drawn inside the cut area of the sheet ("" = none). Absent = the built-in default. */
-  watermark?: string;
-  /** Colours, letter size and line thickness of the watermark. */
-  watermarkStyle?: WatermarkStyle;
+  /** The watermark on the sheet and in downloads; null = none. Absent = the default look on screen only. */
+  watermark?: WatermarkSpec | null;
 }
 
 type TabId = "dielines" | "basic" | "info" | "more";
@@ -76,7 +73,7 @@ function saveBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-export function DielineWorkspace({ mode, generatorId, imported, initialView = null, title, description, initialName, initialParams, modelId, watermark, watermarkStyle }: Props) {
+export function DielineWorkspace({ mode, generatorId, imported, initialView = null, title, description, initialName, initialParams, modelId, watermark }: Props) {
   const router = useRouter();
   const gen = useMemo(() => (imported ? createImportedGenerator(imported.templateId, imported.flat as FlatDieline, imported.fold ?? null) : getGenerator(generatorId)), [generatorId, imported]);
   const [values, setValues] = useState<Values>(() =>
@@ -183,7 +180,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
     try {
       if (!result.geo) throw new Error("Fix the highlighted values first.");
       if (format === "glb") {
-        const glb = await viewRef.current?.exportGlb();
+        const glb = await viewRef.current?.exportGlb(watermark ?? null);
         if (!glb) throw new Error("The 3D preview is not ready yet.");
         saveBlob(glb, `${fileBase(name)}.glb`);
         setDl({ ok: true, title: "Downloaded .glb", notes: ["Panels have zero thickness. The model shows the carton at the current fold amount."] });
@@ -423,7 +420,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
         {/* Centre: sheet */}
         <main className="flex min-h-[55vh] min-w-0 flex-col lg:min-h-0">
           {shown && src ? (
-            <SheetCanvas {...(watermark === undefined ? {} : { watermark })} {...(watermarkStyle ? { watermarkStyle } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} />
+            <SheetCanvas {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} />
           ) : (
             <p className="p-6 text-sm text-muted-foreground">Enter valid dimensions to see the dieline.</p>
           )}

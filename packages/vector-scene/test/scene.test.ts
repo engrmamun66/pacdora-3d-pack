@@ -171,3 +171,49 @@ describe("box background", () => {
     expect(off.layers.find((l) => l.id === "artwork")).toBeUndefined();
   });
 });
+
+describe("watermark", () => {
+  const empty: Artwork = { v: 1, objects: [] } as unknown as Artwork;
+  const spec = { text: "pacdorabd.com", textColor: "#6b7280", lineColor: "#6b7280", fontSize: 3.6, lineWidth: 0.25 };
+
+  it("is a layer of its own, only when asked for", async () => {
+    const without = await buildScene(geo, empty, src);
+    expect(without.layers.some((l) => l.id === "watermark")).toBe(false);
+    const withMark = await buildScene(geo, empty, src, { watermark: spec });
+    const layer = withMark.layers.find((l) => l.id === "watermark");
+    expect(layer).toBeDefined();
+    expect(layer!.items.map((i) => i.name)).toEqual(["watermark lines", "watermark text"]);
+    // Solid colours (no transparency), so EPS and the others look the same.
+    for (const i of layer!.items) expect(i.kind === "path" && i.opacity).toBe(1);
+  });
+
+  it("stays inside the cut area (text and lines)", async () => {
+    const scene = await buildScene(geo, empty, src, { watermark: spec });
+    const box = scene.trimBox;
+    for (const item of scene.layers.find((l) => l.id === "watermark")!.items) {
+      if (item.kind !== "path") continue;
+      const b = pathBounds(item.d);
+      expect(b.minX).toBeGreaterThanOrEqual(box.minX - 1e-6);
+      expect(b.maxX).toBeLessThanOrEqual(box.minX + box.width + 1e-6);
+      expect(b.minY).toBeGreaterThanOrEqual(box.minY - 1e-6);
+      expect(b.maxY).toBeLessThanOrEqual(box.minY + box.height + 1e-6);
+    }
+  });
+
+  it("is written into the SVG", async () => {
+    const svg = sceneToSvg(await buildScene(geo, empty, src, { watermark: spec }));
+    expect(svg).toContain("Watermark");
+  });
+
+  it("is a WATERMARK layer in the DXF, with text", () => {
+    const plain = dielineToDxf(geo);
+    expect(plain).not.toContain("WATERMARK");
+    const dxf = dielineToDxf(geo, spec);
+    expect(dxf).toContain("WATERMARK");
+    expect(dxf).toContain("TEXT");
+    expect(dxf).toContain("pacdorabd.com");
+    // The die lines are unchanged.
+    expect(dxf).toContain("CUT");
+    expect(dxf).toContain("CREASE");
+  });
+});

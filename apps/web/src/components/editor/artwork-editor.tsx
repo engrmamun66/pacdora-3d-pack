@@ -26,7 +26,7 @@ import {
   Undo2,
   Unlock,
 } from "lucide-react";
-import { createImportedGenerator, generateDieline, type FlatDieline, type FoldSetup } from "@packaging/dieline-engine";
+import { createImportedGenerator, generateDieline, type FlatDieline, type FoldSetup, type WatermarkSpec } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import type { ViewSettings } from "@/lib/view-settings";
 import type { Artwork, ArtworkObject, BoxBackground } from "@packaging/schema";
@@ -73,6 +73,7 @@ export function ArtworkEditor({
   artwork: initialArtwork,
   assets: initialAssets,
   threeD: initialThreeD,
+  watermark = null,
 }: {
   projectId: string;
   name: string;
@@ -85,6 +86,8 @@ export function ArtworkEditor({
   artwork: Artwork;
   assets: Asset[];
   threeD: ThreeDSettings;
+  /** Put into the PNG and 3D downloads (the server adds it to the other files); null = none. */
+  watermark?: WatermarkSpec | null;
 }) {
   // Keyed by value: a props refresh with equal params must not rebuild the editor (and lose undo history).
   const paramsKey = JSON.stringify(params);
@@ -438,6 +441,7 @@ export function ArtworkEditor({
           getArtwork={() => ctl.current?.toArtwork() ?? { objects, background }}
           boardColor={threeD.outsideColor}
           flushSave={() => saver.settle(ctl.current?.toArtwork())}
+          watermark={watermark}
           getGlb={async () => {
             if (!view3d.current) {
               setShow3d(true);
@@ -445,7 +449,7 @@ export function ArtworkEditor({
               await new Promise((r) => setTimeout(r, 800)); // let the artwork texture render
             }
             if (!view3d.current) throw new Error("The 3D preview could not be opened.");
-            return view3d.current.exportGlb();
+            return view3d.current.exportGlb(watermark);
           }}
           onClose={() => setShowExport(false)}
         />

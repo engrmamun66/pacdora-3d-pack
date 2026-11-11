@@ -1,3 +1,4 @@
+import type { WatermarkSpec } from "@packaging/dieline-engine";
 import { z } from "zod";
 
 /** Text of the watermark when an admin has not set one. */
@@ -45,6 +46,12 @@ export const watermarkStyle = (s: WatermarkStyle): WatermarkStyle => ({ textColo
 export function parseWatermark(raw: unknown): WatermarkSettings {
   const r = watermarkSchema.safeParse(raw);
   return r.success ? r.data : DEFAULT_WATERMARK_SETTINGS;
+}
+
+/** What to draw: the text and its look, or null for no watermark. */
+export function watermarkSpec(s: WatermarkSettings): WatermarkSpec | null {
+  const text = watermarkText(s);
+  return text ? { text, textColor: s.textColor, lineColor: s.lineColor, fontSize: s.fontSize, lineWidth: s.lineWidth } : null;
 }
 
 /** The text to draw on the sheet; an empty string means no watermark. */

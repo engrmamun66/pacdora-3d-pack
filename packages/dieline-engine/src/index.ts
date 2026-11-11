@@ -5,6 +5,7 @@ export * from "./fold-tree/types";
 export * from "./fold-tree/extract";
 export * from "./fold-tree/fold3d";
 export * from "./geometry-types";
+export * from "./watermark";
 export type { CartonExpectations } from "./validate/checks";
 export * from "./templates/carton-common";
 export * from "./templates/tuck-end-params";

@@ -1,6 +1,6 @@
 import * as fontkit from "fontkit";
 import { anchorIndex, backgroundPlacement, objectCentre } from "@packaging/artwork";
-import { type DielineGeometry, flattenOutline } from "@packaging/dieline-engine";
+import { type DielineGeometry, type WatermarkSpec, flattenOutline, layoutWatermark } from "@packaging/dieline-engine";
 import { type Artwork, type ArtworkFont, type ArtworkObject, type BoxBackground, MM_PER_PT } from "@packaging/schema";
 import { ellipsePath, linePath, mul, outlinePath, pathBounds, polygonPath, rectPath, rotate, scale, transformPath, translate } from "./geometry";
 import { imageSize, imageSizeProblem } from "./images";
@@ -33,6 +33,8 @@ export interface SceneOptions {
   /** Spot colour names for the die lines (printers differ). */
   readonly cutSpot: string;
   readonly creaseSpot: string;
+  /** Faint text and lines inside the cut area, as its own top layer. Null = none. */
+  readonly watermark: WatermarkSpec | null;
 }
 
 export const DEFAULT_SCENE_OPTIONS: SceneOptions = {
@@ -44,6 +46,7 @@ export const DEFAULT_SCENE_OPTIONS: SceneOptions = {
   dimensions: false,
   cutSpot: "CutContour",
   creaseSpot: "Crease",
+  watermark: null,
 };
 
 /** Line weight of technical lines, mm. */
@@ -157,6 +160,8 @@ export async function buildScene(
     mediaBox = { minX: bleedBox.minX - DIM_MARGIN, minY: bleedBox.minY - DIM_MARGIN, width: bleedBox.width + 2 * DIM_MARGIN, height: bleedBox.height + 2 * DIM_MARGIN };
   }
 
+  if (o.watermark?.text.trim()) layers.push(await watermarkLayer(geo, o.watermark, () => fontFor("Inter", "bold", "normal")));
+
   // Artwork outside the page is clipped by every backend; say so.
   const art = layers.find((l) => l.id === "artwork");
   if (art) {
@@ -169,6 +174,31 @@ export async function buildScene(
   }
 
   return { unit: "mm", mediaBox, trimBox, bleedBox, layers, losses };
+}
+
+/** Colour of `hex` at strength `alpha` over white: solid, so every format (EPS included) draws the same without transparency. */
+function overWhite(hex: string, alpha: number): string {
+  const c = (i: number) => Math.round(255 - (255 - parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16)) * alpha);
+  return `#${[0, 1, 2].map((i) => c(i).toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** The watermark: lattice lines, and the text as outlines (so no font is needed to open the file). */
+async function watermarkLayer(geo: DielineGeometry, spec: WatermarkSpec, loadFont: () => Promise<fontkit.Font>): Promise<SceneLayer> {
+  const font = await loadFont();
+  const text = spec.text.trim();
+  const measure = measureWith(font, spec.fontSize);
+  const layout = layoutWatermark(geo, { ...spec, text }, measure);
+  const items: SceneItem[] = [];
+  if (layout.lines.length) {
+    const d: PathCmd[] = layout.lines.flatMap(([x1, y1, x2, y2]) => linePath(x1, y1, x2, y2));
+    items.push({ kind: "path", name: "watermark lines", d, fill: null, fillRule: "nonzero", stroke: rgb(overWhite(spec.lineColor, 0.4)), strokeWidth: spec.lineWidth, opacity: 1 });
+  }
+  if (layout.texts.length) {
+    // Cap height is about 0.73 em, so this baseline centres the letters on the crossing.
+    const d: PathCmd[] = layout.texts.flatMap((t) => lineOutlines(font, spec.fontSize, text, t.x - t.width / 2, t.y + spec.fontSize * 0.36).d);
+    items.push({ kind: "path", name: "watermark text", d, fill: rgb(overWhite(spec.textColor, 0.55)), fillRule: "nonzero", stroke: null, strokeWidth: 0, opacity: 1 });
+  }
+  return { id: "watermark", name: "Watermark", printable: false, items };
 }
 
 /** The box background as one image item, cut off at the print area (bleed bounds). */

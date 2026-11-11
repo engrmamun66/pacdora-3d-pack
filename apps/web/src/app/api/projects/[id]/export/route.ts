@@ -7,6 +7,8 @@ import { auth } from "@/server/auth";
 import { fileBase, projectScene } from "@/server/export";
 import { LIMITS, takeToken, withExportSlot } from "@/server/limits";
 import { getProject } from "@/server/projects";
+import { getWatermark } from "@/server/site-settings";
+import type { WatermarkSpec } from "@packaging/dieline-engine";
 
 const flag = z.enum(["0", "1"]).transform((v) => v === "1");
 const query = z.object({
@@ -42,11 +44,13 @@ export async function GET(request: Request, ctx: RouteContext<"/api/projects/[id
   if (!parsed.success) return NextResponse.json({ error: "Invalid export options." }, { status: 400 });
   const q = parsed.data;
   const base = fileBase(project.name);
+  // The same watermark as on screen goes into every file made here (the project JSON is data, not a drawing).
+  const watermark = await getWatermark(session.user);
 
   const requestId = Math.random().toString(36).slice(2, 10);
   let out: Generated | "busy";
   try {
-    out = await withExportSlot(() => generate(q, session.user.id, project.name, project.doc!));
+    out = await withExportSlot(() => generate(q, session.user.id, project.name, project.doc!, watermark));
   } catch (e) {
     // Details stay in the server log (they can contain paths and library internals).
     console.error(`[export ${requestId}] failed`, e);
@@ -81,7 +85,7 @@ function reportHeader(r: { format: string; profile: string | null; losses: reado
   return enc.length > 4000 ? encodeURIComponent(JSON.stringify({ format: r.format, profile: r.profile, losses: ["Details omitted: too many notes."] })) : enc;
 }
 
-async function generate(q: Query, userId: string, name: string, doc: ProjectDoc): Promise<Generated> {
+async function generate(q: Query, userId: string, name: string, doc: ProjectDoc, watermark: WatermarkSpec | null): Promise<Generated> {
   if (q.format === "json") return { body: JSON.stringify(doc, null, 2), type: "application/json", ext: "json", losses: [] };
   const { scene, geo } = await projectScene(userId, doc, {
     artwork: q.artwork,
@@ -92,6 +96,7 @@ async function generate(q: Query, userId: string, name: string, doc: ProjectDoc)
     dimensions: q.dimensions,
     cutSpot: q.cutSpot,
     creaseSpot: q.creaseSpot,
+    watermark,
   });
   if (q.format === "pdf" || q.format === "ai" || q.format === "eps") {
     const profile = getProfile(q.profile);
@@ -107,8 +112,8 @@ async function generate(q: Query, userId: string, name: string, doc: ProjectDoc)
     return { body: r.bytes, type: q.format === "pdf" ? "application/pdf" : "application/illustrator", ext: q.format, losses: [...scene.losses, ...r.losses, ...untested] };
   }
   if (q.format === "dxf") {
-    const note = q.artwork && doc.artwork.objects.length ? ["DXF contains the die lines only (cut and crease); artwork is not included."] : [];
-    return { body: dielineToDxf(geo), type: "application/dxf", ext: "dxf", losses: note };
+    const note = [...(q.artwork && doc.artwork.objects.length ? ["DXF contains the die lines only (cut and crease); artwork is not included."] : []), ...(watermark ? ["The watermark is on its own layer, WATERMARK."] : [])];
+    return { body: dielineToDxf(geo, watermark), type: "application/dxf", ext: "dxf", losses: note };
   }
   return { body: sceneToSvg(scene), type: "image/svg+xml", ext: "svg", losses: [...scene.losses, ...(q.dieline ? ["SVG has no spot colours: die lines use their preview colours."] : [])] };
 }
