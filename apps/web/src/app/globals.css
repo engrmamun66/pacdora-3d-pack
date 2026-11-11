@@ -117,6 +117,67 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/*
+ * Admin dashboard palette (light + dark). Scoped to .admin-shell so the public site and the
+ * editor keep their own look. Ink blue is the one accent; the sidebar stays deep ink in both themes.
+ */
+.admin-shell {
+  color-scheme: light;
+  --background: oklch(0.975 0.004 255);
+  --foreground: oklch(0.2 0.02 258);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.02 258);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.02 258);
+  --primary: oklch(0.5 0.19 262);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.955 0.006 255);
+  --secondary-foreground: oklch(0.25 0.02 258);
+  --muted: oklch(0.955 0.006 255);
+  --muted-foreground: oklch(0.5 0.02 258);
+  --accent: oklch(0.94 0.025 262);
+  --accent-foreground: oklch(0.38 0.14 262);
+  --border: oklch(0.92 0.008 255);
+  --input: oklch(0.88 0.01 255);
+  --ring: oklch(0.6 0.16 262);
+  --destructive: oklch(0.577 0.245 27.325);
+  --sidebar: oklch(0.21 0.035 262);
+  --sidebar-foreground: oklch(0.9 0.012 262);
+  --sidebar-accent: oklch(1 0 0 / 8%);
+  --sidebar-accent-foreground: oklch(0.99 0 0);
+  --sidebar-primary: oklch(0.76 0.13 235);
+  --sidebar-primary-foreground: oklch(0.2 0.03 262);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.76 0.13 235);
+  background: var(--background);
+  color: var(--foreground);
+}
+.admin-shell.dark {
+  color-scheme: dark;
+  --background: oklch(0.17 0.015 260);
+  --foreground: oklch(0.96 0.005 255);
+  --card: oklch(0.21 0.018 260);
+  --card-foreground: oklch(0.96 0.005 255);
+  --popover: oklch(0.23 0.02 260);
+  --popover-foreground: oklch(0.96 0.005 255);
+  --primary: oklch(0.7 0.15 262);
+  --primary-foreground: oklch(0.17 0.03 262);
+  --secondary: oklch(0.27 0.02 260);
+  --secondary-foreground: oklch(0.96 0.005 255);
+  --muted: oklch(0.26 0.018 260);
+  --muted-foreground: oklch(0.72 0.02 258);
+  --accent: oklch(0.3 0.05 262);
+  --accent-foreground: oklch(0.9 0.05 262);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 13%);
+  --ring: oklch(0.65 0.15 262);
+  --destructive: oklch(0.704 0.191 22.216);
+  --sidebar: oklch(0.14 0.018 262);
+  --sidebar-foreground: oklch(0.86 0.012 262);
+  --sidebar-accent: oklch(1 0 0 / 7%);
+  --sidebar-border: oklch(1 0 0 / 7%);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

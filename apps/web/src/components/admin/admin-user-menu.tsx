@@ -21,7 +21,7 @@ export function AdminUserMenu({ name, email, image }: { name: string; email: str
   const router = useRouter();
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger aria-label="Account menu" className="flex items-center gap-2 rounded-full py-1 pr-1 pl-3 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring">
+      <DropdownMenuTrigger aria-label="Account menu" className="flex items-center gap-2 rounded-full border bg-card py-0.5 pr-0.5 pl-3 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring">
         <span className="hidden max-w-40 truncate text-sm sm:block">{name}</span>
         <Avatar className="size-8">
           {image ? <AvatarImage src={image} alt="" /> : null}
@@ -33,7 +33,7 @@ export function AdminUserMenu({ name, email, image }: { name: string; email: str
           <DropdownMenuLabel>
             <div className="truncate font-medium">{name}</div>
             <div className="truncate text-xs font-normal text-muted-foreground">{email}</div>
-            <div className="mt-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">Super admin</div>
+            <div className="mt-1 text-xs font-normal text-primary">Super admin</div>
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

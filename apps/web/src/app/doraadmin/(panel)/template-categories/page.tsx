@@ -1,10 +1,11 @@
+import { PageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { CategoryManager } from "@/components/admin/category-manager";
 import { CATEGORY_KINDS } from "@/lib/category-data";
 import { db } from "@/server/db";
 import { requireSuperAdmin } from "@/server/admin";
 
-export const metadata = { title: "Template categories" };
+export const metadata = { title: "Categories" };
 
 export default async function TemplateCategoriesPage({ searchParams }: PageProps<"/doraadmin/template-categories">) {
   await requireSuperAdmin();
@@ -18,12 +19,7 @@ export default async function TemplateCategoriesPage({ searchParams }: PageProps
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Template categories</h1>
-        <p className="text-sm text-muted-foreground">
-          Groups used to browse templates. A template can be in several categories. &quot;All&quot; is not stored: it simply means no filter.
-        </p>
-      </div>
+      <PageHeader title="Categories" description={<>Groups used to browse templates. A template can be in several categories. &quot;All&quot; is not stored: it simply means no filter.</>} />
       <nav aria-label="Category groups" className="flex gap-1 border-b">
         {CATEGORY_KINDS.map((k) => (
           <Link

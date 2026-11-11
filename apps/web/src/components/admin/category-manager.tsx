@@ -50,7 +50,7 @@ export function CategoryManager({ kind, rows }: { kind: "use" | "model"; rows: C
   return (
     <div className="flex flex-col gap-4">
       <form
-        className="flex flex-wrap items-end gap-3 rounded-xl border p-4"
+        className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4 shadow-xs"
         onSubmit={(e) => {
           e.preventDefault();
           run(() => createCategory({ kind, ...adding }), () => setAdding({ name: "", slug: "", sortOrder: adding.sortOrder + 10 }));
@@ -71,9 +71,9 @@ export function CategoryManager({ kind, rows }: { kind: "use" | "model"; rows: C
         <Button type="submit" className="h-9" disabled={pending}><Plus className="size-4" aria-hidden /> Add category</Button>
       </form>
 
-      <div className="overflow-x-auto rounded-xl border">
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-xs">
         <table className="w-full text-left text-sm">
-          <thead className="border-b bg-muted/40 text-xs text-muted-foreground">
+          <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
               <th scope="col" className="px-3 py-2 font-medium">Order</th>
               <th scope="col" className="px-3 py-2 font-medium">Name</th>
@@ -105,7 +105,7 @@ export function CategoryManager({ kind, rows }: { kind: "use" | "model"; rows: C
                   <td className="px-3 py-2 font-medium">{r.name}</td>
                   <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{r.slug}</td>
                   <td className="px-3 py-2 tabular-nums">{r.templateCount}</td>
-                  <td className="px-3 py-2">{r.active ? <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800">Visible</span> : <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">Hidden</span>}</td>
+                  <td className="px-3 py-2">{r.active ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">Visible</span> : <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">Hidden</span>}</td>
                   <td className="px-3 py-2 text-right">
                     <div className="flex justify-end gap-1">
                       <button type="button" aria-label={`Edit ${r.name}`} className="grid size-8 place-items-center rounded-md border hover:bg-muted" onClick={() => startEdit(r)}><Pencil className="size-4" /></button>

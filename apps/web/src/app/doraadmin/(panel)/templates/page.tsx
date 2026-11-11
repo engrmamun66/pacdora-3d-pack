@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageHeader } from "@/components/admin/page-header";
 import { Plus } from "lucide-react";
 import { TemplateRowActions } from "@/components/admin/template-row-actions";
 import { svgDataUrl, tryThumbnail } from "@/lib/dieline-preview";
@@ -44,21 +45,21 @@ export default async function AdminTemplates({ searchParams }: PageProps<"/doraa
   ]);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const link = (p: number) => `/doraadmin/templates?${new URLSearchParams({ ...(q ? { q } : {}), ...(cat ? { cat } : {}), ...(source ? { source } : {}), ...(status ? { status } : {}), page: String(p) })}`;
-  const select = "h-9 rounded-lg border border-input bg-background px-2 text-sm";
+  const select = "h-9 rounded-lg border border-input bg-card px-2 text-sm";
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Templates</h1>
-          <p className="text-sm text-muted-foreground">{total} {total === 1 ? "template" : "templates"}. Public address: <code className="text-xs">/template/dieline/&lt;slug&gt;</code></p>
-        </div>
-        <Link href="/doraadmin/templates/new" className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80">
-          <Plus className="size-4" aria-hidden /> Add template
-        </Link>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Templates"
+        description={<>{total} {total === 1 ? "template" : "templates"}. Public address: <code className="rounded bg-muted px-1 py-0.5 text-xs">/template/dieline/&lt;slug&gt;</code></>}
+        actions={
+          <Link href="/doraadmin/templates/new" className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90">
+            <Plus className="size-4" aria-hidden /> Add template
+          </Link>
+        }
+      />
 
-      <form className="flex flex-wrap gap-2" role="search">
+      <form className="-mt-2 flex flex-wrap gap-2" role="search">
         <label className="sr-only" htmlFor="q">Search name or slug</label>
         <input id="q" name="q" defaultValue={q} maxLength={100} placeholder="Search name or slug" className={`${select} w-56`} />
         <label className="sr-only" htmlFor="cat">Category</label>
@@ -82,28 +83,28 @@ export default async function AdminTemplates({ searchParams }: PageProps<"/doraa
           <option value="published">Published</option>
           <option value="hidden">Hidden</option>
         </select>
-        <button type="submit" className="h-9 rounded-lg border px-3 text-sm hover:bg-muted">Filter</button>
+        <button type="submit" className="h-9 rounded-lg border bg-card px-3 text-sm hover:bg-muted">Filter</button>
       </form>
 
-      <div className="overflow-x-auto rounded-xl border">
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-xs">
         <table className="w-full text-left text-sm">
-          <thead className="border-b bg-muted/40 text-xs text-muted-foreground">
+          <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
-              <th scope="col" className="px-3 py-2 font-medium"><span className="sr-only">Preview</span></th>
-              <th scope="col" className="px-3 py-2 font-medium">Template</th>
-              <th scope="col" className="px-3 py-2 font-medium">Categories</th>
-              <th scope="col" className="px-3 py-2 font-medium">Source</th>
-              <th scope="col" className="px-3 py-2 font-medium">Status</th>
-              <th scope="col" className="px-3 py-2 font-medium">Updated</th>
-              <th scope="col" className="px-3 py-2 text-right font-medium">Actions</th>
+              <th scope="col" className="px-4 py-2.5 font-medium"><span className="sr-only">Preview</span></th>
+              <th scope="col" className="px-4 py-2.5 font-medium">Template</th>
+              <th scope="col" className="px-4 py-2.5 font-medium">Categories</th>
+              <th scope="col" className="px-4 py-2.5 font-medium">Source</th>
+              <th scope="col" className="px-4 py-2.5 font-medium">Status</th>
+              <th scope="col" className="px-4 py-2.5 font-medium">Updated</th>
+              <th scope="col" className="px-4 py-2.5 text-right font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((t) => {
               const thumb = t.source === "svg" ? (t.thumbnail ? svgDataUrl(t.thumbnail) : null) : tryThumbnail(t.generatorId, t.defaultParameters);
               return (
-                <tr key={t.id} className="border-b last:border-0">
-                  <td className="px-3 py-2">
+                <tr key={t.id} className="border-b transition-colors last:border-0 hover:bg-muted/40">
+                  <td className="px-4 py-3">
                     <div className="grid h-14 w-20 place-items-center overflow-hidden rounded-md border bg-white">
                       {thumb ? (
                         // eslint-disable-next-line @next/next/no-img-element -- generated SVG data URL
@@ -113,20 +114,20 @@ export default async function AdminTemplates({ searchParams }: PageProps<"/doraa
                       )}
                     </div>
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-4 py-3">
                     <p className="font-medium">{t.name}</p>
                     <p className="font-mono text-xs text-muted-foreground">{t.id}</p>
                     {t.widthMm ? <p className="text-xs text-muted-foreground">{t.widthMm.toFixed(0)} × {t.heightMm?.toFixed(0)} mm sheet</p> : null}
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-4 py-3">
                     <div className="flex max-w-64 flex-wrap gap-1">
                       {t.categories.length ? t.categories.map((c) => <span key={c.id} className="rounded-full bg-muted px-2 py-0.5 text-xs" title={c.kind === "use" ? "By uses" : "By models"}>{c.name}</span>) : <span className="text-xs text-amber-700">No category</span>}
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-xs">{t.source === "svg" ? "Imported SVG" : "Built-in"}</td>
-                  <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs ${t.published ? "bg-green-100 text-green-800" : "bg-muted text-muted-foreground"}`}>{t.published ? "Published" : "Hidden"}</span></td>
-                  <td className="px-3 py-2 whitespace-nowrap text-xs">{date(t.updatedAt)}</td>
-                  <td className="px-3 py-2"><TemplateRowActions slug={t.id} name={t.name} source={t.source} published={t.published} has3d={t.source === "builtin" || t.hasFold} /></td>
+                  <td className="px-4 py-3 text-xs">{t.source === "svg" ? "Imported SVG" : "Built-in"}</td>
+                  <td className="px-4 py-3"><span className={`rounded-full px-2 py-0.5 text-xs ${t.published ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300" : "bg-muted text-muted-foreground"}`}>{t.published ? "Published" : "Hidden"}</span></td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs">{date(t.updatedAt)}</td>
+                  <td className="px-4 py-3"><TemplateRowActions slug={t.id} name={t.name} source={t.source} published={t.published} has3d={t.source === "builtin" || t.hasFold} /></td>
                 </tr>
               );
             })}

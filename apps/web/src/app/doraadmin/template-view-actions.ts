@@ -44,7 +44,7 @@ export async function loadTemplateViewData(slug: string): Promise<{ ok: true; da
   await requireSuperAdmin();
   const s = slugParam.safeParse(slug);
   if (!s.success) return { ok: false, message: "Invalid request." };
-  const row = await db.template.findUnique({ where: { id: s.data }, select: { source: true, viewSettings: true, productImageKey: true } });
+  const row = await db.template.findUnique({ where: { id: s.data }, select: { source: true, viewSettings: true, productImageKey: true, defaultThickness: true } });
   if (!row) return { ok: false, message: "Template not found." };
   const productImage = row.productImageKey ? `/api/templates/${s.data}/product-image?v=${row.productImageKey.slice("templates/".length, -4)}` : null;
   if (row.source === "svg") {
@@ -55,5 +55,5 @@ export async function loadTemplateViewData(slug: string): Promise<{ ok: true; da
   }
   const preset = getPreset(s.data);
   if (!preset) return { ok: false, message: "Template not found." };
-  return { ok: true, data: { kind: "builtin", generatorId: preset.generatorId, params: { ...preset.defaults }, view: readViewSettings(row.viewSettings), productImage } };
+  return { ok: true, data: { kind: "builtin", generatorId: preset.generatorId, params: { ...preset.defaults, ...(row.defaultThickness ? { thickness: row.defaultThickness } : {}) }, view: readViewSettings(row.viewSettings), productImage } };
 }

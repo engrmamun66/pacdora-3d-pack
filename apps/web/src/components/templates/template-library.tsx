@@ -71,7 +71,7 @@ export function TemplateLibrary({ items, categories, children }: { items: Public
           <ul className="grid gap-x-6 gap-y-8 sm:grid-cols-2 xl:grid-cols-3">
             {filtered.map((t) => (
               <li key={t.id}>
-                <Link href={`/template/dieline/${t.id}`} className="group flex flex-col gap-3 rounded-2xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                <Link href={`/template/dieline/${t.id}`} target="_blank" rel="noopener noreferrer" className="group flex flex-col gap-3 rounded-2xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
                   <div className="relative flex aspect-[4/3] overflow-hidden rounded-2xl border bg-muted/40 transition group-hover:border-foreground/40 group-hover:shadow-sm">
                     {/* Dieline on the left (60%), the 3D picture an admin saved on the right (40%). Without a picture the dieline fills the card. */}
                     <div className={`flex items-center justify-center p-4 ${t.productImage ? "basis-[60%]" : "basis-full"}`}>
@@ -88,7 +88,7 @@ export function TemplateLibrary({ items, categories, children }: { items: Public
                     ) : null}
                     {t.has3d ? <Badge variant="secondary" className="absolute left-3 top-3 bg-background/90">3D</Badge> : null}
                   </div>
-                  <span className="px-1 text-base text-muted-foreground transition-colors group-hover:text-foreground">{t.name}</span>
+                  <span className="px-1 text-base text-muted-foreground transition-colors group-hover:text-foreground">{t.name}<span className="sr-only"> (opens in a new tab)</span></span>
                 </Link>
               </li>
             ))}

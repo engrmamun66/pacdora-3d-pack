@@ -133,7 +133,7 @@ export function HeroSettingsForm({ initial }: { initial: HeroSettings }) {
       />
 
       {state.message ? (
-        <p role={state.ok ? "status" : "alert"} className={`rounded-lg border px-3 py-2 text-sm ${state.ok ? "border-green-600/30 bg-green-50 text-green-800" : "border-destructive/30 bg-destructive/10 text-destructive"}`}>
+        <p role={state.ok ? "status" : "alert"} className={`rounded-lg border px-3 py-2 text-sm ${state.ok ? "border-emerald-600/30 bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300" : "border-destructive/30 bg-destructive/10 text-destructive"}`}>
           {state.message}
         </p>
       ) : null}

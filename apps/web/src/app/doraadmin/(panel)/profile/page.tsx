@@ -31,22 +31,22 @@ export default async function AdminProfile() {
   ]);
 
   return (
-    <div className="flex flex-col gap-10">
-      <div className="flex items-center gap-4">
-        <span aria-hidden className="grid size-16 place-items-center rounded-full bg-primary text-xl font-semibold text-primary-foreground">{initials(admin.name)}</span>
+    <div className="flex flex-col gap-8">
+      <div className="flex items-center gap-4 rounded-xl border bg-card p-5 shadow-xs">
+        <span aria-hidden className="grid size-16 shrink-0 place-items-center rounded-full bg-primary text-xl font-semibold text-primary-foreground">{initials(admin.name)}</span>
         <div className="min-w-0">
-          <h1 className="truncate text-2xl font-semibold">{admin.name}</h1>
+          <h1 className="truncate text-2xl font-semibold tracking-tight">{admin.name}</h1>
           <p className="truncate text-sm text-muted-foreground">{admin.email}</p>
           <p className="mt-1 flex gap-1.5 text-xs">
             <span className="rounded-full bg-primary px-2 py-0.5 text-primary-foreground">Super admin</span>
-            <span className="rounded-full bg-green-100 px-2 py-0.5 text-green-800">Email verified</span>
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">Email verified</span>
           </p>
         </div>
       </div>
 
       <section aria-labelledby="h-details" className="flex flex-col gap-3">
         <h2 id="h-details" className="font-medium">Details</h2>
-        <dl className="max-w-2xl rounded-xl border px-4">
+        <dl className="max-w-2xl rounded-xl border bg-card px-5 shadow-xs">
           <Row label="Name">{admin.name}</Row>
           <Row label="Email">{admin.email}</Row>
           <Row label="Role">Super admin</Row>
@@ -58,12 +58,12 @@ export default async function AdminProfile() {
         </dl>
       </section>
 
-      <section aria-labelledby="h-name" className="flex max-w-sm flex-col gap-3">
+      <section aria-labelledby="h-name" className="flex max-w-md flex-col gap-3 rounded-xl border bg-card p-5 shadow-xs">
         <h2 id="h-name" className="font-medium">Display name</h2>
         <ProfileForm name={admin.name} />
       </section>
 
-      <section aria-labelledby="h-pw" className="flex flex-col gap-3">
+      <section aria-labelledby="h-pw" className="flex max-w-md flex-col gap-3 rounded-xl border bg-card p-5 shadow-xs">
         <h2 id="h-pw" className="font-medium">Change password</h2>
         <ChangePasswordForm />
       </section>

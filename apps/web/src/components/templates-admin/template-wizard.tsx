@@ -11,12 +11,14 @@ import { saveTemplate } from "@/app/doraadmin/template-actions";
 import { notify } from "@/lib/notify";
 import { isValidSlug, slugify } from "@/lib/slug";
 import { MAX_SVG_CHARS, ROLE_COLOR, ROLE_HINTS, ROLE_LABELS, ROLE_ORDER } from "@/lib/template-import";
+import { DefaultMaterialField } from "./default-material-field";
 import { ImportedPreview } from "./imported-preview";
 import { RoleSampleButton } from "./role-sample";
 import { SvgPreviewButton } from "./svg-preview";
 import { FoldSetupEditor } from "./fold-setup-editor";
 import { ViewSettingsInline } from "./view-settings-dialog";
 import { linesKey } from "@/lib/fold-edit";
+import { colorRoles, type SvgColorSettings } from "@/lib/svg-colors";
 
 type Unit = "auto" | "mm" | "cm" | "in" | "pt" | "px";
 interface Options {
@@ -42,6 +44,8 @@ export interface WizardInitial {
   fold: FoldSetup | null;
   /** Ignored line styles kept as an optional "Reference" picture for customers. */
   referenceStyles: string[];
+  /** Built-in templates with a board thickness: the generator's limits (mm) and the saved default (null = the template's own). */
+  material: { min: number; max: number; value: number | null } | null;
 }
 
 export interface WizardCategory {
@@ -67,7 +71,7 @@ const mmToIn = (mm: number) => (mm / 25.4).toFixed(2);
  * Add or edit a template in steps: categories, SVG file, customise, details.
  * Built-in (parametric) templates only have categories and details to edit.
  */
-export function TemplateWizard({ mode, categories, initial }: { mode: "create" | "edit"; categories: WizardCategory[]; initial: WizardInitial }) {
+export function TemplateWizard({ mode, categories, initial, svgColors }: { mode: "create" | "edit"; categories: WizardCategory[]; initial: WizardInitial; svgColors: SvgColorSettings }) {
   const router = useRouter();
   const builtin = initial.source === "builtin";
   const steps = builtin ? ["Categories", "Details"] : ["Categories", "SVG file", "Customize", "3D fold", "Details & publish"];
@@ -89,6 +93,7 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
   const [description, setDescription] = useState(initial.description);
   const [published, setPublished] = useState(initial.published);
   const [sortOrder, setSortOrder] = useState(initial.sortOrder);
+  const [defaultThickness, setDefaultThickness] = useState<number | null>(initial.material?.value ?? null);
   const [bgFile, setBgFile] = useState<File | null>(null);
   const [bgRemoved, setBgRemoved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -101,7 +106,8 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
 
   const parsed = useMemo<Parsed | null>(() => (text ? tryImport(text, opts) : null), [text, opts]);
   const dieline: ImportedDieline | null = parsed?.ok ? parsed.dieline : parsed ? null : initial.dieline;
-  const suggested = useMemo(() => (dieline ? suggestRoles(dieline.styles) : {}), [dieline]);
+  // The importer's guess, with the admin's colour rules (Settings > SVG Dieline Color) on top.
+  const suggested = useMemo(() => (dieline ? { ...suggestRoles(dieline.styles), ...colorRoles(dieline.styles, svgColors) } : {}), [dieline, svgColors]);
   const roles = useMemo(() => {
     const r: Record<string, Role> = {};
     for (const st of dieline?.styles ?? []) r[st.key] = overrides[st.key] ?? suggested[st.key] ?? st.suggestedRole;
@@ -133,13 +139,13 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
   const sortedRoles = (r: Record<string, Role>) => Object.fromEntries(Object.entries(r).sort(([a], [b]) => a.localeCompare(b)));
   const snapshot = JSON.stringify({
     name: name.trim(), slug, description: description.trim(), published, sortOrder,
-    cats: [...categoryIds].sort(), roles: sortedRoles(roles), opts,
+    cats: [...categoryIds].sort(), roles: sortedRoles(roles), opts, dt: defaultThickness,
     newSvg: text !== null, bg: bgFile ? "new" : bgRemoved ? "removed" : "same", fold, refs: [...refStyles].sort(),
   });
   const [baseline] = useState(() =>
     JSON.stringify({
       name: initial.name.trim(), slug: initial.slug, description: initial.description.trim(), published: initial.published, sortOrder: initial.sortOrder,
-      cats: [...initial.categoryIds].sort(), roles: sortedRoles(initial.roles), opts: initial.options,
+      cats: [...initial.categoryIds].sort(), roles: sortedRoles(initial.roles), opts: initial.options, dt: initial.material?.value ?? null,
       newSvg: false, bg: "same", fold: initial.fold, refs: [...initial.referenceStyles].sort(),
     }),
   );
@@ -232,6 +238,7 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
     try {
       const r = await saveTemplate({
         mode, slug, name, description, published, categoryIds, sortOrder,
+        ...(initial.material ? { defaultThickness } : {}),
         ...(mode === "edit" ? { originalSlug: initial.slug } : {}),
         ...(text ? { svg: text } : {}),
         unit: opts.unit, scale: opts.scale, pxPerInch: opts.pxPerInch,
@@ -364,7 +371,7 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
                 {text ? ` Units: ${dieline.report.unit} (${dieline.report.unitSource === "svg-size" ? "from the file" : dieline.report.unitSource === "option" ? "your choice" : "assumed"}).` : ""}
               </p>
               {text && dieline.report.warnings.length ? (
-                <ul className="mt-2 list-disc space-y-0.5 pl-5 text-amber-800">
+                <ul className="mt-2 list-disc space-y-0.5 pl-5 text-amber-800 dark:text-amber-300">
                   {dieline.report.warnings.map((w) => <li key={w}>{w}</li>)}
                 </ul>
               ) : null}
@@ -499,11 +506,12 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
               <input className={`${field} w-32`} type="number" min={0} max={100000} step={1} value={sortOrder} onChange={(e) => setSortOrder(Math.max(0, Math.min(100000, Math.trunc(Number(e.target.value)) || 0)))} />
               <span className="text-xs font-normal text-muted-foreground">Lower numbers come first in the template library.</span>
             </label>
+            {initial.material ? <DefaultMaterialField min={initial.material.min} max={initial.material.max} value={defaultThickness} onChange={setDefaultThickness} /> : null}
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={published} onChange={(e) => setPublished(e.target.checked)} />
               Published (visible on the public site)
             </label>
-            {!published ? <p role="status" className="-mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Not published: customers will not see this template in the library until you publish it.</p> : null}
+            {!published ? <p role="status" className="-mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">Not published: customers will not see this template in the library until you publish it.</p> : null}
             
     </>
   );
@@ -536,7 +544,7 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
             </fieldset>
   );
   const summaryAside = (
-    <aside className="flex flex-col gap-3 rounded-xl border p-4 text-sm">
+    <aside className="flex flex-col gap-3 rounded-xl border bg-muted/30 p-4 text-sm">
             <h3 className="font-medium">Summary</h3>
             <div className="flex flex-wrap gap-1">
               {categories.filter((c) => categoryIds.includes(c.id)).map((c) => <span key={c.id} className="rounded-full bg-muted px-2 py-0.5 text-xs">{c.name}</span>)}
@@ -569,7 +577,7 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
       ...(builtin ? [] : [{ id: "sec-dieline", label: "Dieline file" }, ...(dieline ? [{ id: "sec-lines", label: "Line roles" }, { id: "sec-fold", label: "3D fold" }] : [])]),
       ...(builtin || initial.fold ? [{ id: "sec-view", label: "Starting 3D view" }] : []),
     ];
-    const card = "scroll-mt-24 rounded-2xl border bg-card p-5";
+    const card = "scroll-mt-24 rounded-2xl border bg-card p-5 shadow-xs";
     return (
       <div className="flex flex-col gap-4">
         <div className="grid gap-6 lg:grid-cols-[190px_minmax(0,1fr)]">
@@ -616,7 +624,7 @@ export function TemplateWizard({ mode, categories, initial }: { mode: "create" |
           </div>
         </div>
 
-        <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur" role="region" aria-label="Save">
+        <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-3 border-t bg-background/95 px-4 py-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 backdrop-blur" role="region" aria-label="Save">
           <div className="min-w-0 text-sm" aria-live="polite">
             {problems.length ? <span className="text-destructive">{problems[0]}</span> : dirty ? <span className="font-medium">Unsaved changes</span> : <span className="text-muted-foreground">All changes saved</span>}
           </div>

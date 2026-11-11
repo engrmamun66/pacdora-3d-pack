@@ -44,7 +44,7 @@ export function ChangePasswordForm() {
       <Field label={`New password (min. ${MIN} characters)`} id="next" type="password" autoComplete="new-password" required />
       <Field label="Confirm new password" id="confirm" type="password" autoComplete="new-password" required />
       <FormError message={error} />
-      {done ? <p role="status" className="rounded-lg border border-green-600/30 bg-green-50 px-3 py-2 text-sm text-green-800">Password changed. Other devices were signed out.</p> : null}
+      {done ? <p role="status" className="rounded-lg border border-emerald-600/30 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300">Password changed. Other devices were signed out.</p> : null}
       <Button type="submit" className="h-10" disabled={busy}>{busy ? "Saving…" : "Change password"}</Button>
     </form>
   );

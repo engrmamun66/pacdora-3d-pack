@@ -400,7 +400,7 @@ cp .env.example .env               # set DATABASE_URL, auth secret
 pnpm prisma migrate dev            # apply migrations
 pnpm db:seed                       # seed templates
 pnpm dev                           # http://localhost:3100
-
+ 
 pnpm test                          # engine + schema unit tests (Node)
 pnpm test:e2e                      # Playwright critical workflows
 pnpm typecheck && pnpm lint
@@ -680,3 +680,18 @@ Ignored line styles stay dropped from geometry, exports and 3D. In the template 
 - Each dust flap stops `gap` short of the closure beside it, so a slot of that width separates them; the slot bottom is its own cut segment on the body edge. Closure/tuck keep full width. Crease total drops by the gap per affected dust hinge. Factor 0 = old geometry.
 - Crash-lock bottom: the right lock flap also stops one gap short of the back half's outer flap (its hinge is one gap shorter, no zero-width slit there). The tab/lock-flap slits stay zero-width so the glue tab keeps full contact. The closed-bottom coverage check allows the gap area to stay open.
 - Slotted (corrugated) box already had thickness-driven slots. Imported SVG templates are fixed geometry and unaffected. Slot ends are square, not rounded.
+
+## Default material per template (admin)
+- `Template.defaultThickness` (mm, nullable; migration `20261110130000_template_default_thickness`). Set on a built-in template's edit page, Details step, with the same Material menu + thickness field as customers (list in `docs/thickness.md`). Null = the template's own default.
+- New projects, the 3D view editor and the template page start with it (`{...preset.defaults, thickness}`); a `?p=` prefill still wins. Server checks it against the generator's thickness range.
+- Imported SVG templates have no thickness (fixed geometry), so the field is not shown for them.
+
+## Admin dashboard redesign (light + dark)
+- `.admin-shell` palette in `globals.css` (ink-blue accent, deep-ink sidebar in both themes); scoped, so the public site and editor are unchanged.
+- `AdminShell` (sidebar drawer on phones, sticky top bar, breadcrumbs, Light / Match system / Dark toggle). Theme is kept in `localStorage["admin-theme"]` and applied as class `dark` on `#admin-root` only; an inline script avoids a light flash.
+- Shared `PageHeader`; cards, tables, status pills and notices use tokens or have `dark:` variants. The admin login page still uses the shared auth look.
+
+## SVG Dieline Color (admin setting)
+- Settings > "SVG Dieline Color" (`/doraadmin/settings/svg-colors`): any number of hex colours per meaning (Cut, Fold, Bleed, Guide, Ignore), stored in `SiteSetting` key `svg-colors`. A colour can have one meaning only (client moves it, server rejects duplicates).
+- Template wizard: a style whose stroke colour is listed gets that role as its starting selection; other colours keep the importer's guess (`colorRoles` in `src/lib/svg-colors.ts`, layered over `suggestRoles`). Saved templates keep their saved roles; the admin can still change any line.
+- Matching is by exact stroke colour (case-insensitive), not by dash or width.

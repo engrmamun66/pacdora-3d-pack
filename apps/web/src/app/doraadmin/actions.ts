@@ -8,6 +8,7 @@ import { db } from "@/server/db";
 import { SUPERADMIN, requireSuperAdmin } from "@/server/admin";
 import { HERO_TAG } from "@/server/site-settings";
 import { heroSettingsSchema } from "@/lib/hero-settings";
+import { svgColorSchema } from "@/lib/svg-colors";
 import { SITE_TITLE_MAX } from "@/lib/site-identity";
 import { IDENTITY_TAG, readSiteIdentity, writeSiteIdentity } from "@/server/site-identity";
 
@@ -83,6 +84,28 @@ export async function saveHeroSettings(_prev: HeroFormState, formData: FormData)
   });
   updateTag(HERO_TAG); // the home page shows the change on the next visit
   return { ok: true, message: "Saved. The home page now uses these settings." };
+}
+
+export type SvgColorsFormState = { ok: boolean; message: string | null };
+
+/** Save which colours mean Cut, Fold, Bleed, Guide and Ignore when an SVG dieline is imported. */
+export async function saveSvgColors(_prev: SvgColorsFormState, formData: FormData): Promise<SvgColorsFormState> {
+  const admin = await requireSuperAdmin();
+  let raw: unknown;
+  try {
+    raw = JSON.parse(String(formData.get("colors") ?? ""));
+  } catch {
+    return { ok: false, message: "Could not read the colours. Reload the page and try again." };
+  }
+  const parsed = svgColorSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Colours must look like #1a2b3c." };
+  await db.siteSetting.upsert({
+    where: { key: "svg-colors" },
+    create: { key: "svg-colors", value: parsed.data, updatedById: admin.id },
+    update: { value: parsed.data, updatedById: admin.id },
+  });
+  revalidatePath("/doraadmin/templates", "layout");
+  return { ok: true, message: "Saved. New SVG imports use these colours." };
 }
 
 export type IdentityFormState = { ok: boolean; message: string | null };

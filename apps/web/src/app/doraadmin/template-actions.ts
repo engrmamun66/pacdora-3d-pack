@@ -3,7 +3,7 @@
 import { revalidatePath, updateTag } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
-import { ImportedDielineError, assertImportable, createImportedGenerator, importedDefaults, validateFoldSetup, type FlatDieline, type FoldSetup } from "@packaging/dieline-engine";
+import { ImportedDielineError, assertImportable, createImportedGenerator, getGenerator, importedDefaults, validateFoldSetup, type FlatDieline, type FoldSetup } from "@packaging/dieline-engine";
 import { SvgImportError, importSvg, toFlatDieline, type ImportedDieline, type Role } from "@packaging/svg-import";
 import { MAX_SVG_CHARS, thumbnailSvg } from "@/lib/template-import";
 import { isValidSlug } from "@/lib/slug";
@@ -79,6 +79,8 @@ const saveSchema = z.object({
   fold: z.unknown().optional(),
   /** Ignored line styles kept as an optional faint "Reference" picture on the dieline page. */
   referenceStyles: z.array(z.string().max(80)).max(60).default([]),
+  /** Built-in templates: board thickness (mm) new projects start with. null = the template's own default. */
+  defaultThickness: z.number().finite().positive().max(100).nullable().optional(),
 });
 
 export type SaveTemplateResult = ActionResult & { slug?: string };
@@ -158,14 +160,23 @@ export async function saveTemplate(input: unknown): Promise<SaveTemplateResult> 
 
   // The row being edited is found by its current address; a new address is only used when renaming.
   const current = v.mode === "edit" ? (v.originalSlug ?? v.slug) : v.slug;
-  const existing = await db.template.findUnique({ where: { id: current }, select: { source: true, geometry: true, _count: { select: { projects: true } } } });
+  const existing = await db.template.findUnique({ where: { id: current }, select: { source: true, generatorId: true, geometry: true, _count: { select: { projects: true } } } });
 
   // ---- Edit a built-in template: details, order, categories and visibility (its geometry and address come from code).
   if (v.mode === "edit" && existing?.source === "builtin") {
     if (v.slug !== current) return { ok: false, message: "A built-in template keeps its address." };
+    // The default board must be one this template's generator accepts.
+    if (v.defaultThickness !== undefined && v.defaultThickness !== null) {
+      const t = getGenerator(existing.generatorId).params.find((q) => q.key === "thickness");
+      if (!t || t.kind !== "number") return { ok: false, message: "This template has no board thickness to set." };
+      if (v.defaultThickness < t.min || v.defaultThickness > t.max) return { ok: false, message: `Default thickness must be between ${t.min} and ${t.max} mm for this template.` };
+    }
     await db.template.update({
       where: { id: current },
-      data: { name: v.name, description: v.description, published: v.published, sortOrder: v.sortOrder, categories: { set: categories } },
+      data: {
+        name: v.name, description: v.description, published: v.published, sortOrder: v.sortOrder, categories: { set: categories },
+        ...(v.defaultThickness !== undefined ? { defaultThickness: v.defaultThickness } : {}),
+      },
     });
     refresh(current);
     return { ok: true, message: "Template saved.", slug: current };

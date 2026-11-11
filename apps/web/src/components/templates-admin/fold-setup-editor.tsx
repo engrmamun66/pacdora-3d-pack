@@ -149,7 +149,7 @@ export function FoldSetupEditor({
         <Button type="button" variant="outline" size="sm" onClick={() => { if (window.confirm("Remove the 3D fold? The template becomes flat only.")) { onChange(null); setSel(null); setWarnings([]); } }}>Make flat only</Button>
       </div>
 
-      {stale ? <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">The lines changed after the fold was set up. Detect the panels again (or make the template flat only) before saving.</p> : null}
+      {stale ? <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">The lines changed after the fold was set up. Detect the panels again (or make the template flat only) before saving.</p> : null}
       {problems.length ? <ul role="alert" className="list-disc rounded-lg border border-destructive/30 bg-destructive/10 py-2 pl-7 pr-3 text-sm text-destructive">{problems.map((p) => <li key={p}>{p}</li>)}</ul> : null}
       {warnings.length ? (
         <details className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
@@ -203,7 +203,7 @@ export function FoldSetupEditor({
               })}
             </svg>
           </div>
-          <p className="text-xs text-muted-foreground">Colours show how deep a panel is from the base. Numbers on the fold lines are the fold steps. <span className="text-teal-700">Green</span> folds inward, <span className="text-orange-600">orange</span> outward.</p>
+          <p className="text-xs text-muted-foreground">Colours show how deep a panel is from the base. Numbers on the fold lines are the fold steps. <span className="text-teal-700 dark:text-teal-300">Green</span> folds inward, <span className="text-orange-600">orange</span> outward.</p>
         </div>
 
         {/* 3D preview */}

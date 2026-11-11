@@ -25,7 +25,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
   if (slug.length > 80) notFound();
   const row = await db.template.findUnique({
     where: { id: slug },
-    select: { id: true, name: true, description: true, source: true, published: true, viewSettings: true, categories: { where: { active: true }, select: { name: true } } },
+    select: { id: true, name: true, description: true, source: true, published: true, viewSettings: true, defaultThickness: true, categories: { where: { active: true }, select: { name: true } } },
   });
   if (!row || !row.published) notFound();
 
@@ -61,7 +61,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
       title={row.name}
       description={row.description}
       initialName={row.name}
-      initialParams={{ ...preset.defaults, ...prefill }}
+      initialParams={{ ...preset.defaults, ...(row.defaultThickness ? { thickness: row.defaultThickness } : {}), ...prefill }}
     />
   );
 }
