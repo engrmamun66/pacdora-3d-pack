@@ -9,6 +9,7 @@ import { db } from "@/server/db";
 import { requireUser } from "@/server/session";
 import { resolveGenerator } from "@/server/imported-templates";
 import { copyTemplateBackground } from "@/server/template-background";
+import { readViewSettings } from "@/lib/view-settings";
 
 export type DesignState = { ok: boolean; message: string | null; issues: { path: string; message: string }[] };
 
@@ -55,7 +56,7 @@ async function insertProject(formData: FormData): Promise<{ id: string } | Desig
   const invalid = validateWithEngine(generator, params);
   if (invalid) return invalid;
 
-  const doc = newProjectDoc({
+  const baseDoc = newProjectDoc({
     name: name.data,
     presetId,
     generatorId: generator.id,
@@ -63,6 +64,9 @@ async function insertProject(formData: FormData): Promise<{ id: string } | Desig
     engineVersion: ENGINE_VERSION,
     params,
   });
+  // The editor's 3D view starts at the fold amount the admin saved in "Starting 3D view" (the camera comes from the template itself).
+  const startView = readViewSettings((await db.template.findUnique({ where: { id: presetId }, select: { viewSettings: true } }))?.viewSettings ?? null);
+  const doc = startView ? { ...baseDoc, threeD: { ...baseDoc.threeD, foldProgress: startView.progress } } : baseDoc;
   if (builtin) {
     // Keep the catalogue row in sync (code is the source of truth for built-in presets).
     await db.template.upsert({

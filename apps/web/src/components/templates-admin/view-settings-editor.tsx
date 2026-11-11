@@ -191,6 +191,7 @@ export function ViewSettingsEditor({ slug, data, onSaved }: { slug: string; data
           </div>
           <Num label="Turn (left/right)" value={current.azimuthDeg} suffix="°" step={1} min={-180} max={180} onCommit={(v) => move({ azimuthDeg: v })} />
           <Num label="Tilt (up/down)" value={current.elevationDeg} suffix="°" step={1} min={-89} max={89} onCommit={(v) => move({ elevationDeg: v })} />
+          <Num label="Roll (sideways)" value={current.rollDeg} suffix="°" step={1} min={-180} max={180} onCommit={(v) => move({ rollDeg: v })} />
           <Num label="Zoom" value={current.zoom} suffix="×" step={0.05} min={0.2} max={10} onCommit={(v) => move({ zoom: v })} />
           <Num label="Move X" value={current.panX * 100} suffix="%" step={1} min={-300} max={300} onCommit={(v) => move({ panX: v / 100 })} />
           <Num label="Move Y" value={current.panY * 100} suffix="%" step={1} min={-300} max={300} onCommit={(v) => move({ panY: v / 100 })} />

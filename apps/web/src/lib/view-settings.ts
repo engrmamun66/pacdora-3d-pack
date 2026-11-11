@@ -6,6 +6,7 @@ import { z } from "zod";
  *
  *   azimuthDeg    turn around the box (0 = looking at the front, + turns to the right side)
  *   elevationDeg  tilt (0 = level with the box, 90 = from above)
+ *   rollDeg       roll (0 = upright; + turns the picture clockwise, like tilting your head)
  *   zoom          1 = the standard distance; 2 = twice as close
  *   panX, panY    sideways / up-down shift of the view, in box sizes
  *   progress      fold amount (0 = flat, 1 = closed)
@@ -14,6 +15,8 @@ export const viewSettingsSchema = z.object({
   v: z.literal(1),
   azimuthDeg: z.number().finite().min(-180).max(180),
   elevationDeg: z.number().finite().min(-89).max(89),
+  /** Older saved views have no roll: they read as upright. */
+  rollDeg: z.number().finite().min(-180).max(180).default(0),
   zoom: z.number().finite().min(0.2).max(10),
   panX: z.number().finite().min(-3).max(3),
   panY: z.number().finite().min(-3).max(3),
@@ -22,7 +25,7 @@ export const viewSettingsSchema = z.object({
 export type ViewSettings = z.infer<typeof viewSettingsSchema>;
 
 /** The standard view (close to the one the viewer always used). */
-export const STANDARD_VIEW: ViewSettings = { v: 1, azimuthDeg: 36, elevationDeg: 25, zoom: 1, panX: 0, panY: 0, progress: 1 };
+export const STANDARD_VIEW: ViewSettings = { v: 1, azimuthDeg: 36, elevationDeg: 25, rollDeg: 0, zoom: 1, panX: 0, panY: 0, progress: 1 };
 
 /** Camera distance (in box sizes) at zoom 1. */
 const BASE_DISTANCE = 3;
@@ -33,13 +36,29 @@ type V3 = [number, number, number];
 const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
-/** Axes for a camera turned by `az` and tilted by `el`: d points from the target to the camera. */
-function axes(azimuthDeg: number, elevationDeg: number) {
+/** Rotate `v` about the unit axis `k` by `angle` radians (Rodrigues). */
+function turn(v: V3, k: V3, angle: number): V3 {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  const kv = cross(k, v);
+  const kd = dot(k, v);
+  return [v[0] * c + kv[0] * s + k[0] * kd * (1 - c), v[1] * c + kv[1] * s + k[1] * kd * (1 - c), v[2] * c + kv[2] * s + k[2] * kd * (1 - c)];
+}
+
+/**
+ * Axes for a camera turned by `az`, tilted by `el` and rolled by `roll`: d points from the target
+ * to the camera, right and up are the screen's own axes (so panning follows a rolled picture).
+ */
+function axes(azimuthDeg: number, elevationDeg: number, rollDeg = 0) {
   const az = rad(azimuthDeg);
   const el = rad(elevationDeg);
   const d: V3 = [Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)];
-  const right: V3 = [Math.cos(az), 0, -Math.sin(az)];
-  const up = cross(d, right);
+  let right: V3 = [Math.cos(az), 0, -Math.sin(az)];
+  let up = cross(d, right);
+  if (rollDeg) {
+    right = turn(right, d, rad(rollDeg));
+    up = turn(up, d, rad(rollDeg));
+  }
   return { d, right, up };
 }
 
@@ -48,7 +67,7 @@ function axes(azimuthDeg: number, elevationDeg: number) {
  * framed around (its middle), `size` the reference size of the box in the same unit.
  */
 export function viewToCamera(view: ViewSettings, base: V3, size: number): { position: V3; target: V3 } {
-  const { d, right, up } = axes(view.azimuthDeg, view.elevationDeg);
+  const { d, right, up } = axes(view.azimuthDeg, view.elevationDeg, view.rollDeg);
   const target: V3 = [
     base[0] + (right[0] * view.panX + up[0] * view.panY) * size,
     base[1] + (right[1] * view.panX + up[1] * view.panY) * size,
@@ -59,18 +78,19 @@ export function viewToCamera(view: ViewSettings, base: V3, size: number): { posi
 }
 
 /** The reverse of `viewToCamera`: describe where the camera is now. */
-export function cameraToView(position: V3, target: V3, base: V3, size: number, progress: number): ViewSettings {
+export function cameraToView(position: V3, target: V3, base: V3, size: number, progress: number, rollDeg = 0): ViewSettings {
   const off: V3 = [position[0] - target[0], position[1] - target[1], position[2] - target[2]];
   const dist = Math.hypot(...off) || 1e-9;
   const elevationDeg = deg(Math.asin(Math.max(-1, Math.min(1, off[1] / dist))));
   const azimuthDeg = Math.abs(off[0]) + Math.abs(off[2]) < 1e-9 ? 0 : deg(Math.atan2(off[0], off[2]));
-  const { right, up } = axes(azimuthDeg, elevationDeg);
+  const { right, up } = axes(azimuthDeg, elevationDeg, rollDeg);
   const delta: V3 = [target[0] - base[0], target[1] - base[1], target[2] - base[2]];
   const round = (v: number, n: number) => Math.round(v * 10 ** n) / 10 ** n;
   return {
     v: 1,
     azimuthDeg: round(azimuthDeg, 2),
     elevationDeg: round(Math.max(-89, Math.min(89, elevationDeg)), 2),
+    rollDeg: round(Math.max(-180, Math.min(180, rollDeg)), 1),
     zoom: round(Math.max(0.2, Math.min(10, (BASE_DISTANCE * size) / dist)), 3),
     panX: round(dot(delta, right) / size, 4),
     panY: round(dot(delta, up) / size, 4),

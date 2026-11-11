@@ -44,4 +44,25 @@ describe("view settings", () => {
     expect(readViewSettings(null)).toBeNull();
     expect(readViewSettings("x")).toBeNull();
   });
+
+  it("roll: old saved views read as upright, and a rolled view round-trips with screen-aligned panning", () => {
+    const old: Record<string, unknown> = { ...STANDARD_VIEW };
+    delete old.rollDeg;
+    expect(readViewSettings(old)?.rollDeg).toBe(0);
+    expect(readViewSettings({ ...STANDARD_VIEW, rollDeg: 181 })).toBeNull();
+    for (const v of [
+      { ...STANDARD_VIEW, rollDeg: 40, panX: 0.3, panY: -0.2 },
+      { ...STANDARD_VIEW, azimuthDeg: -100, elevationDeg: 50, rollDeg: -135, zoom: 1.7, panX: -0.4, panY: 0.6 },
+    ]) {
+      const { position, target } = viewToCamera(v, base, 100);
+      const back = cameraToView(position, target, base, 100, v.progress, v.rollDeg);
+      expect(back.rollDeg).toBeCloseTo(v.rollDeg, 1);
+      expect(back.panX).toBeCloseTo(v.panX, 3);
+      expect(back.panY).toBeCloseTo(v.panY, 3);
+    }
+    // looking at the front, rolled a quarter turn: "screen right" is the box's up (or down) direction
+    const c = viewToCamera({ ...STANDARD_VIEW, azimuthDeg: 0, elevationDeg: 0, rollDeg: 90, panX: 0.5, panY: 0 }, base, 100);
+    expect(Math.abs(c.target[0])).toBeCloseTo(0, 6);
+    expect(Math.abs(c.target[1] - 50)).toBeCloseTo(50, 6);
+  });
 });

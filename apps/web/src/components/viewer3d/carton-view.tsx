@@ -37,6 +37,13 @@ export interface CartonViewProps {
   onViewChange?: (v: ViewSettings) => void;
 }
 
+/** Camera angles in degrees. */
+export interface Rotation {
+  x: number;
+  y: number;
+  z: number;
+}
+
 export interface CartonViewHandle {
   /** The carton object currently shown (for GLB export). */
   getModelObject(): THREE.Object3D | null;
@@ -45,12 +52,12 @@ export interface CartonViewHandle {
   getView(): ViewSettings | null;
   /** Move the camera to a view. */
   setView(v: ViewSettings): void;
-  /** Where the camera is turned: x = tilt up/down, y = turn left/right, both in degrees; null before the model exists. */
-  getRotation(): { x: number; y: number } | null;
-  /** Turn the camera to this tilt (x) and/or turn (y), in degrees. Zoom and position are kept. */
-  setRotation(r: { x?: number; y?: number }): void;
+  /** Where the camera is turned, in degrees: x = tilt up/down, y = turn left/right, z = roll (the view turned like a tilted head); null before the model exists. */
+  getRotation(): Rotation | null;
+  /** Turn the camera to this tilt (x), turn (y) and/or roll (z), in degrees. Zoom and position are kept. */
+  setRotation(r: Partial<Rotation>): void;
   /** Be told when the camera moves (dragging, buttons, reset). Returns the way to stop. */
-  onRotation(cb: (r: { x: number; y: number }) => void): () => void;
+  onRotation(cb: (r: Rotation) => void): () => void;
   /**
    * PNG (data URL) of the current view. With `size` it is drawn at exactly that many pixels
    * (same camera, the picture is just cut to that shape), and the view on screen is left as it was.
@@ -82,7 +89,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     onViewChangeRef.current = onViewChange;
     progressRef.current = progress;
   });
-  const rotationListeners = useRef(new Set<(r: { x: number; y: number }) => void>());
+  const rotationListeners = useRef(new Set<(r: Rotation) => void>());
   const rebuild = useRef<(p: number, hingeProgress?: Readonly<Record<string, number>>) => void>(() => {});
   const three = useRef<{
     renderer: THREE.WebGLRenderer;
@@ -105,6 +112,49 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     return { r, base: [0, t.model.size.y / 2, 0] as [number, number, number] };
   };
 
+  /**
+   * Make `up` the camera's up direction, and the axis the mouse orbits around. OrbitControls works
+   * out its "up" once, when it is created, so its private copy is updated here as well. That keeps
+   * dragging natural after the view has been rolled: left/right still turns around the screen's vertical.
+   */
+  const setCameraUp = (up: THREE.Vector3) => {
+    const t = three.current;
+    if (!t) return;
+    t.camera.up.copy(up);
+    const c = t.controls as unknown as { _quat: THREE.Quaternion; _quatInverse: THREE.Quaternion };
+    c._quat.setFromUnitVectors(up, new THREE.Vector3(0, 1, 0));
+    c._quatInverse.copy(c._quat).invert();
+    t.camera.lookAt(t.controls.target);
+  };
+
+  /** The camera's line of sight, and the world "up" cut down to the part that is square to it (what an unrolled camera would use). */
+  const sight = () => {
+    const t = three.current;
+    if (!t) return null;
+    const d = t.controls.target.clone().sub(t.camera.position).normalize();
+    let base = new THREE.Vector3(0, 1, 0).addScaledVector(d, -d.y);
+    if (base.lengthSq() < 1e-8) base = new THREE.Vector3(0, 0, -1).addScaledVector(d, -d.z); // looking straight up or down
+    return { d, base: base.normalize() };
+  };
+
+  /** Roll of the view in degrees (0 = upright). Positive turns the picture clockwise. */
+  const getRoll = (): number => {
+    const t = three.current;
+    const s = sight();
+    if (!t || !s) return 0;
+    const up = t.camera.up.clone().addScaledVector(s.d, -t.camera.up.dot(s.d)).normalize();
+    const angle = Math.atan2(s.d.dot(new THREE.Vector3().crossVectors(s.base, up)), s.base.dot(up));
+    const deg = (-angle * 180) / Math.PI;
+    return Math.abs(deg) < 0.05 ? 0 : Math.round(deg * 10) / 10;
+  };
+
+  const applyRoll = (rollDeg: number) => {
+    const s = sight();
+    if (!s) return;
+    setCameraUp(s.base.clone().applyAxisAngle(s.d, (-rollDeg * Math.PI) / 180));
+  };
+
+  /** Move the camera to a view (position, zoom, pan and roll). */
   const applyView = (v: ViewSettings) => {
     const t = three.current;
     const fb = frameBase();
@@ -112,6 +162,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     const { position, target } = viewToCamera(v, fb.base, fb.r);
     t.camera.position.set(...position);
     t.controls.target.set(...target);
+    applyRoll(v.rollDeg);
     t.controls.update();
   };
 
@@ -121,13 +172,14 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     if (!t || !fb) return null;
     const p = t.camera.position;
     const c = t.controls.target;
-    return cameraToView([p.x, p.y, p.z], [c.x, c.y, c.z], fb.base, fb.r, progressRef.current);
+    return cameraToView([p.x, p.y, p.z], [c.x, c.y, c.z], fb.base, fb.r, progressRef.current, getRoll());
   };
 
-  const getRotation = (): { x: number; y: number } | null => {
+  const getRotation = (): Rotation | null => {
     const v = getView();
-    return v ? { x: v.elevationDeg, y: v.azimuthDeg } : null;
+    return v ? { x: v.elevationDeg, y: v.azimuthDeg, z: v.rollDeg } : null;
   };
+
   const notifyRotation = () => {
     if (!rotationListeners.current.size) return;
     const r = getRotation();
@@ -137,6 +189,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   const frame = () => {
     const t = three.current;
     if (!t?.model) return;
+    setCameraUp(new THREE.Vector3(0, 1, 0)); // back to upright
     const r = frameMm ?? Math.max(t.model.size.x, t.model.size.y, t.model.size.z);
     t.camera.position.set(r * 1.6, r * 1.3, r * 2.2);
     t.camera.near = r / 100;
@@ -159,7 +212,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     getModelObject: () => three.current?.model?.object ?? null,
     resetView: frame,
     getView,
-    setView: applyView,
+    setView: (v) => applyView(v),
     getRotation,
     setRotation: (r) => {
       const v = getView();
@@ -168,6 +221,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
         ...v,
         ...(r.y === undefined ? {} : { azimuthDeg: Math.max(-180, Math.min(180, r.y)) }),
         ...(r.x === undefined ? {} : { elevationDeg: Math.max(-89, Math.min(89, r.x)) }),
+        ...(r.z === undefined ? {} : { rollDeg: Math.max(-180, Math.min(180, r.z)) }),
       });
     },
     onRotation: (cb) => {
@@ -270,7 +324,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
         const v = getView();
         if (!v) return;
         onViewChangeRef.current?.(v);
-        rotationListeners.current.forEach((cb) => cb({ x: v.elevationDeg, y: v.azimuthDeg }));
+        rotationListeners.current.forEach((cb) => cb({ x: v.elevationDeg, y: v.azimuthDeg, z: v.rollDeg }));
       });
     };
     controls.addEventListener("change", onChange);
