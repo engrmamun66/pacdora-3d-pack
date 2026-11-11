@@ -26,6 +26,7 @@ export async function createCategory(name: string): Promise<MyResult> {
   const n = nameSchema.safeParse(name);
   if (!n.success) return { ok: false, message: n.error.issues[0]!.message };
   if ((await db.userCategory.count({ where: { userId: user.id } })) >= MAX_CATEGORIES) return { ok: false, message: `You can keep up to ${MAX_CATEGORIES} categories.` };
+  if (await db.userCategory.findFirst({ where: { userId: user.id, name: { equals: n.data, mode: "insensitive" } }, select: { id: true } })) return { ok: false, message: "You already have a category with that name." };
   try {
     const c = await db.userCategory.create({ data: { userId: user.id, name: n.data }, select: { id: true } });
     refresh();
@@ -40,6 +41,7 @@ export async function renameCategory(id: string, name: string): Promise<MyResult
   const user = await requireUser();
   const n = nameSchema.safeParse(name);
   if (!idSchema.safeParse(id).success || !n.success) return { ok: false, message: n.success ? "Invalid request." : n.error.issues[0]!.message };
+  if (await db.userCategory.findFirst({ where: { userId: user.id, id: { not: id }, name: { equals: n.data, mode: "insensitive" } }, select: { id: true } })) return { ok: false, message: "You already have a category with that name." };
   try {
     const r = await db.userCategory.updateMany({ where: { id, userId: user.id }, data: { name: n.data } });
     if (r.count === 0) return { ok: false, message: "Category not found." };
@@ -49,6 +51,22 @@ export async function renameCategory(id: string, name: string): Promise<MyResult
   }
   refresh();
   return { ok: true, message: "Category renamed." };
+}
+
+export async function renameTag(id: string, name: string): Promise<MyResult> {
+  const user = await requireUser();
+  const n = nameSchema.safeParse(name);
+  if (!idSchema.safeParse(id).success || !n.success) return { ok: false, message: n.success ? "Invalid request." : n.error.issues[0]!.message };
+  if (await db.userTag.findFirst({ where: { userId: user.id, id: { not: id }, name: { equals: n.data, mode: "insensitive" } }, select: { id: true } })) return { ok: false, message: "You already have a tag with that name." };
+  try {
+    const r = await db.userTag.updateMany({ where: { id, userId: user.id }, data: { name: n.data } });
+    if (r.count === 0) return { ok: false, message: "Tag not found." };
+  } catch (e) {
+    if (isDuplicate(e)) return { ok: false, message: "You already have a tag with that name." };
+    throw e;
+  }
+  refresh();
+  return { ok: true, message: "Tag renamed." };
 }
 
 /** Delete a category. Its templates stay, just without a category. */
@@ -66,6 +84,7 @@ export async function createTag(name: string): Promise<MyResult> {
   const n = nameSchema.safeParse(name);
   if (!n.success) return { ok: false, message: n.error.issues[0]!.message };
   if ((await db.userTag.count({ where: { userId: user.id } })) >= MAX_TAGS) return { ok: false, message: `You can keep up to ${MAX_TAGS} tags.` };
+  if (await db.userTag.findFirst({ where: { userId: user.id, name: { equals: n.data, mode: "insensitive" } }, select: { id: true } })) return { ok: false, message: "You already have a tag with that name." };
   try {
     const t = await db.userTag.create({ data: { userId: user.id, name: n.data }, select: { id: true } });
     refresh();

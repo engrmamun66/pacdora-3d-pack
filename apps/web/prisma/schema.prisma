@@ -25,6 +25,11 @@ model User {
   banned        Boolean   @default(false)
   bannedAt      DateTime?
   banReason     String?
+  /// Contact details the customer adds on the profile settings tab (all optional).
+  phone           String?
+  altPhone        String?
+  businessName    String?
+  businessAddress String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   sessions      Session[]

@@ -20,7 +20,12 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // Old template address -> new one (query string such as ?p= is kept by Next).
   async redirects() {
-    return [{ source: "/templates/:slug", destination: "/template/dieline/:slug", permanent: false }];
+    return [
+      { source: "/templates/:slug", destination: "/template/dieline/:slug", permanent: false },
+      // The dashboard and the settings page became one: /my-dashboard (settings = its Profile tab).
+      { source: "/dashboard", destination: "/my-dashboard", permanent: false },
+      { source: "/settings", destination: "/my-dashboard?tab=profile", permanent: false },
+    ];
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

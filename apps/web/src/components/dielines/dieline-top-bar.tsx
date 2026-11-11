@@ -93,7 +93,7 @@ function MainMenu({
           {rule}
           <button type="button" role="menuitem" className={rowLive} onClick={() => go("/projects")}>My projects</button>
           {soon("AI generations")}
-          <button type="button" role="menuitem" className={rowLive} onClick={() => go("/settings")}>Account</button>
+          <button type="button" role="menuitem" className={rowLive} onClick={() => go("/my-dashboard?tab=profile")}>Profile settings</button>
           <button type="button" role="menuitem" className={rowLive} onClick={() => go("/")}>Homepage</button>
           {rule}
           <button type="button" role="menuitem" aria-disabled className={rowOff} onClick={(e) => e.preventDefault()}>

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Plus, Search, X } from "lucide-react";
 import { loadTemplatePicker } from "@/app/(site)/templates/picker-actions";
-import { addSystemTemplate } from "@/app/(app)/my-dashboard/actions";
+import { addSystemTemplate } from "@/app/(dash)/my-dashboard/actions";
 import { notify } from "@/lib/notify";
 import type { PublicCategory, PublicTemplate } from "@/server/templates-public";
 import type { MyLabel } from "@/server/my-templates";
@@ -11,7 +11,7 @@ import type { MyLabel } from "@/server/my-templates";
 type State = { status: "idle" | "loading" | "error" } | { status: "ready"; templates: PublicTemplate[]; categories: PublicCategory[] };
 
 /** Pick system templates to copy into the customer's own list (optionally straight into one of their categories). */
-export function AddSystemDialog({ categories }: { categories: MyLabel[] }) {
+export function AddSystemDialog({ categories, onAdded }: { categories: MyLabel[]; onAdded?: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [state, setState] = useState<State>({ status: "idle" });
   const [q, setQ] = useState("");
@@ -51,6 +51,7 @@ export function AddSystemDialog({ categories }: { categories: MyLabel[] }) {
       if (r.ok) {
         setAdded((a) => ({ ...a, [t.id]: (a[t.id] ?? 0) + 1 }));
         notify.success(r.message);
+        onAdded?.();
       } else notify.error(r.message);
     });
   };

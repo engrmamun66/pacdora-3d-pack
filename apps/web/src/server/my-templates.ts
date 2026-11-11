@@ -12,6 +12,8 @@ export interface MyTemplateRow {
   name: string;
   templateName: string;
   updatedAt: string;
+  /** For sorting. */
+  updatedMs: number;
   thumbnail: string | null;
   categoryId: string | null;
   tagIds: string[];
@@ -19,37 +21,24 @@ export interface MyTemplateRow {
 export interface MyLabel {
   id: string;
   name: string;
-  count: number;
 }
 export interface MyDashboard {
   templates: MyTemplateRow[];
-  /** Every template of the customer, before filtering. */
+  /** How many templates the customer has in all (may be more than are listed). */
   total: number;
-  uncategorised: number;
   categories: MyLabel[];
   tags: MyLabel[];
 }
 
-export interface DashboardFilter {
-  q: string;
-  /** A category id, "none" for templates without one, or "" for all. */
-  cat: string;
-  tag: string;
-}
+/** The customer's own templates (projects) with their categories and tags. Always scoped to `userId`. The page filters and sorts them in the browser, so this loads the latest MAX_LISTED. */
+export const MAX_LISTED = 300;
 
-/** The customer's own templates (projects) with their categories and tags. Always scoped to `userId`. */
-export async function loadMyDashboard(userId: string, f: DashboardFilter): Promise<MyDashboard> {
-  const where = {
-    userId,
-    ...(f.cat === "none" ? { categoryId: null } : f.cat ? { categoryId: f.cat } : {}),
-    ...(f.tag ? { tags: { some: { tagId: f.tag } } } : {}),
-    ...(f.q ? { name: { contains: f.q, mode: "insensitive" as const } } : {}),
-  };
-  const [rows, total, uncategorised, categories, tags] = await Promise.all([
+export async function loadMyDashboard(userId: string): Promise<MyDashboard> {
+  const [rows, total, categories, tags] = await Promise.all([
     db.project.findMany({
-      where,
+      where: { userId },
       orderBy: { updatedAt: "desc" },
-      take: 200,
+      take: MAX_LISTED,
       select: {
         id: true,
         name: true,
@@ -61,9 +50,8 @@ export async function loadMyDashboard(userId: string, f: DashboardFilter): Promi
       },
     }),
     db.project.count({ where: { userId } }),
-    db.project.count({ where: { userId, categoryId: null } }),
-    db.userCategory.findMany({ where: { userId }, orderBy: { name: "asc" }, select: { id: true, name: true, _count: { select: { projects: true } } } }),
-    db.userTag.findMany({ where: { userId }, orderBy: { name: "asc" }, select: { id: true, name: true, _count: { select: { projects: true } } } }),
+    db.userCategory.findMany({ where: { userId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.userTag.findMany({ where: { userId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
   return {
     templates: rows.map((r) => {
@@ -74,11 +62,10 @@ export async function loadMyDashboard(userId: string, f: DashboardFilter): Promi
       } catch {
         // a project file from a newer version: no preview
       }
-      return { id: r.id, name: r.name, templateName: r.template.name, updatedAt: r.updatedAt.toISOString().slice(0, 10), thumbnail, categoryId: r.categoryId, tagIds: r.tags.map((t) => t.tagId) };
+      return { id: r.id, name: r.name, templateName: r.template.name, updatedAt: r.updatedAt.toISOString().slice(0, 10), updatedMs: r.updatedAt.getTime(), thumbnail, categoryId: r.categoryId, tagIds: r.tags.map((t) => t.tagId) };
     }),
     total,
-    uncategorised,
-    categories: categories.map((c) => ({ id: c.id, name: c.name, count: c._count.projects })),
-    tags: tags.map((t) => ({ id: t.id, name: t.name, count: t._count.projects })),
+    categories,
+    tags,
   };
 }

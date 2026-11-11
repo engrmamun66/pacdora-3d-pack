@@ -35,7 +35,7 @@ export function UserMenuClient({ name, email, image }: { name: string; email: st
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => router.push("/my-dashboard")}>My dashboard</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => router.push("/settings")}>Settings</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/my-dashboard?tab=profile")}>Profile settings</DropdownMenuItem>
         <DropdownMenuItem
           onClick={async () => {
             await authClient.signOut();
