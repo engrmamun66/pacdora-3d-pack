@@ -53,7 +53,7 @@ describe("resizing parts of an imported dieline", () => {
     expect(planResize(setup)).not.toBeNull();
     expect(gen.params.map((p) => p.key)).toEqual(expect.arrayContaining(["width", "baseWidth", "baseHeight", "boxHeight"]));
     const noFold = createImportedGenerator("t", flat, null);
-    expect(noFold.params.map((p) => p.key)).toEqual(["width", "bleed"]);
+    expect(noFold.params.map((p) => p.key)).toEqual(["width", "thickness", "bleed"]); // no box sizes, but the board is still offered
     expect(planResize(null)).toBeNull();
   });
 

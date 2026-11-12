@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ListOrdered, Play, RotateCcw, Wand2 } from "lucide-react";
-import { createImportedGenerator, detectFoldSetup, importedDefaults, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldHingeSpec, type FoldSetup, type PanelRole, type PartPlacementMode } from "@packaging/dieline-engine";
+import { ListOrdered, Play, RotateCcw, Wand2, X } from "lucide-react";
+import { createImportedGenerator, detectFoldSetup, importedDefaults, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldHingeSpec, type FoldSetup, type PanelRole, partFits } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
-import { applyFoldSequence, compactOrders, depthOf, makeMain, moveHinge, pieceOf, rootAt, rootsOf, setGround, sortedHinges, stepsOf, updateHinge, updatePanel, updatePart } from "@/lib/fold-edit";
+import { applyFoldSequence, compactOrders, depthOf, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootAt, rootsOf, setGround, sortedHinges, stepsOf, updateHinge, updatePanel } from "@/lib/fold-edit";
+import { ConstructionEditor } from "./construction-editor";
+import { HelpTip } from "./help-tip";
+import { PiecesEditor } from "./pieces-editor";
 import { HingeList } from "./hinge-list";
 import { PanelKindHelp } from "./panel-kind-help";
 import { QuickSortBar } from "./quick-sort-bar";
@@ -25,11 +28,8 @@ const ROLE_OPTIONS: { value: PanelRole; label: string; hint: string }[] = [
   { value: "lock-flap", label: "Lock flap", hint: "Inner flap of a glued bottom." },
 ];
 
-const PLACEMENT_OPTIONS: { value: PartPlacementMode; label: string }[] = [
-  { value: "open", label: "Open, tilted above the main body" },
-  { value: "closed", label: "Closed, on top of the main body" },
-  { value: "beside", label: "Beside the main body" },
-];
+/** The open fold tab of each template being edited. It lives outside the component so it survives the rebuild after a save. */
+const openTabs = new Map<string, number>();
 
 const DEPTH_COLORS = ["#fde68a", "#bfdbfe", "#bbf7d0", "#fbcfe8", "#ddd6fe", "#fed7aa", "#a5f3fc"];
 const field = "h-9 rounded-lg border border-input bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
@@ -65,6 +65,7 @@ export function FoldSetupEditor({
   stale,
   barBottom = "0.75rem",
   startView = null,
+  memoryKey,
 }: {
   flat: FlatDielineData;
   fold: FoldSetup | null;
@@ -75,8 +76,24 @@ export function FoldSetupEditor({
   barBottom?: string;
   /** The template's saved starting 3D view: the preview opens with it, returns to it on reset, and moves to it when it changes. */
   startView?: ViewSettings | null;
+  /** Edit page: saving rebuilds this editor from the saved data. With a key, the open tab is remembered across that. */
+  memoryKey?: string;
 }) {
   const [sel, setSel] = useState<Sel>(null);
+  // Which piece's fold list is shown (one tab per piece). Selecting something in the picture switches to its piece.
+  const [tab, setTab] = useState(() => (memoryKey ? (openTabs.get(memoryKey) ?? 0) : 0));
+  useEffect(() => {
+    if (memoryKey) openTabs.set(memoryKey, tab);
+  }, [memoryKey, tab]);
+  const [seenSel, setSeenSel] = useState<Sel>(null);
+  if (seenSel !== sel) {
+    setSeenSel(sel);
+    if (sel && fold) {
+      const panelId = sel.kind === "panel" ? sel.id : fold.hinges.find((h) => h.id === sel.id)?.childId;
+      const piece = panelId ? pieceMap(fold).get(panelId) : undefined;
+      if (piece !== undefined && piece !== tab) setTab(piece);
+    }
+  }
   // Quick sort: while on, a click on a fold line (or the panel it swings) adds it to `queue`.
   const [quick, setQuick] = useState(false);
   const [queue, setQueue] = useState<string[]>([]);
@@ -119,6 +136,27 @@ export function FoldSetupEditor({
     }
   }, [fold, problems, stale, flat]);
 
+  // Panel settings open in a dialog that slides down from the top; the last panel stays in it while it slides back up.
+  const panelDialog = useRef<HTMLDialogElement>(null);
+  const panelName = useRef<HTMLInputElement>(null);
+  const selPanel = sel?.kind === "panel" ? fold?.panels.find((p) => p.id === sel.id) : undefined;
+  const [lastPanel, setLastPanel] = useState(selPanel);
+  if (selPanel && selPanel !== lastPanel) setLastPanel(selPanel);
+  const shownPanel = selPanel ?? lastPanel;
+  const panelOpen = selPanel !== undefined;
+  useEffect(() => {
+    const d = panelDialog.current;
+    if (!d) return;
+    if (panelOpen && !d.open) {
+      d.showModal();
+      // ready to rename: focus the Name field with its text selected
+      panelName.current?.focus({ preventScroll: true });
+      panelName.current?.select();
+    } else if (!panelOpen && d.open) d.close();
+  }, [panelOpen]);
+
+  const fits = useMemo(() => (geo.geo ? partFits(geo.geo.foldTree) : []), [geo.geo]);
+
   const bounds = useMemo(() => {
     const xs: number[] = [];
     const ys: number[] = [];
@@ -142,7 +180,7 @@ export function FoldSetupEditor({
     if (anim.current) cancelAnimationFrame(anim.current);
     const start = performance.now();
     const step = (now: number) => {
-      const t = Math.min(1, (now - start) / Math.max(1500, 1200 * (fold ? stepsOf(fold).length : 1)));
+      const t = Math.min(1, (now - start) / Math.max(1500, 1200 * (fold ? Math.max(...rootsOf(fold).map((_, i) => stepsOf(fold, i).length), 1) * ((fold.parts ?? []).filter((q) => q.timing === "after").length + 1) : 1)));
       setProgress(t);
       anim.current = t < 1 ? requestAnimationFrame(step) : null;
     };
@@ -159,7 +197,12 @@ export function FoldSetupEditor({
     );
   }
 
-  const hinges = sortedHinges(fold);
+  const pieceCount = (fold.parts?.length ?? 0) + 1;
+  // The tabs under the pictures: one per piece, "Piece placement" when there is more than one piece, then "Material & Paper".
+  type TabKind = { k: "piece"; i: number } | { k: "placement" } | { k: "material" };
+  const tabKinds: TabKind[] = [...Array.from({ length: pieceCount }, (_, i): TabKind => ({ k: "piece", i })), ...(pieceCount > 1 ? [{ k: "placement" } as TabKind] : []), { k: "material" }];
+  const tabNow = Math.min(tab, tabKinds.length - 1);
+  const curTab = tabKinds[tabNow]!;
   const hingeName = (id: string) => {
     const h = fold.hinges.find((x) => x.id === id);
     return h ? `${label(h.parentId)} → ${label(h.childId)}` : id;
@@ -167,14 +210,13 @@ export function FoldSetupEditor({
   const liveQueue = queue.filter((id) => fold.hinges.some((h) => h.id === id));
   const toggleQueued = (id: string) => setQueue((q) => (q.includes(id) ? q.filter((x) => x !== id) : [...q, id]));
   const stopQuick = () => { setQuick(false); setQueue([]); };
-  const selPanel = sel?.kind === "panel" ? fold.panels.find((p) => p.id === sel.id) : undefined;
   const selHinge = sel?.kind === "hinge" ? fold.hinges.find((h) => h.id === sel.id) : undefined;
   const setHinge = (id: string, patch: Partial<Pick<FoldHingeSpec, "angleDeg" | "order">>) => onChange(updateHinge(fold, id, patch));
   const steps = stepsOf(fold);
   const roots = rootsOf(fold);
   const parts = fold.parts ?? [];
   /** "Main body" or "Part 2" for the piece whose base panel is `rootId`. */
-  const pieceName = (rootId: string) => (rootId === fold.rootId ? "Main body" : `Part ${roots.indexOf(rootId) + 1}`);
+  const pieceName = (rootId: string) => pieceNameOf(fold, rootId);
 
   return (
     <div className="flex flex-col gap-4">
@@ -199,7 +241,10 @@ export function FoldSetupEditor({
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         {/* flat sheet with panels and fold lines */}
         <div className="flex min-w-0 flex-col gap-2">
-          <div className="rounded-xl border bg-white p-2">
+          <div className="relative rounded-xl border bg-white p-2">
+            <HelpTip label="About the colours and numbers">
+              Colours show how deep a panel is from the base. Numbers on the fold lines are the fold steps. <span className="text-teal-700 dark:text-teal-300">Green</span> folds inward, <span className="text-orange-600">orange</span> outward.
+            </HelpTip>
             <svg viewBox={`${bounds.x - pad} ${bounds.y - pad} ${bounds.w + 2 * pad} ${bounds.h + 2 * pad}`} className="max-h-[60vh] w-full" role="img" aria-label="Flat sheet: panels in colour, fold lines numbered by fold step" onClick={() => setSel(null)}>
               {fold.panels.map((p) => {
                 const d = depth.get(p.id) ?? 0;
@@ -259,7 +304,14 @@ export function FoldSetupEditor({
               })}
             </svg>
           </div>
-          <p className="text-xs text-muted-foreground">Colours show how deep a panel is from the base. Numbers on the fold lines are the fold steps. <span className="text-teal-700 dark:text-teal-300">Green</span> folds inward, <span className="text-orange-600">orange</span> outward.</p>
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+            <label htmlFor="ground-panel" className="font-medium">Bottom (on the ground)</label>
+            <select id="ground-panel" className={`${field} min-w-0 flex-1 basis-40`} value={fold.groundId ?? ""} onChange={(e) => onChange(setGround(fold, e.target.value || null))}>
+              <option value="">Automatic</option>
+              {fold.panels.map((p) => <option key={p.id} value={p.id}>{p.label || p.id}</option>)}
+            </select>
+            <p className="basis-full text-xs text-muted-foreground">The panel chosen here lies flat on the floor with its printed side down, like the bottom of a box. Pick the panel that is the base, and the box stands up on it.</p>
+          </div>
         </div>
 
         {/* 3D preview */}
@@ -281,97 +333,68 @@ export function FoldSetupEditor({
             </div>
             {geo.geo ? <><GridToggle viewRef={view} /><RotationControls viewRef={view} /></> : null}
           </div>
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-            <label htmlFor="ground-panel" className="font-medium">Bottom (on the ground)</label>
-            <select id="ground-panel" className={`${field} min-w-0 flex-1 basis-40`} value={fold.groundId ?? ""} onChange={(e) => onChange(setGround(fold, e.target.value || null))}>
-              <option value="">Automatic</option>
-              {fold.panels.map((p) => <option key={p.id} value={p.id}>{p.label || p.id}</option>)}
-            </select>
-            <p className="basis-full text-xs text-muted-foreground">The panel chosen here lies flat on the floor with its printed side down, like the bottom of a box. Pick the panel that is the base, and the box stands up on it.</p>
-          </div>
-          <p className="text-xs text-muted-foreground">Steps fold one after another. If the box looks wrong, check the angles, directions and steps on the left.</p>
         </div>
       </div>
 
-      {parts.length ? (
-        <section aria-label="Pieces" className="flex flex-col gap-3 rounded-xl border p-4">
-          <div>
-            <h3 className="text-sm font-semibold">This sheet has {parts.length + 1} pieces</h3>
-            <p className="text-sm text-muted-foreground">Each piece folds on its own. The main body stays where it is; choose where every other piece (a lid, for example) goes in 3D. Customers see them together and resize them together.</p>
-          </div>
-          <ul className="flex flex-col gap-2 text-sm">
-            <li className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-muted/40 px-3 py-2">
-              <strong>Main body</strong>
-              <span className="text-muted-foreground">base: {label(fold.rootId)}. Stays in place.</span>
-            </li>
-            {parts.map((part) => (
-              <li key={part.rootId} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3 py-2">
-                <strong>{pieceName(part.rootId)}</strong>
-                <span className="text-muted-foreground">base: {label(part.rootId)}</span>
-                <select
-                  aria-label={`Where ${pieceName(part.rootId)} goes in 3D`}
-                  className={`${field} ml-auto`}
-                  value={part.placement.mode}
-                  onChange={(e) => onChange(updatePart(fold, part.rootId, { mode: e.target.value as PartPlacementMode, ...(part.placement.openDeg === undefined ? {} : { openDeg: part.placement.openDeg }) }))}
-                >
-                  {PLACEMENT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-                {part.placement.mode === "open" ? (
-                  <label className="flex items-center gap-1 text-xs text-muted-foreground">
-                    Lift
-                    <input
-                      aria-label={`How far ${pieceName(part.rootId)} is lifted, in degrees`}
-                      className={`${field} w-16`}
-                      type="number"
-                      min={0}
-                      max={120}
-                      step={1}
-                      value={part.placement.openDeg ?? 30}
-                      onChange={(e) => onChange(updatePart(fold, part.rootId, { mode: "open", openDeg: Math.min(120, Math.max(0, Math.round(Number(e.target.value) || 0))) }))}
-                    />
-                    °
-                  </label>
-                ) : null}
-                <Button type="button" variant="outline" size="sm" onClick={() => onChange(makeMain(fold, part.rootId))}>Make this the main body</Button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
 
       {/* inspector */}
-      {selPanel ? (
-        <section aria-label="Panel settings" className="flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border p-4">
+      {/* Panel settings: a dialog that slides down from the top when a panel is clicked */}
+      <dialog
+        ref={panelDialog}
+        aria-labelledby="panel-dialog-title"
+        // React hands a close event of the help dialog inside this popup up to this handler: only this popup's own counts.
+        onClose={(e) => { if (e.target === e.currentTarget) setSel((cur) => (cur?.kind === "panel" ? null : cur)); }}
+        onClick={(e) => { if (e.target === panelDialog.current) panelDialog.current?.close(); }}
+        className="drop-dialog w-[min(56rem,calc(100vw-1rem))] rounded-b-2xl border border-t-0 bg-background p-0 text-foreground shadow-2xl"
+      >
+        {shownPanel ? (
+          <form
+            onSubmit={(e) => {
+              // Enter in a field: the changes are already applied as you type, so submitting just closes the panel.
+              e.preventDefault();
+              panelDialog.current?.close();
+            }}
+          >
+            <div className="flex items-center justify-between gap-3 border-b px-5 py-3">
+              <h2 id="panel-dialog-title" className="min-w-0 truncate font-semibold">Panel: {shownPanel.label || shownPanel.id}</h2>
+              <button type="button" aria-label="Close" className="rounded p-1 hover:bg-muted" onClick={() => panelDialog.current?.close()}><X className="size-4" /></button>
+            </div>
+            <div className="flex flex-wrap items-start gap-x-4 gap-y-3 p-5">
           <label className="flex w-full flex-col gap-1 text-sm font-medium sm:w-56">Name
-            <input className={field} value={selPanel.label} maxLength={40} onChange={(e) => onChange(updatePanel(fold, selPanel.id, { label: e.target.value }))} />
+            <input ref={panelName} className={field} value={shownPanel.label} maxLength={40} onChange={(e) => onChange(updatePanel(fold, shownPanel.id, { label: e.target.value }))} />
           </label>
           <div className="flex w-full flex-col gap-1 text-sm font-medium sm:w-64">
             <div className="flex items-center gap-1.5">
               <label htmlFor="panel-kind">Kind</label>
               <PanelKindHelp />
             </div>
-            <select id="panel-kind" className={field} value={selPanel.role} onChange={(e) => onChange(updatePanel(fold, selPanel.id, { role: e.target.value as PanelRole }))}>
+            <select id="panel-kind" className={field} value={shownPanel.role} onChange={(e) => onChange(updatePanel(fold, shownPanel.id, { role: e.target.value as PanelRole }))}>
               {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
-            <span className="text-xs font-normal text-muted-foreground">{ROLE_OPTIONS.find((r) => r.value === selPanel.role)?.hint}</span>
+            <span className="text-xs font-normal text-muted-foreground">{ROLE_OPTIONS.find((r) => r.value === shownPanel.role)?.hint}</span>
           </div>
           {/* Same shape as the fields beside it (an empty label line, then a 36px row), so the checkbox sits level with the inputs. */}
           <div className="flex flex-col gap-1">
             <span aria-hidden className="h-5" />
             <label className="flex min-h-9 items-center gap-2 whitespace-nowrap text-sm">
-              <input type="checkbox" className="size-4 shrink-0" checked={selPanel.printable} onChange={(e) => onChange(updatePanel(fold, selPanel.id, { printable: e.target.checked }))} />
+              <input type="checkbox" className="size-4 shrink-0" checked={shownPanel.printable} onChange={(e) => onChange(updatePanel(fold, shownPanel.id, { printable: e.target.checked }))} />
               Artwork can be printed here
             </label>
           </div>
           <p className="basis-full text-sm text-muted-foreground">
-            Size: <strong className="text-foreground tabular-nums">{panelSize(selPanel.polygon).w.toFixed(1)} × {panelSize(selPanel.polygon).h.toFixed(1)} mm</strong> at the imported size, {selPanel.polygon.length / 2} corners.
+            Size: <strong className="text-foreground tabular-nums">{panelSize(shownPanel.polygon).w.toFixed(1)} × {panelSize(shownPanel.polygon).h.toFixed(1)} mm</strong> at the imported size, {shownPanel.polygon.length / 2} corners.
           </p>
           <div className="flex basis-full flex-wrap items-center gap-2">
-            <Button type="button" variant={fold.groundId === selPanel.id ? "default" : "outline"} size="sm" aria-pressed={fold.groundId === selPanel.id} onClick={() => onChange(setGround(fold, fold.groundId === selPanel.id ? null : selPanel.id))}>{fold.groundId === selPanel.id ? "On the ground (click to undo)" : "Put this on the ground"}</Button>
-            {roots.includes(selPanel.id) ? <p className="text-sm text-muted-foreground">{parts.length ? `This is the base panel of the ${pieceName(selPanel.id).toLowerCase()}.` : "This is the base panel."}</p> : <Button type="button" variant="outline" size="sm" onClick={() => onChange(rootAt(fold, selPanel.id))}>{parts.length ? `Make this the base of its piece (${pieceName(roots[Math.max(0, pieceOf(fold, selPanel.id))]!).toLowerCase()})` : "Make this the base (stays flat)"}</Button>}
+            <Button type="button" variant={fold.groundId === shownPanel.id ? "default" : "outline"} size="sm" aria-pressed={fold.groundId === shownPanel.id} onClick={() => onChange(setGround(fold, fold.groundId === shownPanel.id ? null : shownPanel.id))}>{fold.groundId === shownPanel.id ? "On the ground (click to undo)" : "Put this on the ground"}</Button>
+            {roots.includes(shownPanel.id) ? <p className="text-sm text-muted-foreground">{parts.length ? `This is the base panel of the ${pieceName(shownPanel.id).toLowerCase()}.` : "This is the base panel."}</p> : <Button type="button" variant="outline" size="sm" onClick={() => onChange(rootAt(fold, shownPanel.id))}>{parts.length ? `Make this the base of its piece (${pieceName(roots[Math.max(0, pieceOf(fold, shownPanel.id))]!).toLowerCase()})` : "Make this the base (stays flat)"}</Button>}
           </div>
-        </section>
-      ) : null}
+            </div>
+            <div className="flex justify-end border-t px-5 py-3">
+              <Button type="submit">Done</Button>
+            </div>
+          </form>
+        ) : null}
+      </dialog>
       {selHinge ? (
         <section aria-label="Fold settings" className="rounded-xl border p-4 text-sm">
           <p className="font-medium">{label(selHinge.parentId)} → {label(selHinge.childId)}</p>
@@ -382,12 +405,69 @@ export function FoldSetupEditor({
         </section>
       ) : null}
 
-      <HingeList hinges={hinges} label={label} selectedId={sel?.kind === "hinge" ? sel.id : null} onSelect={(id) => setSel({ kind: "hinge", id })} onSetHinge={setHinge} onMove={(id, to) => onChange(moveHinge(fold, id, to))} />
-      <p className="-mt-2 text-xs text-muted-foreground">Drag a row by its handle (or focus it and press the up / down arrow keys) to change which fold happens first.</p>
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={() => onChange(compactOrders(fold))}>Tidy step numbers</Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => onChange({ ...fold, hinges: fold.hinges.map((h) => ({ ...h, angleDeg: Math.sign(h.angleDeg || 1) * 90 })) })}>Set every angle to 90°</Button>
+      <div className="flex flex-col gap-2">
+        <div role="tablist" aria-label="Fold lines, piece placement and material" className="flex flex-wrap gap-1 border-b">
+          {tabKinds.map((t, n) => (
+            <button
+              key={t.k === "piece" ? roots[t.i] : t.k}
+              type="button"
+              role="tab"
+              id={`fold-tab-${n}`}
+              aria-selected={n === tabNow}
+              aria-controls="fold-tabpanel"
+              tabIndex={n === tabNow ? 0 : -1}
+              onClick={() => setTab(n)}
+              onKeyDown={(e) => {
+                const to = e.key === "ArrowRight" ? (n + 1) % tabKinds.length : e.key === "ArrowLeft" ? (n + tabKinds.length - 1) % tabKinds.length : null;
+                if (to === null) return;
+                e.preventDefault();
+                setTab(to);
+                document.getElementById(`fold-tab-${to}`)?.focus();
+              }}
+              className={`-mb-px rounded-t-lg border border-b-0 px-4 py-2 text-sm transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${n === tabNow ? "border-border bg-background font-medium" : "border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground"}`}
+            >
+              {t.k === "piece" ? (
+                <>
+                  {pieceName(roots[t.i]!)}
+                  <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">{sortedHinges(fold, t.i).length} folds</span>
+                </>
+              ) : t.k === "placement" ? "Piece placement" : "Material & Paper"}
+            </button>
+          ))}
+        </div>
+        <div role="tabpanel" id="fold-tabpanel" aria-labelledby={`fold-tab-${tabNow}`} className="flex flex-col gap-2">
+          {curTab.k === "placement" ? (
+            <PiecesEditor fold={fold} fits={fits} label={label} onChange={onChange} />
+          ) : curTab.k === "material" ? (
+            stale ? <p className="rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Detect the panels again first: the lines changed after the fold was set up.</p> : <ConstructionEditor fold={fold} onChange={onChange} />
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  {pieceCount > 1
+                    ? `${pieceName(roots[curTab.i]!)} has its own steps (${stepsOf(fold, curTab.i).length} ${stepsOf(fold, curTab.i).length === 1 ? "step" : "steps"}). Lines with the same step number fold together.`
+                    : "Lines with the same step number fold together."}
+                </p>
+                {curTab.i > 0 ? <Button type="button" variant="outline" size="xs" onClick={() => onChange(makeMain(fold, roots[curTab.i]!))}>Make main body</Button> : null}
+              </div>
+              {sortedHinges(fold, curTab.i).length ? (
+                <HingeList hinges={sortedHinges(fold, curTab.i)} label={label} selectedId={sel?.kind === "hinge" ? sel.id : null} onSelect={(id) => setSel({ kind: "hinge", id })} onSetHinge={setHinge} onMove={(id, to) => onChange(moveHinge(fold, id, to))} />
+              ) : (
+                <p className="rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">This piece has no fold lines.</p>
+              )}
+            </>
+          )}
+        </div>
       </div>
+      {curTab.k === "piece" ? (
+        <>
+        <p className="-mt-2 text-xs text-muted-foreground">Drag a row by its handle (or focus it and press the up / down arrow keys) to change which fold happens first. Type a step number to fold several lines together: give them the same number.</p>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => onChange(compactOrders(fold))}>Tidy step numbers</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => onChange({ ...fold, hinges: fold.hinges.map((h) => ({ ...h, angleDeg: Math.sign(h.angleDeg || 1) * 90 })) })}>Set every angle to 90°</Button>
+        </div>
+        </>
+      ) : null}
       {quick ? (
         <QuickSortBar
           bottom={barBottom}

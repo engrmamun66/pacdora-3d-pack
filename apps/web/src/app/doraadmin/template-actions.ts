@@ -116,6 +116,9 @@ const constructionSchema = z.object({
   flaps: z.array(z.enum(["tuckDepth", "glueFlapWidth", "dustFlapDepth"])).max(3).optional(),
 });
 
+/** A distance or shift of an extra part, in mm. */
+const partShift = z.number().finite().min(-5000).max(5000);
+
 const foldSchema = z.object({
   rootId: z.string().min(1).max(40),
   construction: constructionSchema.optional(),
@@ -125,11 +128,23 @@ const foldSchema = z.object({
     .array(
       z.object({
         rootId: z.string().min(1).max(40),
-        placement: z.object({ mode: z.enum(["closed", "open", "beside"]), openDeg: z.number().finite().min(0).max(120).optional() }),
+        placement: z.object({
+          mode: z.enum(["closed", "open", "beside", "inside", "auto"]),
+          openDeg: z.number().finite().min(0).max(120).optional(),
+          side: z.enum(["right", "left", "front", "back"]).optional(),
+          gap: partShift.optional(),
+          offset: z.object({ x: partShift.optional(), y: partShift.optional(), z: partShift.optional() }).optional(),
+          relativeTo: z.string().min(1).max(40).optional(),
+          hop: z.number().finite().min(0).max(5000).optional(),
+          start: z.object({ from: z.enum(["right", "left", "front", "back"]).optional(), x: partShift.optional(), y: partShift.optional(), z: partShift.optional() }).optional(),
+        }),
+        name: z.string().trim().min(1).max(40).optional(),
+        timing: z.enum(["together", "after"]).optional(),
       }),
     )
     .max(8)
     .optional(),
+  mainName: z.string().trim().min(1).max(40).optional(),
   panels: z
     .array(
       z.object({

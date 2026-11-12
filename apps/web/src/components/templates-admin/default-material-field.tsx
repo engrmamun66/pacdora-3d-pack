@@ -15,6 +15,11 @@ export function DefaultMaterialField({
   max,
   value,
   onChange,
+  alwaysShown = false,
+  legend = "Default material",
+  hint = "New projects start with this board. Customers can change it.",
+  resetLabel = "Use the template's standard board",
+  canReset = true,
 }: {
   /** Limits of the generator's thickness (mm). */
   min: number;
@@ -22,6 +27,14 @@ export function DefaultMaterialField({
   /** mm, or null for the template's own default. */
   value: number | null;
   onChange: (mm: number | null) => void;
+  /** Show the menu and thickness straight away (`value` is then the board in use), like the customer's page; no "Set a default material" step. */
+  alwaysShown?: boolean;
+  legend?: string;
+  hint?: string;
+  /** Text of the link that clears the choice (calls onChange(null)); shown only when `value` is a real choice. */
+  resetLabel?: string;
+  /** Show the reset link. */
+  canReset?: boolean;
 }) {
   const types = useMemo(() => materialsFor(min, max), [min, max]);
   const [unit, setUnit] = useState<Unit>("mm");
@@ -49,8 +62,8 @@ export function DefaultMaterialField({
 
   return (
     <fieldset className="flex flex-col gap-3 rounded-xl border p-3">
-      <legend className="px-1 text-sm font-medium">Default material</legend>
-      {value === null ? (
+      <legend className="px-1 text-sm font-medium">{legend}</legend>
+      {value === null && !alwaysShown ? (
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-sm text-muted-foreground">New projects start with the template&apos;s standard board.</p>
           <button
@@ -69,7 +82,7 @@ export function DefaultMaterialField({
       ) : (
         <>
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs text-muted-foreground">New projects start with this board. Customers can change it.</p>
+            <p className="text-xs text-muted-foreground">{hint}</p>
             <div role="radiogroup" aria-label="Unit" className="flex shrink-0 gap-1 rounded-lg border p-0.5 text-xs">
               {(["mm", "in"] as const).map((u) => (
                 <button
@@ -89,7 +102,7 @@ export function DefaultMaterialField({
             <MaterialPicker types={types} typeId={material.typeId} gradeId={material.gradeId} unit={unit} onPick={pick} />
             <ThicknessField
               p={param}
-              value={String(value)}
+              value={String(value ?? 0.5)}
               unit={unit}
               grade={grade}
               onChange={(t) => {
@@ -98,9 +111,11 @@ export function DefaultMaterialField({
               }}
             />
           </div>
-          <button type="button" className="self-start text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground" onClick={() => onChange(null)}>
-            Use the template&apos;s standard board
-          </button>
+          {canReset ? (
+            <button type="button" className="self-start text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground" onClick={() => onChange(null)}>
+              {resetLabel}
+            </button>
+          ) : null}
         </>
       )}
     </fieldset>

@@ -6,16 +6,21 @@ import type { CartonViewHandle } from "./carton-view";
 
 /**
  * Icon button in the top left corner of a 3D view: shows or hides a floor grid behind the carton.
- * The parent must be `relative`. Off by default.
+ * The parent must be `relative`. On from the start; pass `defaultOn={false}` to start with the grid hidden.
  */
-export function GridToggle({ viewRef }: { viewRef: RefObject<CartonViewHandle | null> }) {
-  const [on, setOn] = useState(false);
+export function GridToggle({ viewRef, defaultOn = true }: { viewRef: RefObject<CartonViewHandle | null>; defaultOn?: boolean }) {
+  const [on, setOn] = useState(defaultOn);
 
-  // A view that was created earlier may already have its grid on.
+  // A view that was created earlier may already have its grid on; with `defaultOn` a view without one gets it now.
   useEffect(() => {
-    const id = requestAnimationFrame(() => setOn(viewRef.current?.isGridVisible() ?? false));
+    const id = requestAnimationFrame(() => {
+      const view = viewRef.current;
+      const shown = view?.isGridVisible() ?? false;
+      if (defaultOn && view && !shown) view.setGridVisible(true);
+      setOn(shown || (defaultOn && !!view));
+    });
     return () => cancelAnimationFrame(id);
-  }, [viewRef]);
+  }, [viewRef, defaultOn]);
 
   return (
     <button

@@ -17,7 +17,7 @@ describe("imported dieline generator", () => {
     expect(importedDefaults(flat)).toEqual({ width: 100, bleed: 4 });
     const g = gen.generate({});
     expect(g.cutBounds.max.x - g.cutBounds.min.x).toBeCloseTo(100, 6);
-    expect(g.params).toEqual({ width: 100, bleed: 4 });
+    expect(g.params).toEqual({ width: 100, bleed: 4, thickness: 0.5 });
     expect(g.bleedBounds.max.x - g.bleedBounds.min.x).toBeCloseTo(108, 3);
   });
 

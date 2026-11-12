@@ -65,11 +65,31 @@ function NumberBox({ value, placeholder, onChange, label, min, max, step }: { va
 export function ConstructionEditor({ fold, onChange }: { fold: FoldSetup; onChange: (f: FoldSetup) => void }) {
   const plan = useMemo(() => fullPlan(fold), [fold]);
   const c = fold.construction;
+  // The material menu keeps its own pick (several boards can share a thickness); a reset starts it over.
+  const [materialKey, setMaterialKey] = useState(0);
   if (!plan) {
+    // No box settings for this fold (two pieces, odd shape...): the board can still be chosen, it only names the material.
     return (
-      <section aria-label="Box settings" className="flex flex-col gap-2 border-t pt-5">
-        <h3 className="text-base font-semibold">Box settings</h3>
-        <p className="text-sm text-muted-foreground">Not available for this fold. Box sizes, material and flaps need one body piece whose base panel has walls around it.</p>
+      <section aria-label="Material and paper" className="flex flex-col gap-4">
+        <div>
+          <h3 className="text-base font-semibold">Material & Paper</h3>
+          <p className="text-sm text-muted-foreground">Box sizes and flaps are not available for this fold (they need one body piece whose base panel has walls around it). The board can still be chosen: customers see it as the material of the template.</p>
+        </div>
+        <DefaultMaterialField
+          key={materialKey}
+          alwaysShown
+          legend="Material"
+          hint="The board customers start with on the dieline page. They can change it there."
+          resetLabel="Use the suggested board"
+          canReset={c?.thickness !== undefined}
+          min={THICKNESS_RANGE.min}
+          max={THICKNESS_RANGE.max}
+          value={c?.thickness ?? CONSTRUCTION_DEFAULTS.thickness}
+          onChange={(mm) => {
+            if (mm === null) setMaterialKey((n) => n + 1);
+            onChange(setConstruction(fold, mm === null ? null : { ...(c ?? {}), thickness: mm }));
+          }}
+        />
       </section>
     );
   }
@@ -87,19 +107,36 @@ export function ConstructionEditor({ fold, onChange }: { fold: FoldSetup; onChan
   const th = "px-2 py-1.5 text-left text-xs font-medium text-muted-foreground";
 
   return (
-    <section aria-label="Box settings" className="flex flex-col gap-4 border-t pt-5">
+    <section aria-label="Material and paper" className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="text-base font-semibold">Box settings</h3>
+          <h3 className="text-base font-semibold">Material & Paper</h3>
           <p className="text-sm text-muted-foreground">Guessed from the file. Change what is not right: customers get these as options on the dieline page, like a built-in box.</p>
         </div>
         {c ? (
-          <button type="button" className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground" onClick={() => onChange(setConstruction(fold, null))}>
+          <button type="button" className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground" onClick={() => { setMaterialKey((n) => n + 1); onChange(setConstruction(fold, null)); }}>
             Use the guessed values
           </button>
         ) : null}
       </div>
       {problems.length ? <ul role="alert" className="list-disc rounded-lg border border-destructive/30 bg-destructive/10 py-2 pl-7 pr-3 text-sm text-destructive">{problems.map((p) => <li key={p}>{p}</li>)}</ul> : null}
+
+      {/* The same material menu and thickness the customer sees on the dieline page: Type and grade, then the board thickness. */}
+      <DefaultMaterialField
+        key={materialKey}
+        alwaysShown
+        legend="Material"
+        hint="The board customers start with on the dieline page. They can change it there."
+        resetLabel="Use the guessed board"
+        canReset={c?.thickness !== undefined}
+        min={THICKNESS_RANGE.min}
+        max={THICKNESS_RANGE.max}
+        value={res.thickness}
+        onChange={(mm) => {
+          if (mm === null) setMaterialKey((n) => n + 1);
+          set({ thickness: mm ?? undefined });
+        }}
+      />
 
       <div className="overflow-x-auto rounded-xl border">
         <table className="w-full text-sm">
@@ -170,8 +207,7 @@ export function ConstructionEditor({ fold, onChange }: { fold: FoldSetup; onChan
         </label>
       </div>
 
-      <DefaultMaterialField min={THICKNESS_RANGE.min} max={THICKNESS_RANGE.max} value={c?.thickness ?? null} onChange={(mm) => set({ thickness: mm ?? undefined })} />
-      <p className="-mt-2 text-xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {c?.thickness === undefined ? `Not set: the page starts with ${CONSTRUCTION_DEFAULTS.thickness} mm board. ` : ""}In inner mode the sheet grows with the board thickness; in manufacture mode the thickness only labels the material.
       </p>
     </section>

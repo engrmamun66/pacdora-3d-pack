@@ -75,26 +75,113 @@ export function updatePart(setup: FoldSetup, rootId: string, placement: PartPlac
   return { ...setup, parts: (setup.parts ?? []).map((p) => (p.rootId === rootId ? { ...p, placement } : p)) };
 }
 
-/** Swap the main body with an extra part: the part's piece becomes the main one, the old main takes its place. */
-export function makeMain(setup: FoldSetup, partRootId: string): FoldSetup {
-  const parts = setup.parts ?? [];
-  if (!parts.some((p) => p.rootId === partRootId)) return setup;
-  return { ...setup, rootId: partRootId, parts: parts.map((p) => (p.rootId === partRootId ? { ...p, rootId: setup.rootId } : p)) };
+/** Rename a piece (empty = back to the default name) or change when it folds. */
+export function updatePartMeta(setup: FoldSetup, rootId: string, patch: { name?: string; timing?: "together" | "after" }): FoldSetup {
+  return {
+    ...setup,
+    parts: (setup.parts ?? []).map((p) => {
+      if (p.rootId !== rootId) return p;
+      const { name: _n, timing: _t, ...rest } = p;
+      void _n;
+      void _t;
+      const name = patch.name !== undefined ? patch.name.trim().slice(0, 40) : p.name;
+      const timing = patch.timing !== undefined ? patch.timing : p.timing;
+      return { ...rest, ...(name ? { name } : {}), ...(timing === "after" ? { timing } : {}) };
+    }),
+  };
 }
 
-/** Distinct fold steps in the order they happen. */
-export const stepsOf = (setup: FoldSetup): number[] => [...new Set(setup.hinges.map((h) => h.order))].sort((a, b) => a - b);
+/** Rename the main body (empty = back to "Main body"). */
+export function setMainName(setup: FoldSetup, name: string): FoldSetup {
+  const { mainName: _old, ...rest } = setup;
+  void _old;
+  const n = name.trim().slice(0, 40);
+  return n ? { ...rest, mainName: n } : rest;
+}
 
-/** Fold lines in the order they happen (ties keep a stable order). */
-export const sortedHinges = (setup: FoldSetup): FoldHingeSpec[] => [...setup.hinges].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+/** The name of the piece whose base panel is `rootId`: the one the admin gave it, else "Main body" or "Part 2", "Part 3"... */
+export function pieceNameOf(setup: FoldSetup, rootId: string): string {
+  if (rootId === setup.rootId) return setup.mainName || "Main body";
+  const i = (setup.parts ?? []).findIndex((p) => p.rootId === rootId);
+  return (i >= 0 ? setup.parts![i]!.name : undefined) || `Part ${i + 2}`;
+}
 
 /**
- * Move one fold line to another place in the sequence and renumber the steps 1, 2, 3...
+ * Swap the main body with an extra part: the part's piece becomes the main one, the old main takes its place.
+ * Names go with the pieces. Parts that were placed against the part (or the old main) follow it.
+ */
+export function makeMain(setup: FoldSetup, partRootId: string): FoldSetup {
+  const parts = setup.parts ?? [];
+  const chosen = parts.find((p) => p.rootId === partRootId);
+  if (!chosen) return setup;
+  const oldRoot = setup.rootId;
+  const swap = (id: string | undefined) => (id === partRootId ? oldRoot : id === oldRoot ? partRootId : id);
+  const { mainName: _old, ...rest } = setup;
+  void _old;
+  return {
+    ...rest,
+    rootId: partRootId,
+    ...(chosen.name ? { mainName: chosen.name } : {}),
+    parts: parts.map((p) => {
+      const placement = p.placement.relativeTo !== undefined ? { ...p.placement, relativeTo: swap(p.placement.relativeTo) } : p.placement;
+      if (p.rootId !== partRootId) return { ...p, placement };
+      // the old main body becomes this part: it keeps the main body's name and is placed against the new main body
+      const { relativeTo: _r, ...free } = placement;
+      void _r;
+      const { name: _n, ...noName } = p;
+      void _n;
+      return { ...noName, rootId: oldRoot, placement: free, ...(setup.mainName ? { name: setup.mainName } : {}) };
+    }),
+  };
+}
+
+/** Index of the piece (0 = main body, 1.. = extra parts, in order) each panel belongs to. */
+export function pieceMap(setup: FoldSetup): Map<string, number> {
+  const roots = rootsOf(setup);
+  const children = new Map<string, string[]>();
+  for (const h of setup.hinges) (children.get(h.parentId) ?? children.set(h.parentId, []).get(h.parentId)!).push(h.childId);
+  const out = new Map<string, number>();
+  roots.forEach((r, i) => {
+    out.set(r, i);
+    const queue = [r];
+    for (let k = 0; k < queue.length; k++) {
+      for (const c of children.get(queue[k]!) ?? []) {
+        if (!out.has(c)) {
+          out.set(c, i);
+          queue.push(c);
+        }
+      }
+    }
+  });
+  return out;
+}
+
+/** The fold lines of one piece (0 = main body). Without a piece: all of them. */
+function inPiece(setup: FoldSetup, piece: number | undefined): FoldHingeSpec[] {
+  if (piece === undefined) return [...setup.hinges];
+  const map = pieceMap(setup);
+  return setup.hinges.filter((h) => (map.get(h.childId) ?? 0) === piece);
+}
+
+/** Distinct fold steps in the order they happen (of one piece, or of all). */
+export const stepsOf = (setup: FoldSetup, piece?: number): number[] => [...new Set(inPiece(setup, piece).map((h) => h.order))].sort((a, b) => a - b);
+
+/** Fold lines in the order they happen (ties keep a stable order); of one piece, or of all. */
+export const sortedHinges = (setup: FoldSetup, piece?: number): FoldHingeSpec[] => inPiece(setup, piece).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+
+/** Renumber the steps of the given lines (a piece's) 1, 2, 3... in the order of `seq`; the rest of the setup is untouched. */
+function renumber(setup: FoldSetup, order: Map<string, number>): FoldSetup {
+  return { ...setup, hinges: setup.hinges.map((h) => ({ ...h, order: order.get(h.id) ?? h.order })) };
+}
+
+/**
+ * Move one fold line to another place in its piece's sequence and renumber that piece's steps 1, 2, 3...
  * Lines that shared a step keep sharing it. The moved line gets its own step, unless it is
  * dropped between two lines of the same step: then it joins them.
  */
 export function moveHinge(setup: FoldSetup, id: string, toIndex: number): FoldSetup {
-  const list = sortedHinges(setup);
+  const piece = pieceMap(setup).get(setup.hinges.find((h) => h.id === id)?.childId ?? "");
+  const list = sortedHinges(setup, piece);
   const from = list.findIndex((h) => h.id === id);
   if (from < 0) return setup;
   const to = Math.min(list.length - 1, Math.max(0, Math.round(toIndex)));
@@ -112,37 +199,47 @@ export function moveHinge(setup: FoldSetup, id: string, toIndex: number): FoldSe
     if (i === 0 || group(h) !== group(seq[i - 1]!)) n += 1;
     order.set(h.id, n);
   });
-  return { ...setup, hinges: setup.hinges.map((h) => ({ ...h, order: order.get(h.id) ?? h.order })) };
+  return renumber(setup, order);
 }
 
 /**
  * Quick sort: fold the listed lines one after another, in the given order (step 1, 2, 3...).
  * Lines that are not listed come after them and keep their current order and any steps they
- * share. Unknown and repeated ids in the list are skipped.
+ * share. Unknown and repeated ids in the list are skipped. Each piece is sorted on its own:
+ * a piece's listed lines are its first steps, in the order they were listed.
  */
 export function applyFoldSequence(setup: FoldSetup, ids: readonly string[]): FoldSetup {
   const known = new Set(setup.hinges.map((h) => h.id));
   const chosen = [...new Set(ids)].filter((id) => known.has(id));
   if (!chosen.length) return setup;
-  const picked = new Set(chosen);
+  const map = pieceMap(setup);
+  const pieceOfHinge = (id: string) => map.get(setup.hinges.find((h) => h.id === id)!.childId) ?? 0;
   const order = new Map<string, number>();
-  chosen.forEach((id, i) => order.set(id, i + 1));
-  // The rest keep their relative steps: lines with the same old step still share one new step.
-  const rest = sortedHinges(setup).filter((h) => !picked.has(h.id));
-  let n = chosen.length;
-  let last: number | null = null;
-  for (const h of rest) {
-    if (h.order !== last) n += 1;
-    last = h.order;
-    order.set(h.id, n);
+  for (let piece = 0; piece <= (setup.parts?.length ?? 0); piece++) {
+    const mine = chosen.filter((id) => pieceOfHinge(id) === piece);
+    if (!mine.length) continue;
+    const picked = new Set(mine);
+    mine.forEach((id, i) => order.set(id, i + 1));
+    // The rest keep their relative steps: lines with the same old step still share one new step.
+    let n = mine.length;
+    let last: number | null = null;
+    for (const h of sortedHinges(setup, piece).filter((x) => !picked.has(x.id))) {
+      if (h.order !== last) n += 1;
+      last = h.order;
+      order.set(h.id, n);
+    }
   }
-  return { ...setup, hinges: setup.hinges.map((h) => ({ ...h, order: order.get(h.id) ?? h.order })) };
+  return renumber(setup, order);
 }
 
-/** Close gaps in the step numbers (1, 3, 3, 7 becomes 1, 2, 2, 3). */
+/** Close gaps in the step numbers (1, 3, 3, 7 becomes 1, 2, 2, 3), piece by piece. */
 export function compactOrders(setup: FoldSetup): FoldSetup {
-  const steps = stepsOf(setup);
-  return { ...setup, hinges: setup.hinges.map((h) => ({ ...h, order: steps.indexOf(h.order) + 1 })) };
+  const order = new Map<string, number>();
+  for (let piece = 0; piece <= (setup.parts?.length ?? 0); piece++) {
+    const steps = stepsOf(setup, piece);
+    for (const h of inPiece(setup, piece)) order.set(h.id, steps.indexOf(h.order) + 1);
+  }
+  return renumber(setup, order);
 }
 
 /** Number of hinges between a panel and the base panel. */

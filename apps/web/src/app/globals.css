@@ -251,3 +251,36 @@
 @media (prefers-reduced-motion: reduce) {
   .hero-grid { animation: none; }
 }
+
+/* Dialog that slides down from the top of the window (and back up when closed). Works with <dialog>.showModal(). */
+dialog.drop-dialog {
+  margin: 0 auto auto;
+  transform: translateY(-110%);
+  opacity: 0;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease, overlay 0.3s allow-discrete, display 0.3s allow-discrete;
+}
+dialog.drop-dialog[open] {
+  transform: translateY(0);
+  opacity: 1;
+}
+@starting-style {
+  dialog.drop-dialog[open] {
+    transform: translateY(-110%);
+    opacity: 0;
+  }
+}
+dialog.drop-dialog::backdrop {
+  background: transparent;
+  transition: background-color 0.3s ease, overlay 0.3s allow-discrete, display 0.3s allow-discrete;
+}
+dialog.drop-dialog[open]::backdrop {
+  background: rgb(0 0 0 / 0.28);
+}
+@starting-style {
+  dialog.drop-dialog[open]::backdrop {
+    background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  dialog.drop-dialog, dialog.drop-dialog::backdrop { transition: none; }
+}

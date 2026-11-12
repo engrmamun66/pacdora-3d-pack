@@ -12,6 +12,7 @@ import { notify } from "@/lib/notify";
 import { isValidSlug, slugify } from "@/lib/slug";
 import { MAX_SVG_CHARS, ROLE_COLOR, ROLE_HINTS, ROLE_LABELS, ROLE_ORDER } from "@/lib/template-import";
 import { DefaultMaterialField } from "./default-material-field";
+import { HelpTip } from "./help-tip";
 import { ImportedPreview } from "./imported-preview";
 import { RoleSampleButton } from "./role-sample";
 import { SvgPreviewButton } from "./svg-preview";
@@ -19,7 +20,6 @@ import { FoldSetupEditor } from "./fold-setup-editor";
 import { ViewSettingsInline } from "./view-settings-dialog";
 import { PageHeader } from "@/components/admin/page-header";
 import { CleanupEditor } from "./cleanup-editor";
-import { ConstructionEditor } from "./construction-editor";
 import { linesKey } from "@/lib/fold-edit";
 import { colorRoles, type SvgColorSettings } from "@/lib/svg-colors";
 import type { ViewSettings } from "@/lib/view-settings";
@@ -186,7 +186,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   const [activeSection, setActiveSection] = useState("sec-details");
   useEffect(() => {
     if (mode !== "edit") return;
-    const ids = ["sec-details", "sec-categories", "sec-background", "sec-dieline", "sec-cleanup", "sec-lines", "sec-fold", "sec-view"];
+    const ids = ["sec-details", "sec-categories", "sec-lines", "sec-fold", "sec-view"];
     const els = ids.map((id) => document.getElementById(id)).filter((e): e is HTMLElement => e !== null);
     // The section crossing the upper third of the screen is the current one.
     const io = new IntersectionObserver(
@@ -370,7 +370,9 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
           <div>
             <h2 id="s-svg" className="text-lg font-semibold">{mode === "create" ? "Upload the dieline SVG" : "Dieline file"}</h2>
             <p className="text-sm text-muted-foreground">
-              Any dieline drawn as lines and shapes (Illustrator, Inkscape, Figma, a cutting-table export). Text, images and effects are ignored. Use only files you have the right to publish.
+              {mode === "create"
+                ? "Any dieline drawn as lines and shapes (Illustrator, Inkscape, Figma, a cutting-table export). Text, images and effects are ignored. Use only files you have the right to publish."
+                : "Optional. The saved dieline is kept as it is. Upload an SVG only to replace it (the line roles, clean-up and 3D fold are then set up again). Use only files you have the right to publish."}
             </p>
           </div>
 
@@ -388,6 +390,8 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
             <Button type="button" variant="outline" onClick={() => fileInput.current?.click()}>Choose file</Button>
           </div>
 
+          {/* Units and scale only apply to a file you are uploading now; a saved dieline is already in millimetres. */}
+          {mode === "create" || text ? (
           <div className="grid gap-4 sm:grid-cols-3">
             <label className="flex flex-col gap-1 text-sm font-medium">
               Units in the file
@@ -408,6 +412,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
               </label>
             ) : null}
           </div>
+          ) : null}
 
           {parsed && !parsed.ok ? <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{parsed.error}</p> : null}
 
@@ -425,7 +430,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
                   {dieline.report.warnings.map((w) => <li key={w}>{w}</li>)}
                 </ul>
               ) : null}
-              <p className="mt-2 text-xs text-muted-foreground">Check the size against the real box. If it is wrong, change the units or scale above.</p>
+              {mode === "create" || text ? <p className="mt-2 text-xs text-muted-foreground">Check the size against the real box. If it is wrong, change the units or scale above.</p> : null}
             </div>
           ) : null}
         </section>
@@ -441,7 +446,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
       {canClean ? (
         <CleanupEditor full={full} excluded={excluded} onChange={setExcluded} error={cleaned.error} />
       ) : (
-        <p className="rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">This template was saved before the clean-up tool existed. Upload its SVG file again (Dieline file) to leave parts out.</p>
+        <p className="rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">This template was saved before the clean-up tool existed, so its lines cannot be left out here. Create the template again from its SVG file to use clean-up.</p>
       )}
     </section>
   ) : null;
@@ -487,15 +492,6 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
                     </li>
                 ))}
               </ul>
-              <Button type="button" variant="outline" onClick={() => setOverrides({})}><Wand2 className="size-4" aria-hidden /> Auto-detect again</Button>
-              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                {ROLE_ORDER.map((r) => (
-                  <div key={r} className="contents">
-                    <dt className="font-medium text-foreground">{ROLE_LABELS[r]}</dt>
-                    <dd>{ROLE_HINTS[r]}</dd>
-                  </div>
-                ))}
-              </dl>
               {!hasCut ? <p role="alert" className="text-sm text-destructive">Mark at least one style as Cut.</p> : !hasClosedCut ? <p role="alert" className="text-sm text-destructive">The Cut lines must include a closed outline (the outer shape of the box).</p> : null}
             </div>
 
@@ -506,18 +502,26 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
                 <label className="flex items-center gap-1.5"><input type="checkbox" checked={showGuides} onChange={(e) => setShowGuides(e.target.checked)} /> Guides</label>
                 <span className="ml-auto text-xs text-muted-foreground">{dieline.widthMm.toFixed(1)} × {dieline.heightMm.toFixed(1)} mm</span>
               </div>
-              <div className="rounded-xl border bg-white p-3">
+              <div className="relative rounded-xl border bg-white p-3">
+                <HelpTip label="About this sheet">Customers can resize this sheet, add artwork, and export it. The 3D fold is set up in its own step (create) or section (edit).</HelpTip>
                 <ImportedPreview dieline={dieline} roles={previewRoles} animate replayKey={replay} className="mx-auto max-h-[60vh] w-full" />
               </div>
-              <p className="text-xs text-muted-foreground">Customers can resize this sheet, add artwork, and export it. The 3D fold is set up in its own step (create) or section (edit).</p>
+              <Button type="button" variant="outline" onClick={() => setOverrides({})}><Wand2 className="size-4" aria-hidden /> Auto-detect again</Button>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                {ROLE_ORDER.map((r) => (
+                  <div key={r} className="contents">
+                    <dt className="font-medium text-foreground">{ROLE_LABELS[r]}</dt>
+                    <dd>{ROLE_HINTS[r]}</dd>
+                  </div>
+                ))}
+              </dl>
             </div>
           </div>
         </section>
   ) : null;
   const foldSection = flat ? (
     <section aria-label="3D fold" className="flex flex-col gap-4">
-      <FoldSetupEditor flat={flat} fold={fold} stale={foldStale} startView={startView} barBottom={mode === "edit" ? "4.75rem" : "0.75rem"} onChange={(f) => { setFold(f); setFoldKey(flatKey); }} />
-      {fold && !foldStale ? <ConstructionEditor fold={fold} onChange={(f) => setFold(f)} /> : null}
+      <FoldSetupEditor flat={flat} fold={fold} stale={foldStale} startView={startView} {...(mode === "edit" ? { memoryKey: initial.slug } : {})} barBottom={mode === "edit" ? "4.75rem" : "0.75rem"} onChange={(f) => { setFold(f); setFoldKey(flatKey); }} />
     </section>
   ) : null;
   const detailsFields = (
@@ -639,8 +643,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
     const sections = [
       { id: "sec-details", label: "Details" },
       { id: "sec-categories", label: "Categories" },
-      { id: "sec-background", label: "Background image" },
-      ...(builtin ? [] : [{ id: "sec-dieline", label: "Dieline file" }, ...(dieline ? [{ id: "sec-cleanup", label: "Clean up" }, { id: "sec-lines", label: "Line roles" }, { id: "sec-fold", label: "3D fold" }] : [])]),
+      ...(builtin ? [] : [...(dieline ? [{ id: "sec-lines", label: "Line roles" }, { id: "sec-fold", label: "3D fold" }] : [])]),
       ...(builtin || initial.fold ? [{ id: "sec-view", label: "Starting 3D view" }] : []),
     ];
     const card = "scroll-mt-24 rounded-2xl border bg-card p-5 shadow-xs";
@@ -676,9 +679,6 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
               </div>
             </section>
             <div id="sec-categories" className={card}>{categoriesSection}</div>
-            <div id="sec-background" className={card}>{backgroundFieldset}</div>
-            {!builtin ? <div id="sec-dieline" className={card}>{svgSection}</div> : null}
-            {!builtin && cleanupSection ? <div id="sec-cleanup" className={card}>{cleanupSection}</div> : null}
             {!builtin && customizeSection ? <div id="sec-lines" className={card}>{customizeSection}</div> : null}
             {!builtin && foldSection ? <div id="sec-fold" className={card}>{foldSection}</div> : null}
             {builtin || initial.fold ? (

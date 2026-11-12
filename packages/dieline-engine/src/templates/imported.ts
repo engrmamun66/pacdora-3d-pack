@@ -5,7 +5,7 @@ import type { Outline } from "../primitives/arc";
 import { area, bounds, offsetPolygon } from "../primitives/polygon";
 import { type Vec2, vec } from "../primitives/vec2";
 import { ENGINE_VERSION, ParamValidationError } from "./carton-common";
-import { DIM_KEYS, DIM_NAMES, FACTOR_RANGE, FLAP_SIZE_KEYS, THICKNESS_RANGE, type DimKey, type SizeMode, importedPlan, resolveConstruction, sizeTargets } from "./imported-construction";
+import { CONSTRUCTION_DEFAULTS, DIM_KEYS, DIM_NAMES, FACTOR_RANGE, FLAP_SIZE_KEYS, THICKNESS_RANGE, type DimKey, type SizeMode, importedPlan, resolveConstruction, sizeTargets } from "./imported-construction";
 import { type FoldSetup, validateFoldSetup } from "./imported-fold";
 import { type PartSizes, type ResizePlan, sheetMap } from "./imported-resize";
 import type { GeneratorDefinition, ParamDescriptor } from "./registry";
@@ -196,7 +196,8 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
       if (raw.sizeMode === "manufacture" || raw.sizeMode === "inner") mode = raw.sizeMode;
       else issues.push({ path: "sizeMode", message: "must be manufacture or inner" });
     }
-    const thickness = plan ? read("thickness", cons!.thickness, THICKNESS_RANGE.min, THICKNESS_RANGE.max) : 0;
+    // The board: with box settings it drives the sizes; without them (two pieces, flat only...) it only names the material.
+    const thickness = read("thickness", cons?.thickness ?? fold?.construction?.thickness ?? CONSTRUCTION_DEFAULTS.thickness, THICKNESS_RANGE.min, THICKNESS_RANGE.max);
     const allowance = plan ? read("allowanceFactor", cons!.allowanceFactor, FACTOR_RANGE.min, FACTOR_RANGE.max, "") : 0;
     // The part sizes: left empty they start as the admin set (else as drawn, scaled with the sheet); typed, they must stay within 0.1x..10x of the scaled drawing.
     const scale0 = width / baseW;
@@ -294,7 +295,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
       }));
       rootId = fold.rootId;
       groundId = fold.groundId;
-      parts = (fold.parts ?? []).map((q) => ({ rootId: q.rootId, placement: q.placement }));
+      parts = (fold.parts ?? []).map((q) => ({ rootId: q.rootId, placement: q.placement, ...(q.name ? { name: q.name } : {}), ...(q.timing ? { timing: q.timing } : {}) }));
       // A guide belongs to the panel that contains its first point (else its centre, else the root panel).
       safeAreas = guides.map((polygon) => {
         const centre = vec(polygon.reduce((a, v) => a + v.x, 0) / polygon.length, polygon.reduce((a, v) => a + v.y, 0) / polygon.length);
@@ -332,6 +333,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
       params: {
         width,
         bleed,
+        thickness: round2(thickness),
         ...(targets && cons
           ? {
               ...Object.fromEntries(Object.entries(targets.shown).map(([key, v]) => [key, round2(v)])),
@@ -361,7 +363,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
     id: IMPORTED_GENERATOR_ID,
     name: "Imported dieline",
     schemaVersion: 1,
-    schemaKeys: plan && cons ? ["width", "bleed", ...DIM_KEYS, ...FLAP_SIZE_KEYS.filter((k) => plan.natural[k] !== undefined), "sizeMode", "thickness", "allowanceFactor"] : ["width", "bleed"],
+    schemaKeys: plan && cons ? ["width", "bleed", ...DIM_KEYS, ...FLAP_SIZE_KEYS.filter((k) => plan.natural[k] !== undefined), "sizeMode", "thickness", "allowanceFactor"] : ["width", "thickness", "bleed"],
     generate,
     params: [
       {
@@ -376,7 +378,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
         optional: true,
         help: `Overall width of the flat shape. Height follows the original proportions (original ${round1(baseW)} mm wide). The whole sheet is scaled.`,
       },
-      ...(plan && cons ? boxParams(plan, cons) : []),
+      ...(plan && cons ? boxParams(plan, cons) : [{ key: "thickness", kind: "number", label: "Board thickness", unit: "mm", group: "Material", min: THICKNESS_RANGE.min, max: THICKNESS_RANGE.max, step: 0.05, optional: true, help: "The board this template is made of. The drawing keeps its size." } as ParamDescriptor]),
       { key: "bleed", kind: "number", label: "Bleed", unit: "mm", group: "Print", min: 0, max: 20, step: 0.5, optional: true, help: "Print area outside the cut line." },
     ],
   };

@@ -47,6 +47,10 @@ export interface FoldPartSpec {
   /** The panel of this piece that stays flat (like the main `rootId`). */
   readonly rootId: string;
   readonly placement: PartPlacement;
+  /** Shown to the admin ("Lid"). Absent = "Part 2", "Part 3"... */
+  readonly name?: string;
+  /** "after": folds when the piece before it has finished. Absent = together with the main body. */
+  readonly timing?: "together" | "after";
 }
 
 export interface FoldSetup {
@@ -56,6 +60,8 @@ export interface FoldSetup {
   readonly hinges: readonly FoldHingeSpec[];
   /** Extra pieces (lid, insert...), each with its own base panel. Absent or empty for a single piece. */
   readonly parts?: readonly FoldPartSpec[];
+  /** Shown to the admin for the main body ("Box"). Absent = "Main body". */
+  readonly mainName?: string;
   /**
    * The panel that lies flat on the ground in 3D, printed side down (the bottom of the box).
    * Absent = automatic.
@@ -66,7 +72,10 @@ export interface FoldSetup {
 }
 
 export const MAX_FOLD_PARTS = 8;
-export const PLACEMENT_MODES = ["closed", "open", "beside"] as const;
+export const PLACEMENT_MODES = ["closed", "open", "beside", "inside", "auto"] as const;
+export const PLACEMENT_SIDES = ["right", "left", "front", "back"] as const;
+/** Largest distance or shift (mm) accepted for a part. */
+export const MAX_PART_SHIFT_MM = 5000;
 
 export interface DetectResult {
   readonly setup: FoldSetup;
@@ -159,8 +168,36 @@ export function validateFoldSetup(setup: FoldSetup): string[] {
     else if (partRoots.has(part.rootId)) problems.push(`${label(part.rootId)} is the base of more than one extra part.`);
     partRoots.add(part.rootId);
     const pl = part.placement;
-    if (!pl || !(PLACEMENT_MODES as readonly string[]).includes(pl.mode)) problems.push(`The part with base ${label(part.rootId)} needs a placement: closed, open or beside.`);
-    else if (pl.openDeg !== undefined && (!Number.isFinite(pl.openDeg) || pl.openDeg < 0 || pl.openDeg > 120)) problems.push(`The opening angle of the part with base ${label(part.rootId)} must be between 0 and 120 degrees.`);
+    const who = `The part with base ${label(part.rootId)}`;
+    if (!pl || !(PLACEMENT_MODES as readonly string[]).includes(pl.mode)) problems.push(`${who} needs a placement: closed, open, beside, inside or auto.`);
+    else {
+      if (pl.openDeg !== undefined && (!Number.isFinite(pl.openDeg) || pl.openDeg < 0 || pl.openDeg > 120)) problems.push(`The opening angle of ${who.toLowerCase()} must be between 0 and 120 degrees.`);
+      if (pl.side !== undefined && !(PLACEMENT_SIDES as readonly string[]).includes(pl.side)) problems.push(`${who} must stand on the right, left, front or back.`);
+      const shift = (v: number | undefined) => v === undefined || (Number.isFinite(v) && Math.abs(v) <= MAX_PART_SHIFT_MM);
+      if (pl.hop !== undefined && !(Number.isFinite(pl.hop) && pl.hop >= 0 && pl.hop <= MAX_PART_SHIFT_MM)) problems.push(`The lift while moving of ${who.toLowerCase()} must be between 0 and ${MAX_PART_SHIFT_MM} mm.`);
+      if (!shift(pl.gap)) problems.push(`The distance of ${who.toLowerCase()} must be within ${MAX_PART_SHIFT_MM} mm.`);
+      if (pl.start?.from !== undefined && !(PLACEMENT_SIDES as readonly string[]).includes(pl.start.from)) problems.push(`${who} must start on the right, left, front or back.`);
+      if (pl.start && !(shift(pl.start.x) && shift(pl.start.y) && shift(pl.start.z))) problems.push(`The starting position of ${who.toLowerCase()} must be within ${MAX_PART_SHIFT_MM} mm on each axis.`);
+      if (pl.offset && !(shift(pl.offset.x) && shift(pl.offset.y) && shift(pl.offset.z))) problems.push(`The position shift of ${who.toLowerCase()} must be within ${MAX_PART_SHIFT_MM} mm on each axis.`);
+      if (pl.relativeTo !== undefined) {
+        if (pl.relativeTo === part.rootId) problems.push(`${who} cannot be placed against itself.`);
+        else if (!roots.includes(pl.relativeTo)) problems.push(`${who} is placed against a piece that does not exist.`);
+      }
+    }
+    if (part.timing !== undefined && part.timing !== "together" && part.timing !== "after") problems.push(`${who} has an unknown fold timing.`);
+  }
+  // Placed against each other in a circle is not possible: every chain must end at the main body.
+  for (const part of parts) {
+    const seen = new Set([part.rootId]);
+    let at = part.placement?.relativeTo;
+    while (at && at !== setup.rootId) {
+      if (seen.has(at)) {
+        problems.push(`The parts ${label(part.rootId)} and ${label(at)} are placed against each other in a circle. Place one of them against the main body.`);
+        break;
+      }
+      seen.add(at);
+      at = parts.find((q) => q.rootId === at)?.placement?.relativeTo;
+    }
   }
   if (byId.has(setup.rootId) && dupPanels.size === 0) {
     const incoming = new Map<string, number>();
