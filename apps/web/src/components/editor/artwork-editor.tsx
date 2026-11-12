@@ -26,7 +26,7 @@ import {
   Undo2,
   Unlock,
 } from "lucide-react";
-import { createImportedGenerator, generateDieline, type FlatDieline, type FoldSetup, type WatermarkSpec } from "@packaging/dieline-engine";
+import { applyWindows, createImportedGenerator, generateDieline, type FlatDieline, type FoldSetup, type WatermarkSpec, type WindowSpec } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import type { ViewSettings } from "@/lib/view-settings";
 import type { Artwork, ArtworkObject, BoxBackground } from "@packaging/schema";
@@ -70,6 +70,7 @@ export function ArtworkEditor({
   imported,
   initialView = null,
   params,
+  windows = [],
   artwork: initialArtwork,
   assets: initialAssets,
   threeD: initialThreeD,
@@ -83,6 +84,8 @@ export function ArtworkEditor({
   /** Camera the 3D preview starts with (set per template by an admin). */
   initialView?: ViewSettings | null;
   params: Record<string, unknown>;
+  /** Window holes cut into the box (made in the dieline page's window editor). */
+  windows?: readonly WindowSpec[];
   artwork: Artwork;
   assets: Asset[];
   threeD: ThreeDSettings;
@@ -91,13 +94,15 @@ export function ArtworkEditor({
 }) {
   // Keyed by value: a props refresh with equal params must not rebuild the editor (and lose undo history).
   const paramsKey = JSON.stringify(params);
+  const windowsKey = JSON.stringify(windows);
   const geo = useMemo(() => {
     try {
-      return imported ? createImportedGenerator(imported.templateId, imported.flat as FlatDieline, imported.fold ?? null).generate(JSON.parse(paramsKey)) : generateDieline(generatorId, JSON.parse(paramsKey));
+      const base = imported ? createImportedGenerator(imported.templateId, imported.flat as FlatDieline, imported.fold ?? null).generate(JSON.parse(paramsKey)) : generateDieline(generatorId, JSON.parse(paramsKey));
+      return applyWindows(base, JSON.parse(windowsKey) as WindowSpec[]).geo;
     } catch {
       return null;
     }
-  }, [generatorId, imported, paramsKey]);
+  }, [generatorId, imported, paramsKey, windowsKey]);
   // Imported dielines are flat: nothing to fold, so no 3D.
   const foldable = (geo?.foldTree.hinges.length ?? 0) > 0;
 

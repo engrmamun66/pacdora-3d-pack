@@ -4,7 +4,7 @@ import { requireUser } from "@/server/session";
 import { getProject, getSaveAsOptions } from "@/server/projects";
 import { DielineWorkspace } from "@/components/dielines/workspace";
 import { getWatermark } from "@/server/site-settings";
-import { IMPORTED_GENERATOR_ID } from "@packaging/dieline-engine";
+import { IMPORTED_GENERATOR_ID, type WindowSpec } from "@packaging/dieline-engine";
 import { loadImportedSource } from "@/server/imported-templates";
 import { readViewSettings } from "@/lib/view-settings";
 
@@ -32,6 +32,7 @@ async function ProjectView({ params }: { params: PageProps<"/projects/[id]">["pa
       description={`Last saved ${project.updatedAt.toISOString().replace("T", " ").slice(0, 16)} UTC`}
       initialName={project.name}
       initialParams={project.doc.template.params}
+      initialWindows={(project.doc.windows ?? []) as WindowSpec[]}
       watermark={watermark}
       viewer={{ name: user.name, email: user.email, image: user.image ?? null }}
       saveOptions={await getSaveAsOptions(user.id, project.id)}

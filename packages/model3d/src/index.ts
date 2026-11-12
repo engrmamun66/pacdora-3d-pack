@@ -269,6 +269,9 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
   for (const panel of geo.foldTree.panels) {
     const outline = flattenOutline(panelOutline(panel), 0.05); // arcs as fine polylines for display
     const shape = new THREE.Shape(outline.map((v) => new THREE.Vector2(v.x, v.y)));
+    // Window holes: the shape has real holes, so the box can be seen through them.
+    const holes = (panel.holes ?? []).filter((h) => h.length >= 3);
+    for (const h of holes) shape.holes.push(new THREE.Path(h.map((v) => new THREE.Vector2(v.x, v.y))));
     const geom = new THREE.ShapeGeometry(shape);
     const pos = geom.getAttribute("position");
     const uv = new Float32Array(pos.count * 2);
@@ -329,8 +332,11 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
       const wallUv: number[] = [];
       const idx: number[] = [];
       let run = 0;
-      outline.forEach((v, i) => {
-        const w = outline[(i + 1) % outline.length]!;
+      // The outline, and the edge of each hole (the board's cut edge shows there too).
+      for (const loop of [outline, ...holes]) {
+      run = 0;
+      loop.forEach((v, i) => {
+        const w = loop[(i + 1) % loop.length]!;
         const len = Math.hypot(w.x - v.x, w.y - v.y);
         const c = wall.length / 3;
         wall.push(v.x, v.y, -board, v.x, v.y, 0, w.x, w.y, -board, w.x, w.y, 0);
@@ -338,6 +344,7 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
         idx.push(c, c + 1, c + 2, c + 1, c + 3, c + 2);
         run += len;
       });
+      }
       const wallGeom = new THREE.BufferGeometry();
       wallGeom.setAttribute("position", new THREE.Float32BufferAttribute(wall, 3));
       wallGeom.setAttribute("uv", new THREE.Float32BufferAttribute(wallUv, 2));

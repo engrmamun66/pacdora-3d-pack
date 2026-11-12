@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { createImportedGenerator, detectFoldSetup, generateDieline, type FlatDieline } from "@packaging/dieline-engine";
+import { applyWindows, area, createImportedGenerator, detectFoldSetup, flattenOutline, generateDieline, type FlatDieline } from "@packaging/dieline-engine";
 import { buildCartonModel } from "../src";
 
 const geo = generateDieline("tuck-end-carton", { width: 100, depth: 50, height: 150 });
@@ -192,3 +192,38 @@ describe("a box with a lid (extra part)", () => {
   });
 });
 
+
+describe("window holes", () => {
+  const surface = (mesh: THREE.Mesh): number => {
+    const g = mesh.geometry;
+    const pos = g.getAttribute("position");
+    const idx = g.getIndex();
+    const tri = idx ? idx.count / 3 : pos.count / 3;
+    let sum = 0;
+    for (let t = 0; t < tri; t++) {
+      const [a, b, c] = [0, 1, 2].map((k) => {
+        const i = idx ? idx.getX(t * 3 + k) : t * 3 + k;
+        return new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i));
+      });
+      sum += new THREE.Vector3().crossVectors(b!.clone().sub(a!), c!.clone().sub(a!)).length() / 2;
+    }
+    return sum;
+  };
+
+  it("a window is a real hole: the panel's face loses exactly the window's area, and its edge gets walls", () => {
+    const base = generateDieline("tuck-end-carton", { width: 100, depth: 50, height: 150 });
+    const body = [...base.foldTree.panels].filter((p) => p.role === "body").sort((a, b) => area(flattenOutline({ points: b.polygon })) - area(flattenOutline({ points: a.polygon })))[0]!;
+    const pts = flattenOutline({ points: body.polygon, ...(body.bulges ? { bulges: body.bulges } : {}) });
+    const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length;
+    const cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+    const r = applyWindows(base, [{ id: "w", shape: "rectangle", cx, cy, width: 20, height: 30, rotation: 0 }]);
+    expect(r.applied).toEqual(["w"]);
+    const face = (geo: typeof base) => buildCartonModel(geo, { progress: 1 }).object.getObjectByName(body.id)!.children[0] as THREE.Mesh;
+    expect(surface(face(base)) - surface(face(r.geo))).toBeCloseTo(600, 3);
+    const walls = (geo: typeof base, thickness: number) => buildCartonModel(geo, { progress: 1, thickness }).object.getObjectByName(body.id)!.children.length;
+    expect(walls(r.geo, 2)).toBe(walls(base, 2));
+    const wallMesh = (geo: typeof base) => buildCartonModel(geo, { progress: 1, thickness: 2 }).object.getObjectByName(body.id)!.children[2] as THREE.Mesh;
+    // 4 more straight edges around the hole.
+    expect(wallMesh(r.geo).geometry.getAttribute("position").count - wallMesh(base).geometry.getAttribute("position").count).toBe(4 * 4);
+  });
+});

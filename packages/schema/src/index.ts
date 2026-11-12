@@ -18,6 +18,21 @@ export const PROJECT_DOC_VERSION = 1 as const;
 
 const paramValue = z.union([z.number().finite(), z.string().max(100), z.boolean()]);
 
+/**
+ * A window hole cut through one panel (see the dieline engine's windows.ts, which also checks the rules).
+ * Coordinates are in the sheet's frame, in mm. The shape name is checked by the engine.
+ */
+export const windowSchema = z.object({
+  id: z.string().min(1).max(40),
+  shape: z.string().min(1).max(30),
+  cx: z.number().finite(),
+  cy: z.number().finite(),
+  width: z.number().finite().positive(),
+  height: z.number().finite().positive(),
+  rotation: z.number().finite().min(-360).max(360),
+});
+export type WindowDoc = z.infer<typeof windowSchema>;
+
 export const projectDocV1 = z.object({
   schemaVersion: z.literal(1),
   meta: z.object({
@@ -34,6 +49,8 @@ export const projectDocV1 = z.object({
   }),
   /** Artwork placed on the dieline (see artwork.ts). */
   artwork: artworkSchema,
+  /** Window holes the customer cut into the box (absent = none). Older files have none. */
+  windows: z.array(windowSchema).max(24).optional(),
   threeD: z.object({
     foldProgress: z.number().min(0).max(1),
     outsideColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),

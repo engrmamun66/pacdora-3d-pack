@@ -54,3 +54,4 @@ export function generateDieline(templateId: string, input: unknown): DielineGeom
   }
   return gen.generate(input);
 }
+export * from "./windows";

@@ -3,8 +3,8 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { ENGINE_VERSION, IMPORTED_GENERATOR_ID, ParamValidationError, getPreset, type GeneratorDefinition } from "@packaging/dieline-engine";
-import { newProjectDoc, parseProjectDoc } from "@packaging/schema";
+import { ENGINE_VERSION, IMPORTED_GENERATOR_ID, MAX_WINDOWS, ParamValidationError, applyWindows, getPreset, type GeneratorDefinition, type WindowSpec } from "@packaging/dieline-engine";
+import { newProjectDoc, parseProjectDoc, windowSchema, type WindowDoc } from "@packaging/schema";
 import { db } from "@/server/db";
 import { requireUser } from "@/server/session";
 import { resolveGenerator } from "@/server/imported-templates";
@@ -26,6 +26,34 @@ function readParams(raw: FormDataEntryValue | null) {
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
+  }
+}
+
+const MAX_WINDOWS_JSON = 20_000;
+
+/** The windows sent with the form: `[]` when none, null when the field is not valid. Absent field = `undefined` (keep what the project has). */
+function readWindows(formData: FormData): WindowDoc[] | null | undefined {
+  if (!formData.has("windows")) return undefined;
+  const raw = formData.get("windows");
+  if (raw === "") return [];
+  if (typeof raw !== "string" || raw.length > MAX_WINDOWS_JSON) return null;
+  try {
+    const parsed = z.array(windowSchema).max(MAX_WINDOWS).safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The windows must all fit on the dieline these params make (the engine decides); one that does not stops the save. */
+function checkWindows(gen: GeneratorDefinition, params: Record<string, unknown>, windows: readonly WindowDoc[]): DesignState | null {
+  if (windows.length === 0) return null;
+  try {
+    const r = applyWindows(gen.generate(params), windows as readonly WindowSpec[]);
+    if (r.problems.length === 0) return null;
+    return { ok: false, message: `A window does not fit: ${r.problems[0]!.message}`, issues: r.problems.map((p) => ({ path: `windows.${p.id}`, message: p.message })) };
+  } catch {
+    return { ok: false, message: "These parameters do not produce a valid dieline.", issues: [] };
   }
 }
 
@@ -57,6 +85,10 @@ async function insertProject(formData: FormData): Promise<{ id: string } | Desig
 
   const invalid = validateWithEngine(generator, params);
   if (invalid) return invalid;
+  const windows = readWindows(formData);
+  if (windows === null) return { ok: false, message: "Invalid windows.", issues: [] };
+  const badWindows = checkWindows(generator, params, windows ?? []);
+  if (badWindows) return badWindows;
 
   const baseDoc = newProjectDoc({
     name: name.data,
@@ -68,7 +100,8 @@ async function insertProject(formData: FormData): Promise<{ id: string } | Desig
   });
   // The editor's 3D view starts at the fold amount the admin saved in "Starting 3D view" (the camera comes from the template itself).
   const startView = readViewSettings((await db.template.findUnique({ where: { id: presetId }, select: { viewSettings: true } }))?.viewSettings ?? null);
-  const doc = startView ? { ...baseDoc, threeD: { ...baseDoc.threeD, foldProgress: startView.progress } } : baseDoc;
+  const withView = startView ? { ...baseDoc, threeD: { ...baseDoc.threeD, foldProgress: startView.progress } } : baseDoc;
+  const doc = windows && windows.length > 0 ? { ...withView, windows } : withView;
   if (builtin) {
     // Keep the catalogue row in sync (code is the source of truth for built-in presets).
     await db.template.upsert({
@@ -133,11 +166,17 @@ export async function updateProject(_prev: DesignState, formData: FormData): Pro
   if (!generator) return { ok: false, message: "This project's template is no longer available.", issues: [] };
   const invalid = validateWithEngine(generator, params);
   if (invalid) return invalid;
+  const sent = readWindows(formData);
+  if (sent === null) return { ok: false, message: "Invalid windows.", issues: [] };
+  const windows = sent ?? doc.windows ?? [];
+  const badWindows = checkWindows(generator, params, windows);
+  if (badWindows) return badWindows;
 
   const next = parseProjectDoc({
     ...doc,
     meta: { ...doc.meta, name: name.data, engineVersion: ENGINE_VERSION },
     template: { ...doc.template, params },
+    ...(sent !== undefined ? { windows } : {}),
   });
   await db.project.update({ where: { id: row.id }, data: { name: name.data, projectData: next } });
   revalidatePath("/projects");
@@ -192,8 +231,13 @@ export async function saveProjectAs(formData: FormData): Promise<DesignState & {
   if (!generator) return fail({ ok: false, message: "This project's template is no longer available.", issues: [] });
   const invalid = validateWithEngine(generator, params);
   if (invalid) return fail(invalid);
+  const sent = readWindows(formData);
+  if (sent === null) return fail({ ok: false, message: "Invalid windows.", issues: [] });
+  const windows = sent ?? doc.windows ?? [];
+  const badWindows = checkWindows(generator, params, windows);
+  if (badWindows) return fail(badWindows);
 
-  const next = parseProjectDoc({ ...doc, meta: { ...doc.meta, name: name.data, engineVersion: ENGINE_VERSION }, template: { ...doc.template, params } });
+  const next = parseProjectDoc({ ...doc, meta: { ...doc.meta, name: name.data, engineVersion: ENGINE_VERSION }, template: { ...doc.template, params }, ...(sent !== undefined ? { windows } : {}) });
   const copy = await db.project.create({
     data: { userId: user.id, name: name.data, templateId: row.templateId, projectData: next, categoryId: row.categoryId },
     select: { id: true },

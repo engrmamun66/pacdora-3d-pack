@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Hand, Maximize, Minus, Plus, SlidersHorizontal } from "lucide-react";
+import { AppWindow, Hand, Maximize, Minus, Plus, SlidersHorizontal } from "lucide-react";
 import type { WatermarkStyle } from "@/lib/watermark-settings";
 import { DEFAULT_WATERMARK, SheetWatermark } from "./sheet-watermark";
 
@@ -54,6 +54,8 @@ export function SheetCanvas<T extends Record<string, boolean>>({
   watermark = DEFAULT_WATERMARK,
   watermarkStyle,
   watermarkClip,
+  onWindows,
+  windowCount = 0,
 }: {
   /** Size (mm) of the picture `src` shows, margins included. */
   bounds: { width: number; height: number; minX?: number; minY?: number };
@@ -68,6 +70,10 @@ export function SheetCanvas<T extends Record<string, boolean>>({
   watermarkStyle?: WatermarkStyle;
   /** Path data (sheet mm) that limits the watermark to the cut outline. */
   watermarkClip?: string;
+  /** Opens the window editor (a button in the tool bar); absent = no such button. */
+  onWindows?: () => void;
+  /** How many windows there are, shown on that button. */
+  windowCount?: number;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View | null>(null);
@@ -217,31 +223,48 @@ export function SheetCanvas<T extends Record<string, boolean>>({
         aria-label="Canvas tools"
         className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-xl border bg-background p-1 shadow-md"
       >
-        <span className="flex size-8 items-center justify-center text-muted-foreground" title="Drag the sheet to pan">
-          <Hand className="size-4" aria-hidden />
-        </span>
-        <button type="button" aria-label="Zoom in" className="flex size-8 items-center justify-center rounded-md hover:bg-muted" onClick={() => zoomCentre(1.25)}>
-          <Plus className="size-4" />
-        </button>
-        <button type="button" aria-label="Zoom out" className="flex size-8 items-center justify-center rounded-md hover:bg-muted" onClick={() => zoomCentre(0.8)}>
-          <Minus className="size-4" />
-        </button>
-        <button type="button" aria-label="Fit sheet to screen" className="flex size-8 items-center justify-center rounded-md hover:bg-muted" onClick={fit}>
-          <Maximize className="size-4" />
-        </button>
+        <Tip label="Drag the sheet to pan">
+          <span className="flex size-8 items-center justify-center text-muted-foreground">
+            <Hand className="size-4" aria-hidden />
+          </span>
+        </Tip>
+        <Tip label="Zoom in">
+          <button type="button" aria-label="Zoom in" className="flex size-8 items-center justify-center rounded-md hover:bg-muted" onClick={() => zoomCentre(1.25)}>
+            <Plus className="size-4" />
+          </button>
+        </Tip>
+        <Tip label="Zoom out">
+          <button type="button" aria-label="Zoom out" className="flex size-8 items-center justify-center rounded-md hover:bg-muted" onClick={() => zoomCentre(0.8)}>
+            <Minus className="size-4" />
+          </button>
+        </Tip>
+        <Tip label="Fit to screen">
+          <button type="button" aria-label="Fit sheet to screen" className="flex size-8 items-center justify-center rounded-md hover:bg-muted" onClick={fit}>
+            <Maximize className="size-4" />
+          </button>
+        </Tip>
         <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+        {onWindows ? (
+          <Tip label="Window holes">
+            <button type="button" aria-label="Window holes" onClick={onWindows} className="relative flex size-8 items-center justify-center rounded-md hover:bg-muted">
+              <AppWindow className="size-4" />
+              {windowCount > 0 ? <span className="absolute -top-1 -right-1 grid min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] leading-4 font-semibold text-primary-foreground">{windowCount}</span> : null}
+            </button>
+          </Tip>
+        ) : null}
         <div ref={menuRef} className="relative">
+          <Tip label="View options" hidden={menuOpen}>
           <button
             type="button"
             aria-label="View options"
             aria-haspopup="true"
             aria-expanded={menuOpen}
-            title="View options"
             onClick={() => setMenuOpen((o) => !o)}
             className={`flex size-8 items-center justify-center rounded-md hover:bg-muted ${menuOpen ? "bg-muted" : ""}`}
           >
             <SlidersHorizontal className="size-4" />
           </button>
+          </Tip>
           {menuOpen ? (
             <div role="group" aria-label="View options" className="absolute bottom-full left-1/2 z-20 mb-3 flex w-44 -translate-x-1/2 flex-col rounded-xl border bg-background p-1 shadow-lg">
               {toggleDefs.map((d) => toggle(d.key, d.label))}
@@ -250,5 +273,23 @@ export function SheetCanvas<T extends Record<string, boolean>>({
         </div>
       </div>
     </div>
+  );
+}
+
+/** Tooltip centred above its child. Native `title` tips follow the cursor, so they never sit over the icon. */
+function Tip({ label, hidden = false, children }: { label: string; hidden?: boolean; children: React.ReactNode }) {
+  return (
+    <span className="group/tip relative flex">
+      {children}
+      {hidden ? null : (
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background opacity-0 shadow-md transition-opacity group-hover/tip:opacity-100 group-has-[:focus-visible]/tip:opacity-100"
+        >
+          {label}
+          <span aria-hidden className="absolute -bottom-1 left-1/2 size-2 -translate-x-1/2 rotate-45 rounded-[1px] bg-foreground" />
+        </span>
+      )}
+    </span>
   );
 }

@@ -21,6 +21,8 @@ export interface Panel {
   readonly bulges?: readonly number[];
   /** True if artwork may be printed on this panel (gets a safe area). */
   readonly printable: boolean;
+  /** Window holes cut through this panel (flat polygons, fully inside the panel). Absent = none. */
+  readonly holes?: readonly (readonly Vec2[])[];
 }
 
 /**

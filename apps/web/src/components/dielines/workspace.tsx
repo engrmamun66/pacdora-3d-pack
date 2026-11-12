@@ -3,7 +3,7 @@
 import { useActionState, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Box, CircleAlert, CircleEllipsis, Ruler, type LucideIcon } from "lucide-react";
-import { ParamValidationError, type WatermarkSpec, createImportedGenerator, creaseSizesOf, scaleImportedPaths, getGenerator, type DielineGeometry, type FlatDieline, type FoldSetup, type ParamDescriptor, type ParamGroup } from "@packaging/dieline-engine";
+import { ParamValidationError, applyWindows, type WatermarkSpec, type WindowSpec, createImportedGenerator, creaseSizesOf, scaleImportedPaths, getGenerator, type DielineGeometry, type FlatDieline, type FoldSetup, type ParamDescriptor, type ParamGroup } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { STYLE, dielineViewBox, outlinePathD, renderDielineSvg } from "@packaging/render-svg";
 import { notify } from "@/lib/notify";
@@ -15,6 +15,7 @@ import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { DielineInfo } from "./dieline-info";
 import { boxSizes, dielineStats } from "./info-math";
 import { DielineTopBar } from "./dieline-top-bar";
+import { WindowEditor } from "./window-editor";
 import type { SaveAsOptions } from "@/server/projects";
 import { TemplatePicker } from "./template-picker";
 import { MaterialInfoButton } from "./material-info";
@@ -45,6 +46,8 @@ interface Props {
   viewer?: { name: string; email: string; image: string | null } | null;
   /** The visitor's own categories and tags for "Save as" (absent or empty lists = nothing to choose). */
   saveOptions?: SaveAsOptions | null;
+  /** Window holes the project already has. */
+  initialWindows?: readonly WindowSpec[];
 }
 
 type TabId = "dielines" | "basic" | "info" | "more";
@@ -78,7 +81,7 @@ function saveBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-export function DielineWorkspace({ mode, generatorId, imported, initialView = null, title, description, initialName, initialParams, modelId, watermark, viewer = null, saveOptions = null }: Props) {
+export function DielineWorkspace({ mode, generatorId, imported, initialView = null, title, description, initialName, initialParams, modelId, watermark, viewer = null, saveOptions = null, initialWindows = [] }: Props) {
   const router = useRouter();
   const gen = useMemo(() => (imported ? createImportedGenerator(imported.templateId, imported.flat as FlatDieline, imported.fold ?? null) : getGenerator(generatorId)), [generatorId, imported]);
   const [values, setValues] = useState<Values>(() =>
@@ -115,7 +118,12 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   // Keep the last good sheet on screen while the user is mid-edit.
   const [lastGood, setLastGood] = useState<DielineGeometry | null>(null);
   if (result.geo && result.geo !== lastGood) setLastGood(result.geo);
-  const shown = result.geo ?? lastGood;
+  const base = result.geo ?? lastGood;
+  // Window holes the customer placed (see the window editor): cut into the box, so the sheet, the 3D box and the downloads show them.
+  const [windows, setWindows] = useState<WindowSpec[]>(() => [...initialWindows]);
+  const [editingWindows, setEditingWindows] = useState(false);
+  const windowResult = useMemo(() => (base ? applyWindows(base, windows) : null), [base, windows]);
+  const shown = windowResult?.geo ?? base;
 
   const hasReference = Boolean(imported?.flat.reference?.length);
   const src = useMemo(
@@ -176,6 +184,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
     if (projectId) fd.set("projectId", projectId);
     fd.set("name", name);
     fd.set("params", JSON.stringify(input));
+    fd.set("windows", windows.length > 0 ? JSON.stringify(windows) : "");
     return fd;
   };
 
@@ -333,6 +342,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
         {mode.kind === "create" ? <input type="hidden" name="presetId" value={mode.presetId} /> : <input type="hidden" name="projectId" value={mode.projectId} />}
         <input type="hidden" name="name" value={name} />
         <input type="hidden" name="params" value={JSON.stringify(input)} />
+        <input type="hidden" name="windows" value={windows.length > 0 ? JSON.stringify(windows) : ""} />
       </form>
 
       <DielineTopBar
@@ -350,7 +360,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
         onSaveAs={saveAs}
         saveOptions={saveOptions}
         viewer={viewer}
-        {...(shown && foldable ? { centre: viewTabs } : {})}
+        {...(shown && foldable && !editingWindows ? { centre: viewTabs } : {})}
       />
 
       {issueText ? (
@@ -359,6 +369,23 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
         </div>
       ) : null}
 
+      {editingWindows && base ? (
+        <WindowEditor
+          geo={base}
+          value={windows}
+          unit={unit}
+          onUnit={setUnit}
+          onCancel={() => setEditingWindows(false)}
+          onDone={(next) => {
+            setWindows(next);
+            setEditingWindows(false);
+          }}
+          materialId={materialType?.id}
+          boardColor={boardColor}
+          thickness={bt ?? 0}
+          watermark={watermark ?? null}
+        />
+      ) : (
       <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[372px_minmax(0,1fr)_340px]">
         {/* Left: vertical menu (Dielines, Basic, Info, More) and the panel of the chosen one */}
         <aside className="flex min-h-0 flex-col border-b lg:flex-row lg:border-r lg:border-b-0">
@@ -471,7 +498,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
               <FoldPreview large materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
             </div>
           ) : shown && src ? (
-            <SheetCanvas {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} />
+            <SheetCanvas onWindows={() => setEditingWindows(true)} windowCount={windows.length} {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} />
           ) : (
             <p className="p-6 text-sm text-muted-foreground">Enter valid dimensions to see the dieline.</p>
           )}
@@ -502,6 +529,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
           />
         </aside>
       </div>
+      )}
     </div>
   );
 }

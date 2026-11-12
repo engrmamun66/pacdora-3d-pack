@@ -4,7 +4,7 @@ import { db } from "@/server/db";
 import { getProject } from "@/server/projects";
 import { requireUser } from "@/server/session";
 import { EditorLoader } from "@/components/editor/editor-loader";
-import { IMPORTED_GENERATOR_ID } from "@packaging/dieline-engine";
+import { IMPORTED_GENERATOR_ID, type WindowSpec } from "@packaging/dieline-engine";
 import { loadImportedSource } from "@/server/imported-templates";
 import { readViewSettings } from "@/lib/view-settings";
 import { getWatermark } from "@/server/site-settings";
@@ -33,6 +33,7 @@ async function EditorView({ params }: { params: PageProps<"/editor/[id]">["param
       {...(imported ? { imported: { templateId: imported.templateId, flat: imported.flat, fold: imported.fold } } : {})}
       initialView={readViewSettings(project.template.viewSettings)}
       params={project.doc.template.params}
+      windows={(project.doc.windows ?? []) as WindowSpec[]}
       artwork={project.doc.artwork}
       assets={assets}
       threeD={project.doc.threeD}

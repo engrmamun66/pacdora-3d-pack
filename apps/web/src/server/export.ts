@@ -1,5 +1,5 @@
 import "server-only";
-import type { DielineGeometry } from "@packaging/dieline-engine";
+import { applyWindows, type DielineGeometry, type WindowSpec } from "@packaging/dieline-engine";
 import type { ProjectDoc } from "@packaging/schema";
 import { type ImageSource, type Scene, type SceneOptions, buildScene } from "@packaging/vector-scene";
 import { nodeFontSource } from "@packaging/vector-scene/node";
@@ -32,7 +32,8 @@ export function userImageSource(userId: string): ImageSource {
 export async function projectScene(userId: string, doc: ProjectDoc, options: Partial<SceneOptions>): Promise<{ scene: Scene; geo: DielineGeometry }> {
   const gen = await resolveGenerator(doc.template.generatorId, doc.template.presetId);
   if (!gen) throw new Error("This project's template is no longer available.");
-  const geo = gen.generate(doc.template.params);
+  // The customer's windows are cut into the box (one that no longer fits is left out, never exported half-way).
+  const geo = applyWindows(gen.generate(doc.template.params), (doc.windows ?? []) as readonly WindowSpec[]).geo;
   const scene = await buildScene(geo, doc.artwork, { fonts: nodeFontSource, images: userImageSource(userId) }, options);
   return { scene, geo };
 }

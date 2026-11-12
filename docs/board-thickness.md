@@ -120,3 +120,7 @@ folds and no overlaps. The page console must stay clean.
 - Showing the rounded corners / board edges as highlighted, dark-outlined shapes "to show the thickness": it reads as a
   diagram, not a box. The thickness must be visible only through true geometry (silhouette, rounded edge, cut edge).
 - Headless-browser checks hang when the machine is busy (other Chrome windows, GPU): give the script a long default timeout.
+
+## 9. Lighting of the 3D view
+
+`CartonView` lights the box with a soft studio environment (`RoomEnvironment`, intensity 0.42) plus a weak hemisphere light (0.55) and one sun (1.25) that casts the shadow. The environment keeps every face readable (no flat dark sides); do not raise the intensities much, the board colour then washes out to peach. Previously hemisphere 2.0 + sun 1.8 only.
