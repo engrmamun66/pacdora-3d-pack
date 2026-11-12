@@ -13,6 +13,9 @@ import {
   type DimName,
   type FlapKey,
   type FoldSetup,
+  type PartPlan,
+  type PartSizeLink,
+  type PartSizeMode,
   fullPlan,
   resolveConstruction,
   sizeOffset,
@@ -20,6 +23,7 @@ import {
 } from "@packaging/dieline-engine";
 import { setConstruction } from "@/lib/fold-edit";
 import { DefaultMaterialField } from "./default-material-field";
+import { InfoTip } from "./help-tip";
 
 const field = "h-9 rounded-lg border border-input bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive";
 const round1 = (v: number) => Math.round(v * 10) / 10;
@@ -72,8 +76,10 @@ export function ConstructionEditor({ fold, onChange }: { fold: FoldSetup; onChan
     return (
       <section aria-label="Material and paper" className="flex flex-col gap-4">
         <div>
-          <h3 className="text-base font-semibold">Material & Paper</h3>
-          <p className="text-sm text-muted-foreground">Box sizes and flaps are not available for this fold (they need one body piece whose base panel has walls around it). The board can still be chosen: customers see it as the material of the template.</p>
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-base font-semibold">Material & Paper</h3>
+            <InfoTip label="Material & Paper">Box sizes and flaps are not available for this fold (the main body&apos;s base panel needs walls around it, and pieces must not overlap on the sheet). The board can still be chosen: customers see it as the material of the template.</InfoTip>
+          </div>
         </div>
         <DefaultMaterialField
           key={materialKey}
@@ -110,8 +116,13 @@ export function ConstructionEditor({ fold, onChange }: { fold: FoldSetup; onChan
     <section aria-label="Material and paper" className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="text-base font-semibold">Material & Paper</h3>
-          <p className="text-sm text-muted-foreground">Guessed from the file. Change what is not right: customers get these as options on the dieline page, like a built-in box.</p>
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-base font-semibold">Material & Paper</h3>
+            <InfoTip label="Material & Paper">
+              Guessed from the file. Change what is not right: customers get these as options on the dieline page, like a built-in box.
+              {plan.parts?.length ? ` The sizes here are for ${fold.mainName || "the main body"}. How the other pieces follow them is set in the "Piece links" tab.` : ""}
+            </InfoTip>
+          </div>
         </div>
         {c ? (
           <button type="button" className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground" onClick={() => { setMaterialKey((n) => n + 1); onChange(setConstruction(fold, null)); }}>
@@ -181,35 +192,111 @@ export function ConstructionEditor({ fold, onChange }: { fold: FoldSetup; onChan
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-muted-foreground">
-        The sizes are measured from the lines. Start sizes are in the size mode below; leave one empty to start as drawn.
-        {flaps.length === 0 ? ` No flap sizes: set a panel's kind to ${Object.values(FLAP_ROLE).join(", ")} in the panel settings above. Only a stretch of the sheet that nothing but those flaps covers can be resized.` : " A flap can be resized only where nothing but flaps of that kind cover the sheet."}
+      <p className="flex items-center gap-1 text-xs text-muted-foreground">
+        About these sizes
+        <InfoTip label="About these sizes">
+          The sizes are measured from the lines. Start sizes are in the size mode below; leave one empty to start as drawn.
+          {flaps.length === 0 ? ` No flap sizes: set a panel's kind to ${Object.values(FLAP_ROLE).join(", ")} in the panel settings above. Only a stretch of the sheet that nothing but those flaps covers can be resized.` : " A flap can be resized only where nothing but flaps of that kind cover the sheet."}
+        </InfoTip>
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm font-medium">
-          Size mode
+          <span className="flex items-center gap-1">Size mode <InfoTip label="Size mode">What Width, Depth and Height mean on the page to start with. The drawing is crease-to-crease.</InfoTip></span>
           <select className={`${field} h-10`} value={res.sizeMode} onChange={(e) => set({ sizeMode: e.target.value as Construction["sizeMode"] })}>
             <option value="manufacture">Manufacture (crease-to-crease)</option>
             <option value="inner">Inner (inside of the box)</option>
           </select>
-          <span className="text-xs font-normal text-muted-foreground">What Width, Depth and Height mean on the page to start with. The drawing is crease-to-crease.</span>
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
-          Allowance (x thickness)
+          <span className="flex items-center gap-1">Allowance (x thickness) <InfoTip label="Allowance">Inner mode: crease-to-crease = inner + allowance x thickness.</InfoTip></span>
           <NumberBox label="Allowance" value={c?.allowanceFactor} placeholder={String(CONSTRUCTION_DEFAULTS.allowanceFactor)} min={FACTOR_RANGE.min} max={FACTOR_RANGE.max} step={0.1} onChange={(v) => set({ allowanceFactor: v })} />
-          <span className="text-xs font-normal text-muted-foreground">Inner mode: crease-to-crease = inner + allowance x thickness.</span>
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
-          Cut gap (x thickness)
+          <span className="flex items-center gap-1">Cut gap (x thickness) <InfoTip label="Cut gap">Slot between a dust flap and the closure beside it ({Math.round(res.cutGapFactor * res.thickness * 100) / 100} mm). Shown in the dieline info; the drawn slots are not changed.</InfoTip></span>
           <NumberBox label="Cut gap" value={c?.cutGapFactor} placeholder={String(CONSTRUCTION_DEFAULTS.cutGapFactor)} min={FACTOR_RANGE.min} max={FACTOR_RANGE.max} step={0.1} onChange={(v) => set({ cutGapFactor: v })} />
-          <span className="text-xs font-normal text-muted-foreground">Slot between a dust flap and the closure beside it ({Math.round(res.cutGapFactor * res.thickness * 100) / 100} mm). Shown in the dieline info; the drawn slots are not changed.</span>
         </label>
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        {c?.thickness === undefined ? `Not set: the page starts with ${CONSTRUCTION_DEFAULTS.thickness} mm board. ` : ""}In inner mode the sheet grows with the board thickness; in manufacture mode the thickness only labels the material.
+      <p className="flex items-center gap-1 text-xs text-muted-foreground">
+        About the board
+        <InfoTip label="About the board">
+          {c?.thickness === undefined ? `Not set: the page starts with ${CONSTRUCTION_DEFAULTS.thickness} mm board. ` : ""}In inner mode the sheet grows with the board thickness; in manufacture mode the thickness only labels the material.
+        </InfoTip>
       </p>
+    </section>
+  );
+}
+
+const MODES: { mode: PartSizeMode; title: string; text: string }[] = [
+  { mode: "follow", title: "Follow the main body", text: "Gets bigger or smaller with it, keeping the gap it was drawn with. Customers set its height and fit gap." },
+  { mode: "own", title: "Own sizes", text: "Customers set its width, depth and height themselves, independent of the main body." },
+  { mode: "fixed", title: "Fixed", text: "No size options. It only scales with the sheet width." },
+];
+
+/**
+ * Admin tab "Piece links": what happens to each extra piece (lid, insert) when a customer changes the
+ * size of the main body on the dieline page.
+ */
+export function PieceLinksEditor({ fold, onChange }: { fold: FoldSetup; onChange: (f: FoldSetup) => void }) {
+  const plan = useMemo(() => fullPlan(fold), [fold]);
+  const mainName = fold.mainName || "Main body";
+  if (!plan?.parts?.length) {
+    return <p className="rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Sizes cannot be linked for this fold: the main body needs walls around its base panel, and the pieces must not overlap on the sheet.</p>;
+  }
+  const setLink = (index: number, patch: { mode?: PartSizeMode; swap?: boolean }) => {
+    onChange({
+      ...fold,
+      parts: (fold.parts ?? []).map((p, i) => {
+        if (i !== index) return p;
+        const next = { ...(p.link ?? {}), ...patch };
+        const link: PartSizeLink = { ...(next.mode && next.mode !== "follow" ? { mode: next.mode } : {}), ...(next.swap ? { swap: true } : {}) };
+        const { link: _old, ...rest } = p;
+        void _old;
+        return Object.keys(link).length > 0 ? { ...rest, link } : rest;
+      }),
+    });
+  };
+  const mm = (v: number) => `${round1(v)}`;
+  return (
+    <section aria-label="Piece links" className="flex flex-col gap-4">
+      <div className="flex items-center gap-1.5">
+        <h3 className="text-base font-semibold">Piece links</h3>
+        <InfoTip label="Piece links">On the dieline page customers can type the size of {mainName}. Choose what each other piece does when they do.</InfoTip>
+      </div>
+      {(plan.parts ?? []).map((q: PartPlan, i) => {
+        const mode: PartSizeMode = q.plan ? q.mode : "fixed";
+        const drawn = q.plan ? `${mm(q.plan.natural.baseWidth)} × ${mm(q.plan.natural.baseHeight)} mm base, ${mm(q.plan.natural.boxHeight)} mm high` : null;
+        return (
+          <fieldset key={q.rootId} className="flex flex-col gap-3 rounded-lg border p-3" disabled={!q.plan}>
+            <legend className="px-1 text-sm font-semibold">{q.name}</legend>
+            <p className="text-xs text-muted-foreground">
+              {drawn ? `Drawn as ${drawn}. ` : ""}
+              {!q.plan ? `It has no walls around its base panel, so it can only scale with the sheet.` : `${mainName} is drawn as ${mm(plan.natural.baseWidth)} × ${mm(plan.natural.baseHeight)} mm base, ${mm(plan.natural.boxHeight)} mm high.`}
+            </p>
+            <div className="grid gap-2 md:grid-cols-3">
+              {MODES.map((m) => (
+                <label key={m.mode} className={`flex cursor-pointer flex-col gap-1 rounded-lg border p-3 text-sm has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50 ${mode === m.mode ? "border-primary bg-primary/5" : "hover:bg-muted/50"} ${!q.plan ? "cursor-not-allowed opacity-60" : ""}`}>
+                  <span className="flex items-center gap-2 font-medium">
+                    <input type="radio" name={`link-${q.rootId}`} checked={mode === m.mode} onChange={() => setLink(i, { mode: m.mode })} />
+                    {m.title}
+                    <InfoTip label={m.title}>{m.text}</InfoTip>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {q.plan && mode === "follow" && q.link ? (
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" className="mt-0.5" checked={q.turned === true} onChange={(e) => setLink(i, { swap: e.target.checked !== (q.guessedTurned === true) })} />
+                <span className="flex items-center gap-1">
+                  Match its width to {mainName}&apos;s other side
+                  <InfoTip label="Match its width">Tick this if {q.name} is drawn turned by 90° and its sizes follow the wrong sides of {mainName}.</InfoTip>
+                </span>
+              </label>
+            ) : null}
+          </fieldset>
+        );
+      })}
     </section>
   );
 }

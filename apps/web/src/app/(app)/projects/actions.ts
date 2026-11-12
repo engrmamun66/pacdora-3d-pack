@@ -9,6 +9,8 @@ import { db } from "@/server/db";
 import { requireUser } from "@/server/session";
 import { resolveGenerator } from "@/server/imported-templates";
 import { copyTemplateBackground } from "@/server/template-background";
+import { storage } from "@/server/storage";
+import { randomUUID } from "node:crypto";
 import { readViewSettings } from "@/lib/view-settings";
 
 export type DesignState = { ok: boolean; message: string | null; issues: { path: string; message: string }[] };
@@ -141,6 +143,63 @@ export async function updateProject(_prev: DesignState, formData: FormData): Pro
   revalidatePath("/projects");
   revalidatePath(`/projects/${row.id}`);
   return { ok: true, message: "Saved.", issues: [] };
+}
+
+/**
+ * "Save as": keep the current values as a new project with its own name, and leave the original as it is.
+ * With a `projectId` the new project is a copy of that project (artwork, 3D settings, uploaded images) with
+ * the new values; without one (a template page, nothing saved yet) it is a fresh project from `presetId`.
+ */
+export async function saveProjectAs(formData: FormData): Promise<DesignState & { id: string | null }> {
+  const fail = (r: DesignState) => ({ ...r, id: null });
+  const projectId = String(formData.get("projectId") ?? "");
+  if (!projectId) {
+    const r = await insertProject(formData);
+    return "id" in r ? { ok: true, message: "Saved.", issues: [], id: r.id } : fail(r);
+  }
+  const user = await requireUser();
+  const row = await db.project.findFirst({ where: { id: projectId, userId: user.id } });
+  if (!row) return fail({ ok: false, message: "Project not found.", issues: [] });
+  const name = nameSchema.safeParse(formData.get("name"));
+  if (!name.success) return fail({ ok: false, message: name.error.issues[0]!.message, issues: [] });
+  const params = readParams(formData.get("params"));
+  if (!params) return fail({ ok: false, message: "Invalid parameters.", issues: [] });
+  let doc;
+  try {
+    doc = parseProjectDoc(row.projectData);
+  } catch {
+    return fail({ ok: false, message: "This project file could not be read.", issues: [] });
+  }
+  const generator = await resolveGenerator(doc.template.generatorId, doc.template.presetId);
+  if (!generator) return fail({ ok: false, message: "This project's template is no longer available.", issues: [] });
+  const invalid = validateWithEngine(generator, params);
+  if (invalid) return fail(invalid);
+
+  const next = parseProjectDoc({ ...doc, meta: { ...doc.meta, name: name.data, engineVersion: ENGINE_VERSION }, template: { ...doc.template, params } });
+  const copy = await db.project.create({
+    data: { userId: user.id, name: name.data, templateId: row.templateId, projectData: next, categoryId: row.categoryId },
+    select: { id: true },
+  });
+  // The copy gets its own uploaded images (best effort: if one cannot be copied the copy keeps pointing at the original).
+  let json = JSON.stringify(next);
+  const assets = await db.asset.findMany({ where: { projectId: row.id, userId: user.id } });
+  for (const a of assets) {
+    try {
+      const bytes = await storage.get(a.storageKey);
+      if (!bytes) continue;
+      const storageKey = `${user.id}/${randomUUID()}.${a.storageKey.endsWith(".png") ? "png" : "jpg"}`;
+      await storage.put(storageKey, bytes);
+      const made = await db.asset.create({ data: { userId: user.id, projectId: copy.id, fileName: a.fileName, fileType: a.fileType, sizeBytes: a.sizeBytes, storageKey }, select: { id: true } });
+      json = json.split(a.id).join(made.id);
+    } catch {
+      /* keep the original image */
+    }
+  }
+  if (assets.length > 0) await db.project.update({ where: { id: copy.id }, data: { projectData: parseProjectDoc(JSON.parse(json)) } });
+  const tags = await db.projectTag.findMany({ where: { projectId: row.id }, select: { tagId: true } });
+  if (tags.length > 0) await db.projectTag.createMany({ data: tags.map((t) => ({ projectId: copy.id, tagId: t.tagId })) });
+  revalidatePath("/projects");
+  return { ok: true, message: "Saved as a new project.", issues: [], id: copy.id };
 }
 
 /** Delete a project the user owns. */

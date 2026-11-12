@@ -5,9 +5,9 @@ import type { Outline } from "../primitives/arc";
 import { area, bounds, offsetPolygon } from "../primitives/polygon";
 import { type Vec2, vec } from "../primitives/vec2";
 import { ENGINE_VERSION, ParamValidationError } from "./carton-common";
-import { CONSTRUCTION_DEFAULTS, DIM_KEYS, DIM_NAMES, FACTOR_RANGE, FLAP_SIZE_KEYS, THICKNESS_RANGE, type DimKey, type SizeMode, importedPlan, resolveConstruction, sizeTargets } from "./imported-construction";
+import { CONSTRUCTION_DEFAULTS, DIM_KEYS, partKey, DIM_NAMES, FACTOR_RANGE, FLAP_SIZE_KEYS, THICKNESS_RANGE, type DimKey, type SizeMode, importedPlan, predictNames, resolveConstruction, sizeTargets } from "./imported-construction";
 import { type FoldSetup, validateFoldSetup } from "./imported-fold";
-import { type PartSizes, type ResizePlan, sheetMap } from "./imported-resize";
+import { type PartSizes, type ResizePlan, sheetMap, stretchPlanOf } from "./imported-resize";
 import type { GeneratorDefinition, ParamDescriptor } from "./registry";
 
 /**
@@ -205,10 +205,10 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
     let targets: ReturnType<typeof sizeTargets> | null = null;
     if (plan && cons) {
       const limits = sizeTargets(plan, cons, scale0, { mode, thickness, allowance, typed: {} }).range;
-      for (const key of [...DIM_KEYS, ...FLAP_SIZE_KEYS]) {
-        const lim = limits[key];
+      const typedParts: Record<string, number>[] = (plan.parts ?? []).map(() => ({}));
+      for (const [key, lim] of Object.entries(limits)) {
         const v = raw[key];
-        if (!lim || v === undefined || v === "") continue;
+        if (v === undefined || v === "") continue;
         if (typeof v !== "number" || !Number.isFinite(v)) {
           issues.push({ path: key, message: "must be a number" });
           continue;
@@ -216,9 +216,14 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
         const lo = round1(lim.min);
         const hi = round1(lim.max);
         if (v < lo || v > hi) issues.push({ path: key, message: `must be between ${lo} and ${hi} mm` });
-        (typed as Record<string, number>)[key] = v;
+        const ofPart = /^p(\d+)_(.+)$/.exec(key);
+        if (ofPart) {
+          const own = typedParts[Number(ofPart[1]) - 1];
+          if (own) own[ofPart[2]!] = v;
+        } else (typed as Record<string, number>)[key] = v;
       }
-      targets = sizeTargets(plan, cons, scale0, { mode, thickness, allowance, typed });
+      targets = sizeTargets(plan, cons, scale0, { mode, thickness, allowance, typed: typedParts.length > 0 ? { ...typed, parts: typedParts } : typed });
+      issues.push(...targets.problems);
     }
     const sizes: PartSizes = targets?.sizes ?? {};
     if (issues.length) throw new ParamValidationError(issues);
@@ -255,7 +260,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
     const creaseLines: CreaseLine[] = segs(flat.crease, "fold").map((s) => ({ ...s, hingeId: s.id, foldAngleDeg: 90 }));
 
     // One piece: the cut outline grown by the bleed. Several pieces: one box around all of them.
-    const sheetBox = { min: vec(ob.min.x, ob.min.y), max: map(vec(ob.max.x, ob.max.y)) };
+    const sheetBox = pieces.length > 1 ? unionBounds(pieces.map(mapAll)) : { min: vec(ob.min.x, ob.min.y), max: map(vec(ob.max.x, ob.max.y)) };
     let bleedLoop: readonly Vec2[] = pieces.length > 1 ? rectangle(sheetBox.min, sheetBox.max) : outer;
     if (bleed > 0) {
       if (pieces.length > 1) {
@@ -363,7 +368,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
     id: IMPORTED_GENERATOR_ID,
     name: "Imported dieline",
     schemaVersion: 1,
-    schemaKeys: plan && cons ? ["width", "bleed", ...DIM_KEYS, ...FLAP_SIZE_KEYS.filter((k) => plan.natural[k] !== undefined), "sizeMode", "thickness", "allowanceFactor"] : ["width", "thickness", "bleed"],
+    schemaKeys: plan && cons ? ["width", "bleed", ...DIM_KEYS, ...FLAP_SIZE_KEYS.filter((k) => plan.natural[k] !== undefined), ...partParams(plan, fold).map((d) => d.key), "sizeMode", "thickness", "allowanceFactor"] : ["width", "thickness", "bleed"],
     generate,
     params: [
       {
@@ -378,18 +383,47 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
         optional: true,
         help: `Overall width of the flat shape. Height follows the original proportions (original ${round1(baseW)} mm wide). The whole sheet is scaled.`,
       },
-      ...(plan && cons ? boxParams(plan, cons) : [{ key: "thickness", kind: "number", label: "Board thickness", unit: "mm", group: "Material", min: THICKNESS_RANGE.min, max: THICKNESS_RANGE.max, step: 0.05, optional: true, help: "The board this template is made of. The drawing keeps its size." } as ParamDescriptor]),
+      ...(plan && cons ? boxParams(plan, cons, fold) : [{ key: "thickness", kind: "number", label: "Board thickness", unit: "mm", group: "Material", min: THICKNESS_RANGE.min, max: THICKNESS_RANGE.max, step: 0.05, optional: true, help: "The board this template is made of. The drawing keeps its size." } as ParamDescriptor]),
       { key: "bleed", kind: "number", label: "Bleed", unit: "mm", group: "Print", min: 0, max: 20, step: 0.5, optional: true, help: "Print area outside the cut line." },
     ],
   };
 }
 
-const sizeParam = (key: string, label: string, help: string, group: ParamDescriptor["group"] = "Dimensions"): ParamDescriptor => ({ key, kind: "number", label, unit: "mm", group, min: 1, max: 5000, step: 1, optional: true, help });
+const sizeParam = (key: string, label: string, help: string, group: ParamDescriptor["group"] = "Dimensions", min = 1): ParamDescriptor => ({ key, kind: "number", label, unit: "mm", group, min, max: 5000, step: 1, optional: true, help });
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+/** The options of the extra pieces (lid...), by how the admin linked each one to the main body. */
+function partParams(plan: ResizePlan, fold?: FoldSetup | null): ParamDescriptor[] {
+  const out: ParamDescriptor[] = [];
+  const main = fold?.mainName || "the main body";
+  const flapLabels = { tuckDepth: "tuck flap depth", glueFlapWidth: "glue flap width", dustFlapDepth: "dust flap depth" } as const;
+  (plan.parts ?? []).forEach((q, idx) => {
+    const stretch = stretchPlanOf(q);
+    if (!stretch) return;
+    const pre = (key: string) => partKey(idx + 1, key);
+    if (q.mode === "own") {
+      // Its own sizes, named like a main body's (the largest of the other two is the width...).
+      const names = predictNames(stretch);
+      const dims = [...DIM_KEYS].sort((a, b) => DIM_NAMES.indexOf(names[a]) - DIM_NAMES.indexOf(names[b]));
+      for (const key of dims) out.push(sizeParam(pre(key), `${q.name} ${names[key]}`, `${cap(names[key])} of ${q.name}, on its own. Measured as Size mode says.`));
+    } else {
+      out.push(
+        sizeParam(pre("boxHeight"), `${q.name} height`, `How tall ${q.name} stands. Its width and depth follow ${main}. Measured as Size mode says.`),
+        // The fit gap may be negative; the engine checks the exact range.
+        sizeParam(pre("gap"), `${q.name} fit gap`, `Space between ${q.name} and ${main} on each side. A negative gap makes ${q.name} fit inside.`, "Dimensions", -2500),
+      );
+    }
+    for (const key of FLAP_SIZE_KEYS) {
+      if (stretch.natural[key] === undefined) continue;
+      out.push(sizeParam(pre(key), `${q.name} ${flapLabels[key]}`, `As drawn: ${round1(stretch.natural[key]!)} mm.`, "Flaps (advanced)"));
+    }
+  });
+  return out;
+}
+
 /** The options of the dieline page that come from the box settings: sizes, size mode, material thickness, flaps. */
-function boxParams(plan: ResizePlan, cons: NonNullable<ReturnType<typeof resolveConstruction>>): ParamDescriptor[] {
+function boxParams(plan: ResizePlan, cons: NonNullable<ReturnType<typeof resolveConstruction>>, fold?: FoldSetup | null): ParamDescriptor[] {
   const dims = [...DIM_KEYS].sort((a, b) => DIM_NAMES.indexOf(cons.names[a]) - DIM_NAMES.indexOf(cons.names[b]));
   const dimHelp: Record<string, string> = {
     width: "Front/back panel width.",
@@ -402,6 +436,7 @@ function boxParams(plan: ResizePlan, cons: NonNullable<ReturnType<typeof resolve
     if (plan.natural[key] === undefined) continue;
     out.push(sizeParam(key, flapLabels[key], `As drawn: ${round1(plan.natural[key]!)} mm.`, "Flaps (advanced)"));
   }
+  out.push(...partParams(plan, fold));
   out.push(
     {
       key: "sizeMode",

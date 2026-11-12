@@ -1,5 +1,5 @@
 import type { FoldSetup } from "./imported-fold";
-import { type FlapClass, type PartSizes, type ResizePlan, planResize } from "./imported-resize";
+import { type FlapClass, type PartSizes, type ResizePlan, planResize, stretchPlanOf } from "./imported-resize";
 
 /**
  * Box settings of an imported dieline, set by the admin (and first guessed from the file).
@@ -9,6 +9,8 @@ import { type FlapClass, type PartSizes, type ResizePlan, planResize } from "./i
  * The drawing itself is always crease-to-crease (that is what the lines are). "Inner" mode
  * shows the size of the inside of the box instead: crease-to-crease minus allowance x thickness.
  */
+
+const MAX_PARTS = 8;
 
 export type DimName = "width" | "depth" | "height";
 export type SizeMode = "manufacture" | "inner";
@@ -136,7 +138,12 @@ export interface SizeTargets {
   readonly shown: Record<string, number>;
   /** Allowed range (as shown) for each offered size. */
   readonly range: Record<string, { min: number; max: number }>;
+  /** Combinations that cannot be built (e.g. a lid gap that leaves the lid too small). */
+  readonly problems: readonly { path: string; message: string }[];
 }
+
+/** The part-size keys of an extra piece in `params`: piece 1 is the first extra piece. */
+export const partKey = (index: number, key: string) => `p${index}_${key}`;
 
 /** Work out the sheet's part sizes from the box settings, the overall scale `k` and what the customer typed. */
 export function sizeTargets(plan: ResizePlan, c: ResolvedConstruction, k: number, input: SizeInput): SizeTargets {
@@ -145,24 +152,75 @@ export function sizeTargets(plan: ResizePlan, c: ResolvedConstruction, k: number
   const sizes: Record<string, number> = {};
   const shown: Record<string, number> = {};
   const range: Record<string, { min: number; max: number }> = {};
-  const keys = [...DIM_KEYS, ...FLAP_SIZE_KEYS] as const;
-  for (const key of keys) {
-    const natural = plan.natural[key as keyof ResizePlan["natural"]];
-    if (natural === undefined) continue;
+  const problems: { path: string; message: string }[] = [];
+
+  /** One size: what the sheet gets, what the customer sees, and the allowed range. */
+  const solve = (natural: number, isDim: boolean, typed: number | undefined, start: number | undefined) => {
     const plain = natural * k;
-    const isDim = (DIM_KEYS as readonly string[]).includes(key);
-    const typed = input.typed[key];
-    const start = c.start[key];
     // Crease-to-crease size with nothing typed: the starting size, or as drawn; the inside stays the same when the board thickness changes.
     const base = start !== undefined ? start + (isDim ? adminOff : 0) : plain;
     const byDefault = isDim && input.mode === "inner" ? base + input.allowance * (input.thickness - c.thickness) : base;
     const crease = typed !== undefined ? typed + (isDim ? off : 0) : byDefault;
-    if (Math.abs(crease - plain) > 1e-9) sizes[key] = crease;
-    shown[key] = typed !== undefined ? typed : crease - (isDim ? off : 0);
     const dimOff = isDim ? off : 0;
-    range[key] = { min: Math.max(0.1, plain * 0.1 - dimOff), max: plain * 10 - dimOff };
+    return { plain, crease, shown: typed !== undefined ? typed : crease - dimOff, range: { min: Math.max(0.1, plain * 0.1 - dimOff), max: plain * 10 - dimOff } };
+  };
+
+  for (const key of [...DIM_KEYS, ...FLAP_SIZE_KEYS] as const) {
+    const natural = plan.natural[key as keyof ResizePlan["natural"]];
+    if (natural === undefined) continue;
+    const isDim = (DIM_KEYS as readonly string[]).includes(key);
+    const r = solve(natural, isDim, input.typed[key], c.start[key]);
+    if (Math.abs(r.crease - r.plain) > 1e-9) sizes[key] = r.crease;
+    shown[key] = r.shown;
+    range[key] = r.range;
   }
-  return { sizes: sizes as PartSizes, shown, range };
+
+  // Extra pieces (lid...): the base follows the main piece's base, the height and flaps are their own.
+  const partSizes: PartSizes[] = [];
+  (plan.parts ?? []).forEach((q, idx) => {
+    const out: Record<string, number> = {};
+    partSizes.push(out);
+    const stretch = stretchPlanOf(q);
+    if (!stretch) return;
+    const typedPart = input.typed.parts?.[idx] ?? {};
+    const n = stretch.natural;
+    const pre = (key: string) => partKey(idx + 1, key);
+    if (q.mode === "own") {
+      // Its own width, depth, height and flaps, like a main body.
+      for (const key of [...DIM_KEYS, ...FLAP_SIZE_KEYS] as const) {
+        const natural = n[key as keyof ResizePlan["natural"]];
+        if (natural === undefined) continue;
+        const r = solve(natural, (DIM_KEYS as readonly string[]).includes(key), typedPart[key], undefined);
+        if (Math.abs(r.crease - r.plain) > 1e-9) out[key] = r.crease;
+        shown[pre(key)] = r.shown;
+        range[pre(key)] = r.range;
+      }
+      return;
+    }
+    if (!q.link) return;
+    const mainCrease = (key: "baseWidth" | "baseHeight") => (sizes[key] as number | undefined) ?? plan.natural[key] * k;
+    const dW = (n.baseWidth - plan.natural[q.link.baseWidth]) * k;
+    const dH = (n.baseHeight - plan.natural[q.link.baseHeight]) * k;
+    const gap = typedPart.gap;
+    const baseW = mainCrease(q.link.baseWidth) + (gap !== undefined ? 2 * gap : dW);
+    const baseH = mainCrease(q.link.baseHeight) + (gap !== undefined ? 2 * gap : dH);
+    if (!(baseW >= 1 && baseH >= 1)) problems.push({ path: pre("gap"), message: `leaves ${q.name} too small: make the gap larger or the box bigger` });
+    if (Math.abs(baseW - n.baseWidth * k) > 1e-9) out.baseWidth = baseW;
+    if (Math.abs(baseH - n.baseHeight * k) > 1e-9) out.baseHeight = baseH;
+    shown[pre("baseWidth")] = baseW - off;
+    shown[pre("baseHeight")] = baseH - off;
+    shown[pre("gap")] = gap !== undefined ? gap : (dW + dH) / 4;
+    range[pre("gap")] = { min: -Math.min(plan.natural.baseWidth, plan.natural.baseHeight) * k * 0.45, max: 500 };
+    for (const key of ["boxHeight", ...FLAP_SIZE_KEYS] as const) {
+      const natural = n[key as keyof ResizePlan["natural"]];
+      if (natural === undefined) continue;
+      const r = solve(natural, key === "boxHeight", typedPart[key], undefined);
+      if (Math.abs(r.crease - r.plain) > 1e-9) out[key] = r.crease;
+      shown[pre(key)] = r.shown;
+      range[pre(key)] = r.range;
+    }
+  });
+  return { sizes: { ...(sizes as PartSizes), ...(partSizes.length > 0 ? { parts: partSizes } : {}) }, shown, range, problems };
 }
 
 /**
@@ -183,5 +241,15 @@ export function creaseSizesOf(params: unknown): PartSizes {
     const v = n(key);
     if (v !== undefined) out[key] = v;
   }
-  return out as PartSizes;
+  const parts: Record<string, number>[] = [];
+  for (let i = 1; i <= MAX_PARTS; i++) {
+    const one: Record<string, number> = {};
+    for (const key of [...DIM_KEYS, ...FLAP_SIZE_KEYS]) {
+      const v = n(partKey(i, key));
+      if (v !== undefined) one[key] = (DIM_KEYS as readonly string[]).includes(key) ? v + off : v;
+    }
+    parts.push(one);
+  }
+  while (parts.length > 0 && Object.keys(parts[parts.length - 1]!).length === 0) parts.pop();
+  return { ...(out as PartSizes), ...(parts.length > 0 ? { parts } : {}) };
 }

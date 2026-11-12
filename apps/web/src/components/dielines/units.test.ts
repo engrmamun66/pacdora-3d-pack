@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CUSTOM_GRADE, MATERIAL_TYPES, fmtLength, fmtRange, gradeLabel, materialFor, materialsFor } from "./units";
+import { CUSTOM_GRADE, MATERIAL_TYPES, fmtLength, fmtRange, gradeLabel, toDisplay, materialFor, materialsFor } from "./units";
 
 describe("materials", () => {
   const grade = (type: string, id: string) => MATERIAL_TYPES.find((t) => t.id === type)!.grades.find((g) => g.id === id)!;
@@ -54,5 +54,20 @@ describe("materials", () => {
     expect(materialFor(0.46)).toEqual({ typeId: "kraft-paperboard", gradeId: "kp-350" });
     expect(materialFor(2.2)).toEqual({ typeId: "corrugated", gradeId: CUSTOM_GRADE });
     expect(materialFor(0.1)).toEqual({ typeId: "white-paperboard", gradeId: CUSTOM_GRADE });
+  });
+});
+
+describe("toDisplay", () => {
+  it("shows at most 2 digits after the point, in both units", () => {
+    expect(toDisplay("128", "in")).toBe("5.04");
+    expect(toDisplay("1963.4999", "mm")).toBe("1963.5");
+    expect(toDisplay("754", "mm")).toBe("754");
+    expect(toDisplay("128.126", "mm")).toBe("128.13");
+  });
+  it("keeps empty and non-numbers as they are, and allows more digits where asked", () => {
+    expect(toDisplay("", "in")).toBe("");
+    expect(toDisplay("abc", "mm")).toBe("abc");
+    expect(toDisplay("0.33", "in", 4)).toBe("0.013");
+    expect(toDisplay("0.325", "mm", 3)).toBe("0.325");
   });
 });

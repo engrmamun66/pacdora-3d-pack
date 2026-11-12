@@ -1,5 +1,6 @@
 "use client";
 
+import { InfoTip } from "./help-tip";
 import { useMemo, useState } from "react";
 import type { ParamDescriptor } from "@packaging/dieline-engine";
 import { MaterialPicker, ThicknessField } from "@/components/dielines/settings-fields";
@@ -62,10 +63,14 @@ export function DefaultMaterialField({
 
   return (
     <fieldset className="flex flex-col gap-3 rounded-xl border p-3">
-      <legend className="px-1 text-sm font-medium">{legend}</legend>
+      <legend className="px-1 text-sm font-medium">
+        <span className="flex items-center gap-1">
+          {legend}
+          <InfoTip label={legend}>{value === null && !alwaysShown ? "New projects start with the template's standard board." : hint}</InfoTip>
+        </span>
+      </legend>
       {value === null && !alwaysShown ? (
         <div className="flex flex-wrap items-center gap-3">
-          <p className="text-sm text-muted-foreground">New projects start with the template&apos;s standard board.</p>
           <button
             type="button"
             className="h-9 rounded-lg border px-3 text-sm font-medium hover:bg-muted"
@@ -81,8 +86,7 @@ export function DefaultMaterialField({
         </div>
       ) : (
         <>
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs text-muted-foreground">{hint}</p>
+          <div className="flex items-center justify-end gap-2">
             <div role="radiogroup" aria-label="Unit" className="flex shrink-0 gap-1 rounded-lg border p-0.5 text-xs">
               {(["mm", "in"] as const).map((u) => (
                 <button

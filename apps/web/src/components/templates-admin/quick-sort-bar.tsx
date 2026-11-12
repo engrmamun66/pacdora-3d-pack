@@ -1,5 +1,6 @@
 "use client";
 
+import { InfoTip } from "./help-tip";
 import { useRef, useState } from "react";
 import { GripVertical, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -84,10 +85,11 @@ export function QuickSortBar({
         <span aria-hidden className="h-1.5 w-12 rounded-full border bg-muted shadow-xs transition-colors group-hover:bg-primary/30 group-focus-visible:bg-primary/30" />
       </div>
       <div className="w-36 shrink-0">
-        <h3 className="text-sm font-semibold">Quick sort</h3>
-        <p className="text-xs text-muted-foreground">
-          {items.length ? `${items.length} in order` : "Click the fold lines in the order they should fold."}
-        </p>
+        <div className="flex items-center gap-1">
+          <h3 className="text-sm font-semibold">Quick sort</h3>
+          <InfoTip label="Quick sort">Click the fold lines in the order they should fold. Drag to reorder, or press Alt and an arrow key.</InfoTip>
+        </div>
+        {items.length ? <p className="text-xs text-muted-foreground">{items.length} in order</p> : null}
       </div>
 
       {items.length ? (

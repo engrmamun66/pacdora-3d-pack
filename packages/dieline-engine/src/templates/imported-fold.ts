@@ -43,6 +43,23 @@ export interface FoldHingeSpec {
  * A second piece on the same sheet (for example the lid next to the box). Its panels hang
  * off `rootId`; `placement` says where it goes in 3D relative to the main body.
  */
+/** How an extra piece's sizes behave on the dieline page. */
+export const PART_SIZE_MODES = ["follow", "own", "fixed"] as const;
+export type PartSizeMode = (typeof PART_SIZE_MODES)[number];
+
+/**
+ * How the sizes of an extra piece relate to the main body:
+ *  follow: its base follows the main body's base (keeping the size difference it was drawn with, or a typed fit gap); its height and flaps are its own.
+ *  own:    it has its own width, depth, height and flaps, independent of the main body.
+ *  fixed:  it only follows the overall scale of the sheet.
+ * Absent = follow.
+ */
+export interface PartSizeLink {
+  readonly mode?: PartSizeMode;
+  /** follow: pair the base sizes the other way round than guessed (the piece is drawn turned by 90 degrees). */
+  readonly swap?: boolean;
+}
+
 export interface FoldPartSpec {
   /** The panel of this piece that stays flat (like the main `rootId`). */
   readonly rootId: string;
@@ -51,6 +68,8 @@ export interface FoldPartSpec {
   readonly name?: string;
   /** "after": folds when the piece before it has finished. Absent = together with the main body. */
   readonly timing?: "together" | "after";
+  /** How its sizes behave on the dieline page. Absent = follows the main body. */
+  readonly link?: PartSizeLink;
 }
 
 export interface FoldSetup {
@@ -185,6 +204,8 @@ export function validateFoldSetup(setup: FoldSetup): string[] {
       }
     }
     if (part.timing !== undefined && part.timing !== "together" && part.timing !== "after") problems.push(`${who} has an unknown fold timing.`);
+    if (part.link?.mode !== undefined && !(PART_SIZE_MODES as readonly string[]).includes(part.link.mode)) problems.push(`${who} has an unknown size link: follow, own or fixed.`);
+    if (part.link?.swap !== undefined && typeof part.link.swap !== "boolean") problems.push(`${who} has an unknown size pairing.`);
   }
   // Placed against each other in a circle is not possible: every chain must end at the main body.
   for (const part of parts) {

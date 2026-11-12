@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Download, ExternalLink, Menu, Pencil, Share2 } from "lucide-react";
+import { ChevronRight, CopyPlus, Download, ExternalLink, Menu, Pencil, Save, Share2 } from "lucide-react";
 import { deleteProject } from "@/app/(app)/projects/actions";
 import { authClient } from "@/lib/auth-client";
 import { notify } from "@/lib/notify";
@@ -19,10 +19,19 @@ function MainMenu({
   name,
   onName,
   projectId,
+  canSave,
+  saveHint,
+  saving,
+  onSaveAs,
 }: {
   name: string;
   onName: (v: string) => void;
   projectId: string | null;
+  canSave: boolean;
+  /** Why saving is switched off (not signed in); shown as a tooltip. */
+  saveHint: string | undefined;
+  saving: boolean;
+  onSaveAs: () => void;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -85,11 +94,29 @@ function MainMenu({
             </button>
           </div>
           {rule}
+          <button type="submit" form="project-form" role="menuitem" disabled={saving || !canSave} title={saveHint} className={`${rowLive} disabled:cursor-not-allowed disabled:opacity-60`} onClick={() => requestAnimationFrame(() => setOpen(false))}>
+            {saving ? "Saving…" : "Save"}
+            <Save className="size-4 text-muted-foreground" aria-hidden />
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!canSave}
+            title={saveHint}
+            className={`${rowLive} disabled:cursor-not-allowed disabled:opacity-60`}
+            onClick={() => {
+              setOpen(false);
+              onSaveAs();
+            }}
+          >
+            Save as…
+            <CopyPlus className="size-4 text-muted-foreground" aria-hidden />
+          </button>
+          {rule}
           <button type="button" role="menuitem" className={rowLive} onClick={() => go("/templates")}>Create new project</button>
           {rule}
           {soon("Add to favorites")}
           {soon("Move")}
-          {soon("Make a copy")}
           {rule}
           <button type="button" role="menuitem" className={rowLive} onClick={() => go("/projects")}>My projects</button>
           {soon("AI generations")}
@@ -134,6 +161,73 @@ function MainMenu({
 }
 
 /**
+ * "Save as": asks for a name and keeps the current values as a new project (the open one stays as it is).
+ * Slides down from the top like the other popups; Enter saves, Esc or Cancel closes. The form is only
+ * mounted while the dialog is open, so it starts with the suggested name each time.
+ */
+function SaveAsDialog({ dlg, open, onOpenChange, name, onSaveAs }: { dlg: React.RefObject<HTMLDialogElement | null>; open: boolean; onOpenChange: (open: boolean) => void; name: string; onSaveAs: (name: string) => Promise<{ ok: boolean; message: string | null }> }) {
+  return (
+    <dialog
+      ref={dlg}
+      aria-labelledby="save-as-title"
+      className="drop-dialog w-[min(28rem,calc(100vw-24px))] rounded-b-2xl border bg-background p-0 text-foreground shadow-xl backdrop:bg-black/30"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) e.currentTarget.close();
+      }}
+      onClose={() => onOpenChange(false)}
+    >
+      {open ? <SaveAsForm name={name} onSaveAs={onSaveAs} onDone={() => dlg.current?.close()} /> : null}
+    </dialog>
+  );
+}
+
+function SaveAsForm({ name, onSaveAs, onDone }: { name: string; onSaveAs: (name: string) => Promise<{ ok: boolean; message: string | null }>; onDone: () => void }) {
+  const [text, setText] = useState(name);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const ghost = "inline-flex h-10 items-center gap-2 rounded-lg border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60";
+  const primary = "inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-70";
+  return (
+    <form
+      className="flex flex-col gap-4 p-5"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const value = text.trim();
+        if (!value) return setError("Give the new project a name.");
+        setBusy(true);
+        setError(null);
+        const r = await onSaveAs(value).catch(() => ({ ok: false, message: "Could not save. Please try again." }));
+        setBusy(false);
+        if (r.ok) onDone();
+        else setError(r.message ?? "Could not save.");
+      }}
+    >
+      <div>
+        <h2 id="save-as-title" className="text-base font-semibold">Save as</h2>
+        <p className="text-sm text-muted-foreground">Keeps what you see now as a new project. The project you are in stays as it was last saved.</p>
+      </div>
+      <label className="flex flex-col gap-1 text-sm font-medium">
+        Name of the new project
+        <input
+          autoFocus
+          onFocus={(e) => e.currentTarget.select()}
+          value={text}
+          maxLength={120}
+          onChange={(e) => setText(e.target.value)}
+          aria-invalid={error ? true : undefined}
+          className="h-10 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        />
+      </label>
+      {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+      <div className="flex justify-end gap-2">
+        <button type="button" className={ghost} disabled={busy} onClick={onDone}>Cancel</button>
+        <button type="submit" className={primary} disabled={busy}>{busy ? "Saving…" : "Save as new project"}</button>
+      </div>
+    </form>
+  );
+}
+
+/**
  * Top bar of the dieline page: home mark and title, the menu, a saved/unsaved cloud, then
  * Design online, Share and the main Download button.
  */
@@ -149,6 +243,7 @@ export function DielineTopBar({
   canDownload,
   downloadLabel,
   onDownload,
+  onSaveAs,
   viewer = null,
 }: {
   title: string;
@@ -162,6 +257,8 @@ export function DielineTopBar({
   canDownload: boolean;
   downloadLabel: string;
   onDownload: () => void;
+  /** Keep the current values as a new project with this name; resolves with how it went (the page opens the new project). */
+  onSaveAs: (name: string) => Promise<{ ok: boolean; message: string | null }>;
   /** Signed-in visitor: shown as a profile icon with an account menu. */
   viewer?: { name: string; email: string; image: string | null } | null;
 }) {
@@ -175,20 +272,31 @@ export function DielineTopBar({
   };
   const ghost = "inline-flex h-10 items-center gap-2 rounded-lg border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60";
   const primary = "inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-70";
+  const saveAsDialog = useRef<HTMLDialogElement>(null);
+  const [saveAsOpen, setSaveAsOpen] = useState(false);
+  const openSaveAs = () => {
+    setSaveAsOpen(true);
+    saveAsDialog.current?.showModal();
+  };
+  // Saving needs an account: a visitor who is not signed in sees the buttons switched off.
+  const signedIn = Boolean(viewer);
+  const mayHere = canSave && signedIn;
+  const whyNot = signedIn ? undefined : "Log in to save";
   return (
     <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4">
       <Link href="/" aria-label={`${site.name} home`} className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
         <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden><path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z" /><path d="M3 7.5 12 12l9-4.5M12 12v9" /></svg>
       </Link>
       <h1 className="mr-1 hidden min-w-0 max-w-[16rem] truncate text-base font-semibold sm:block" title={title}>{title}</h1>
-      <MainMenu name={name} onName={onName} projectId={projectId} />
+      <MainMenu name={name} onName={onName} projectId={projectId} canSave={mayHere} saveHint={whyNot} saving={saving} onSaveAs={openSaveAs} />
 
       <div className="ml-auto flex items-center gap-2">
-        {mode === "edit" ? (
-          <button type="submit" form="project-form" disabled={saving || !canSave} className={`${ghost} hidden sm:inline-flex`}>
-            {saving ? "Saving…" : "Save changes"}
-          </button>
-        ) : null}
+        <button type="submit" form="project-form" disabled={saving || !mayHere} className={`${ghost} hidden sm:inline-flex`} title={whyNot ?? (mode === "edit" ? "Save the changes to this project" : "Save this as a project in My projects")}>
+          <Save className="size-4" aria-hidden /> {saving ? "Saving…" : "Save"}
+        </button>
+        <button type="button" disabled={!mayHere} onClick={openSaveAs} className={`${ghost} hidden md:inline-flex`} title={whyNot ?? "Save what you see as a new project with another name"}>
+          <CopyPlus className="size-4" aria-hidden /> Save as
+        </button>
         {mode === "edit" && projectId ? (
           <Link href={`/editor/${projectId}`} className={ghost}>
             Design Online <ExternalLink className="size-4" aria-hidden />
@@ -208,6 +316,13 @@ export function DielineTopBar({
         </button>
         {viewer ? <UserMenuClient name={viewer.name} email={viewer.email} image={viewer.image} /> : null}
       </div>
+      <SaveAsDialog dlg={saveAsDialog} open={saveAsOpen} onOpenChange={setSaveAsOpen} name={defaultCopyName(name, mode)} onSaveAs={onSaveAs} />
     </header>
   );
+}
+
+/** The name offered by "Save as": "<name> copy" for a saved project, the project's own name before the first save. */
+function defaultCopyName(name: string, mode: "create" | "edit"): string {
+  const base = name.trim();
+  return mode === "edit" && base ? `${base} copy`.slice(0, 120) : base;
 }

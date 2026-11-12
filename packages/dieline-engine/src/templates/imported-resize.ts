@@ -1,7 +1,7 @@
 import { foldTree } from "../fold-tree/fold3d";
 import type { FoldTree, PanelRole } from "../fold-tree/types";
 import { type Vec2, vec } from "../primitives/vec2";
-import type { FoldSetup } from "./imported-fold";
+import type { FoldSetup, PartSizeMode } from "./imported-fold";
 import { flatSignedArea } from "./imported-fold-util";
 
 /**
@@ -41,7 +41,45 @@ export interface ResizePlan {
   readonly yClass: readonly (SizeClass | null)[];
   /** True when the admin marked tuck flaps: a tube carton (taller than wide) rather than a tray. */
   readonly tube: boolean;
+  /** Only with extra pieces: where this (main) piece lies on the flat sheet, as imported. */
+  readonly box?: Box2;
+  /** Extra pieces (lid, insert...) in the order of the fold setup. Absent for a single piece. */
+  readonly parts?: readonly PartPlan[];
 }
+
+/** A rectangle on the flat sheet (imported mm). */
+export interface Box2 {
+  readonly x0: number;
+  readonly x1: number;
+  readonly y0: number;
+  readonly y1: number;
+}
+
+export type BaseKey = "baseWidth" | "baseHeight";
+
+/** How one extra piece of the sheet can be stretched. */
+export interface PartPlan {
+  readonly rootId: string;
+  /** Shown to customers ("Lid"). */
+  readonly name: string;
+  readonly box: Box2;
+  /** The piece's own stretching (its height and flaps). Null = the piece only follows the overall scale. */
+  readonly plan: ResizePlan | null;
+  /** How the piece's sizes behave (the admin's choice; default follow). Fixed pieces are only scaled, whatever `plan` is. */
+  readonly mode: PartSizeMode;
+  /**
+   * Which base size of the main piece each base size of this piece follows: the piece keeps the
+   * size difference it was drawn with (or the customer's "fit gap") to the main piece's base.
+   */
+  readonly link?: { readonly baseWidth: BaseKey; readonly baseHeight: BaseKey };
+  /** True when `link` pairs the sizes crosswise (width with the main body's height), after the admin's choice. */
+  readonly turned?: boolean;
+  /** What the guess alone says about `turned` (what the admin's swap switches away from). */
+  readonly guessedTurned?: boolean;
+}
+
+/** The plan that really stretches a piece (none for a fixed one). */
+export const stretchPlanOf = (q: Pick<PartPlan, "plan" | "mode">): ResizePlan | null => (q.mode === "fixed" ? null : q.plan);
 
 /** The three sizes the customer may set (mm); a missing one follows the overall scale. */
 export interface PartSizes {
@@ -51,6 +89,10 @@ export interface PartSizes {
   readonly tuckDepth?: number;
   readonly glueFlapWidth?: number;
   readonly dustFlapDepth?: number;
+  /** Customer input only: the space between an extra piece's walls and the main body's (mm, each side). */
+  readonly gap?: number;
+  /** Sizes of the extra pieces, in the order of the fold setup. */
+  readonly parts?: readonly PartSizes[];
 }
 
 /** The size key of each flap class. */
@@ -122,7 +164,88 @@ function gapClasses(breaks: readonly number[], boxes: readonly Box[], axis: "x" 
  */
 export function planResize(setup: FoldSetup | null | undefined, enabled: readonly FlapClass[] = []): ResizePlan | null {
   const flapOf = Object.fromEntries(Object.entries(FLAP_OF_ROLE).filter(([, c]) => enabled.includes(c as FlapClass))) as Partial<Record<PanelRole, SizeClass>>;
-  if (!setup || setup.hinges.length === 0 || (setup.parts?.length ?? 0) > 0) return null;
+  if (!setup || setup.hinges.length === 0) return null;
+  const main = planPiece(pieceOf(setup, setup.rootId), flapOf);
+  if (!main) return null;
+  const specs = setup.parts ?? [];
+  if (specs.length === 0) return main;
+
+  // Extra pieces (lid, insert...): each is stretched on its own and follows the main piece's base.
+  const mainBox = boxOf(pieceOf(setup, setup.rootId).panels);
+  const parts: PartPlan[] = specs.map((q, i) => {
+    const sub = pieceOf(setup, q.rootId);
+    const plan = sub.hinges.length > 0 ? planPiece(sub, flapOf) : null;
+    const guessed = plan ? guessTurned(main, plan) : false;
+    const turned = guessed !== (q.link?.swap === true);
+    return {
+      rootId: q.rootId,
+      name: q.name || `Part ${i + 2}`,
+      box: boxOf(sub.panels),
+      plan,
+      mode: q.link?.mode ?? "follow",
+      ...(plan ? { link: turned ? ({ baseWidth: "baseHeight", baseHeight: "baseWidth" } as const) : ({ baseWidth: "baseWidth", baseHeight: "baseHeight" } as const), turned, guessedTurned: guessed } : {}),
+    };
+  });
+  // The pieces must lie apart on the sheet, or one piece's stretch would drag the other's lines.
+  const boxes = [mainBox, ...parts.map((q) => q.box)];
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i]!;
+      const b = boxes[j]!;
+      const apart = a.x1 + PIECE_GAP <= b.x0 || b.x1 + PIECE_GAP <= a.x0 || a.y1 + PIECE_GAP <= b.y0 || b.y1 + PIECE_GAP <= a.y0;
+      if (!apart) return null;
+    }
+  }
+  return { ...main, box: mainBox, parts };
+}
+
+/** Pieces closer than this (imported mm) count as touching. */
+const PIECE_GAP = 0.01;
+
+/** The panels and hinges of the piece that hangs from `rootId`. */
+function pieceOf(setup: FoldSetup, rootId: string): PieceSetup {
+  const ids = new Set([rootId]);
+  const todo = [rootId];
+  while (todo.length > 0) {
+    const id = todo.pop()!;
+    for (const h of setup.hinges) {
+      if (h.parentId === id && !ids.has(h.childId)) {
+        ids.add(h.childId);
+        todo.push(h.childId);
+      }
+    }
+  }
+  return { rootId, panels: setup.panels.filter((p) => ids.has(p.id)), hinges: setup.hinges.filter((h) => ids.has(h.parentId) && ids.has(h.childId)) };
+}
+
+type PieceSetup = Pick<FoldSetup, "rootId" | "panels" | "hinges">;
+
+function boxOf(panels: PieceSetup["panels"]): Box2 {
+  let x0 = Infinity;
+  let x1 = -Infinity;
+  let y0 = Infinity;
+  let y1 = -Infinity;
+  for (const p of panels) {
+    for (let i = 0; i + 1 < p.polygon.length; i += 2) {
+      x0 = Math.min(x0, p.polygon[i]!);
+      x1 = Math.max(x1, p.polygon[i]!);
+      y0 = Math.min(y0, p.polygon[i + 1]!);
+      y1 = Math.max(y1, p.polygon[i + 1]!);
+    }
+  }
+  return { x0, x1, y0, y1 };
+}
+
+/** Guess how a piece's base sizes pair with the main piece's: crosswise when that needs the smaller total change (a lid drawn turned by 90 degrees). */
+function guessTurned(main: ResizePlan, part: ResizePlan): boolean {
+  const straight = Math.abs(part.natural.baseWidth - main.natural.baseWidth) + Math.abs(part.natural.baseHeight - main.natural.baseHeight);
+  const turned = Math.abs(part.natural.baseWidth - main.natural.baseHeight) + Math.abs(part.natural.baseHeight - main.natural.baseWidth);
+  return turned < straight;
+}
+
+/** Stretching plan of one piece (a connected set of panels with one base panel). Null if it cannot be stretched. */
+function planPiece(setup: PieceSetup, flapOf: Partial<Record<PanelRole, SizeClass>>): ResizePlan | null {
+  if (setup.hinges.length === 0) return null;
   const root = setup.panels.find((p) => p.id === setup.rootId);
   if (!root) return null;
   const polys = new Map(setup.panels.map((p) => [p.id, Array.from({ length: p.polygon.length / 2 }, (_, i) => vec(p.polygon[i * 2]!, p.polygon[i * 2 + 1]!))]));
@@ -241,11 +364,69 @@ function axisMap(breaks: readonly number[], classes: readonly (SizeClass | null)
  * With no stretch this is exactly the plain uniform scale.
  */
 export function sheetMap(origin: Vec2, k: number, plan: ResizePlan | null, sizes: PartSizes): (p: Vec2) => Vec2 {
+  const plain = (p: Vec2) => vec(origin.x + (p.x - origin.x) * k, origin.y + (p.y - origin.y) * k);
+  if (plan?.parts && plan.parts.length > 0 && plan.box) return multiMap(origin, k, plan, sizes, plain);
   const ratio = plan ? resizeRatios(plan, k, sizes) : null;
-  if (!plan || !ratio || (ratio.W === 1 && ratio.H === 1 && ratio.D === 1 && ratio.T === 1 && ratio.G === 1 && ratio.F === 1)) {
-    return (p) => vec(origin.x + (p.x - origin.x) * k, origin.y + (p.y - origin.y) * k);
-  }
+  if (!plan || !ratio || isPlain(ratio)) return plain;
   const fx = axisMap(plan.xs, plan.xClass, origin.x, k, ratio);
   const fy = axisMap(plan.ys, plan.yClass, origin.y, k, ratio);
   return (p) => vec(fx(p.x), fy(p.y));
+}
+
+const isPlain = (r: Record<SizeClass, number>) => r.W === 1 && r.H === 1 && r.D === 1 && r.T === 1 && r.G === 1 && r.F === 1;
+
+/**
+ * Several pieces on the sheet: each point is stretched by the map of the piece it lies in, and a
+ * piece that grows or shrinks pushes the pieces to its right and below it along, so the gaps between pieces stay.
+ */
+function multiMap(origin: Vec2, k: number, plan: ResizePlan, sizes: PartSizes, plain: (p: Vec2) => Vec2): (p: Vec2) => Vec2 {
+  const items = [
+    { box: plan.box!, plan: plan as ResizePlan | null, sizes },
+    ...plan.parts!.map((q, i) => ({ box: q.box, plan: stretchPlanOf(q), sizes: sizes.parts?.[i] ?? ({} as PartSizes) })),
+  ];
+  const maps = items.map((it) => {
+    const ratio = it.plan ? resizeRatios(it.plan, k, it.sizes) : null;
+    if (!it.plan || !ratio || isPlain(ratio)) return { fx: (v: number) => origin.x + (v - origin.x) * k, fy: (v: number) => origin.y + (v - origin.y) * k, plain: true };
+    return { fx: axisMap(it.plan.xs, it.plan.xClass, origin.x, k, ratio), fy: axisMap(it.plan.ys, it.plan.yClass, origin.y, k, ratio), plain: false };
+  });
+  if (maps.every((m) => m.plain)) return plain;
+
+  // How much wider / taller each piece became than the plain scale makes it.
+  const growX = items.map((it, i) => maps[i]!.fx(it.box.x1) - maps[i]!.fx(it.box.x0) - (it.box.x1 - it.box.x0) * k);
+  const growY = items.map((it, i) => maps[i]!.fy(it.box.y1) - maps[i]!.fy(it.box.y0) - (it.box.y1 - it.box.y0) * k);
+  const shift = (lo: "x0" | "y0", hi: "x1" | "y1", grow: number[]) => {
+    const out = items.map(() => 0);
+    const order = items.map((_, i) => i).sort((a, b) => items[a]!.box[lo] - items[b]!.box[lo]);
+    for (const i of order) {
+      let best: number | null = null;
+      for (const j of order) {
+        if (j === i || items[j]!.box[hi] > items[i]!.box[lo] + PIECE_GAP) continue;
+        const v = out[j]! + grow[j]!;
+        if (best === null || v > best) best = v;
+      }
+      out[i] = best ?? 0;
+    }
+    return out;
+  };
+  const sx = shift("x0", "x1", growX);
+  const sy = shift("y0", "y1", growY);
+
+  const pick = (p: Vec2): number => {
+    let best = 0;
+    let bestD = Infinity;
+    items.forEach((it, i) => {
+      const dx = Math.max(it.box.x0 - p.x, 0, p.x - it.box.x1);
+      const dy = Math.max(it.box.y0 - p.y, 0, p.y - it.box.y1);
+      const d = Math.hypot(dx, dy);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    });
+    return best;
+  };
+  return (p) => {
+    const i = pick(p);
+    return vec(maps[i]!.fx(p.x) + sx[i]!, maps[i]!.fy(p.y) + sy[i]!);
+  };
 }

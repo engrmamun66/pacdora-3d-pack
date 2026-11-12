@@ -1,5 +1,6 @@
 "use client";
 
+import { InfoTip } from "./help-tip";
 import { RotateCcw } from "lucide-react";
 import type { FoldSetup, PartFit, PartPlacement, PartPlacementMode, PartSide } from "@packaging/dieline-engine";
 import { Button } from "@/components/ui/button";
@@ -71,7 +72,8 @@ export function PiecesEditor({ fold, fits, label, onChange }: { fold: FoldSetup;
   return (
     <section id="pieces-section" aria-label="Pieces" className="flex flex-col gap-2 rounded-xl border p-3">
       <p className="text-sm">
-        <strong>{parts.length + 1} pieces.</strong> <span className="text-muted-foreground">Each folds on its own, with its own steps (see its tab). Set where every piece except the main body goes in 3D.</span>
+        <strong>{parts.length + 1} pieces.</strong>{" "}
+        <InfoTip label="Pieces">Each folds on its own, with its own steps (see its tab). Set where every piece except the main body goes in 3D.</InfoTip>
       </p>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-muted/40 px-2.5 py-1.5 text-sm">

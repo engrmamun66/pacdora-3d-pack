@@ -10,7 +10,7 @@ import { notify } from "@/lib/notify";
 import type { ViewSettings } from "@/lib/view-settings";
 import { svgDataUrl } from "@/lib/dieline-preview";
 import { pathData } from "@/lib/template-import";
-import { createProject, createProjectDraft, updateProject, type DesignState } from "@/app/(app)/projects/actions";
+import { createProject, createProjectDraft, saveProjectAs, updateProject, type DesignState } from "@/app/(app)/projects/actions";
 import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { DielineInfo } from "./dieline-info";
 import { boxSizes, dielineStats } from "./info-math";
@@ -175,6 +175,19 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
     return fd;
   };
 
+  /** "Save as": the current values become a new project, which then opens. */
+  const saveAs = async (newName: string): Promise<{ ok: boolean; message: string | null }> => {
+    const fd = formData(mode.kind === "edit" ? mode.projectId : undefined);
+    fd.set("name", newName);
+    const r = await saveProjectAs(fd);
+    if (r.ok && r.id) {
+      notify.success("Saved as a new project", { description: newName });
+      router.push(`/projects/${r.id}`);
+      return { ok: true, message: null };
+    }
+    return { ok: false, message: r.message ?? "Could not save." };
+  };
+
   const download = async () => {
     setBusy(true);
     setDl(null);
@@ -308,6 +321,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
         canDownload={Boolean(result.geo)}
         downloadLabel="Download the dieline"
         onDownload={() => void download()}
+        onSaveAs={saveAs}
         viewer={viewer}
       />
 

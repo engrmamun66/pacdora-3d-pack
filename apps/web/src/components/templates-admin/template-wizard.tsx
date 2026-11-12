@@ -12,7 +12,7 @@ import { notify } from "@/lib/notify";
 import { isValidSlug, slugify } from "@/lib/slug";
 import { MAX_SVG_CHARS, ROLE_COLOR, ROLE_HINTS, ROLE_LABELS, ROLE_ORDER } from "@/lib/template-import";
 import { DefaultMaterialField } from "./default-material-field";
-import { HelpTip } from "./help-tip";
+import { HelpTip, InfoTip } from "./help-tip";
 import { ImportedPreview } from "./imported-preview";
 import { RoleSampleButton } from "./role-sample";
 import { SvgPreviewButton } from "./svg-preview";
@@ -329,8 +329,10 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   const categoriesSection = (
         <section aria-labelledby="s-cat" className="flex flex-col gap-5">
           <div>
-            <h2 id="s-cat" className="text-lg font-semibold">{mode === "create" ? "Choose categories" : "Categories"}</h2>
-            <p className="text-sm text-muted-foreground">A template can be in several: for example Food (by use) and Tuck End Boxes (by model). Pick at least one.</p>
+            <div className="flex items-center gap-1.5">
+              <h2 id="s-cat" className="text-lg font-semibold">{mode === "create" ? "Choose categories" : "Categories"}</h2>
+              <InfoTip label="Categories">A template can be in several: for example Food (by use) and Tuck End Boxes (by model). Pick at least one.</InfoTip>
+            </div>
           </div>
           <div className="flex flex-col divide-y">
             {(["use", "model"] as const).map((k) => {
@@ -368,12 +370,14 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   const svgSection = (
         <section aria-labelledby="s-svg" className="flex flex-col gap-5">
           <div>
-            <h2 id="s-svg" className="text-lg font-semibold">{mode === "create" ? "Upload the dieline SVG" : "Dieline file"}</h2>
-            <p className="text-sm text-muted-foreground">
-              {mode === "create"
-                ? "Any dieline drawn as lines and shapes (Illustrator, Inkscape, Figma, a cutting-table export). Text, images and effects are ignored. Use only files you have the right to publish."
-                : "Optional. The saved dieline is kept as it is. Upload an SVG only to replace it (the line roles, clean-up and 3D fold are then set up again). Use only files you have the right to publish."}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <h2 id="s-svg" className="text-lg font-semibold">{mode === "create" ? "Upload the dieline SVG" : "Dieline file"}</h2>
+              <InfoTip label="Dieline file">
+                {mode === "create"
+                  ? "Any dieline drawn as lines and shapes (Illustrator, Inkscape, Figma, a cutting-table export). Text, images and effects are ignored. Use only files you have the right to publish."
+                  : "Optional. The saved dieline is kept as it is. Upload an SVG only to replace it (the line roles, clean-up and 3D fold are then set up again). Use only files you have the right to publish."}
+              </InfoTip>
+            </div>
           </div>
 
           <div
@@ -430,7 +434,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
                   {dieline.report.warnings.map((w) => <li key={w}>{w}</li>)}
                 </ul>
               ) : null}
-              {mode === "create" || text ? <p className="mt-2 text-xs text-muted-foreground">Check the size against the real box. If it is wrong, change the units or scale above.</p> : null}
+              {mode === "create" || text ? <p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">Check the size <InfoTip label="Check the size">Check the size against the real box. If it is wrong, change the units or scale above.</InfoTip></p> : null}
             </div>
           ) : null}
         </section>
@@ -438,10 +442,10 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   const cleanupSection = full ? (
     <section aria-labelledby="s-clean" className="flex flex-col gap-4">
       <div>
-        <h2 id="s-clean" className="text-lg font-semibold">Leave out parts of the drawing</h2>
-        <p className="text-sm text-muted-foreground">
-          Files often carry more than the box: a colour key, dimension notes, a second layout. Approve our suggestions or leave anything out yourself. Skip this step if the drawing is clean.
-        </p>
+        <div className="flex items-center gap-1.5">
+          <h2 id="s-clean" className="text-lg font-semibold">Leave out parts of the drawing</h2>
+          <InfoTip label="Leave out parts of the drawing">Files often carry more than the box: a colour key, dimension notes, a second layout. Approve our suggestions or leave anything out yourself. Skip this step if the drawing is clean.</InfoTip>
+        </div>
       </div>
       {canClean ? (
         <CleanupEditor full={full} excluded={excluded} onChange={setExcluded} error={cleaned.error} />
@@ -454,8 +458,10 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
         <section aria-labelledby="s-cust" className="flex flex-col gap-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 id="s-cust" className="text-lg font-semibold">{mode === "create" ? "Customize the dieline" : "Line roles and preview"}</h2>
-              <p className="text-sm text-muted-foreground">Tell us what each kind of line means. We guessed from colour and dashes; change anything that is wrong.</p>
+              <div className="flex items-center gap-1.5">
+                <h2 id="s-cust" className="text-lg font-semibold">{mode === "create" ? "Customize the dieline" : "Line roles and preview"}</h2>
+                <InfoTip label="Line roles">Tell us what each kind of line means. We guessed from colour and dashes; change anything that is wrong.</InfoTip>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <SvgPreviewButton rawSvg={text} dieline={dieline} roles={roles} onRole={(key, role) => setOverrides((o) => ({ ...o, [key]: role }))} />
@@ -540,45 +546,42 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
               />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium">
-              Slug (public address)
+              <span className="flex items-center gap-1">
+                Slug (public address)
+                <InfoTip label="Slug">{mode === "edit" && builtin ? "A built-in template keeps its address." : `Lowercase letters, digits and single dashes, 2 to 80 characters. Page: /template/dieline/${slug}`}</InfoTip>
+              </span>
               <input
                 className={`${field} font-mono`}
                 value={slug}
                 maxLength={80}
                 disabled={mode === "edit" && builtin}
                 aria-invalid={!slugOk}
-                aria-describedby="slug-hint"
+                aria-describedby={!slugOk || (mode === "edit" && !builtin && slug !== initial.slug) ? "slug-hint" : undefined}
                 onChange={(e) => {
                   setSlugTouched(true);
                   setSlug(e.target.value.toLowerCase());
                 }}
               />
-              <span id="slug-hint" className="text-xs font-normal text-muted-foreground">
-                {!slugOk
-                  ? "Lowercase letters, digits and single dashes, 2 to 80 characters."
-                  : mode === "edit" && builtin
-                    ? "A built-in template keeps its address."
-                    : mode === "edit" && slug !== initial.slug
-                      ? `New page: /template/dieline/${slug}. The old address will stop working.`
-                      : `Page: /template/dieline/${slug}`}
-              </span>
+              {!slugOk || (mode === "edit" && !builtin && slug !== initial.slug) ? (
+                <span id="slug-hint" className="text-xs font-normal text-muted-foreground">
+                  {!slugOk ? "Lowercase letters, digits and single dashes, 2 to 80 characters." : `New page: /template/dieline/${slug}. The old address will stop working.`}
+                </span>
+              ) : null}
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium">
               Description
               <textarea className={`${field} h-24 py-2`} value={description} maxLength={500} onChange={(e) => setDescription(e.target.value)} />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium">
-              Display order
+              <span className="flex items-center gap-1">Display order <InfoTip label="Display order">Lower numbers come first in the template library.</InfoTip></span>
               <input className={`${field} w-32`} type="number" min={0} max={100000} step={1} value={sortOrder} onChange={(e) => setSortOrder(Math.max(0, Math.min(100000, Math.trunc(Number(e.target.value)) || 0)))} />
-              <span className="text-xs font-normal text-muted-foreground">Lower numbers come first in the template library.</span>
             </label>
             {initial.material ? <DefaultMaterialField min={initial.material.min} max={initial.material.max} value={defaultThickness} onChange={setDefaultThickness} /> : null}
             <label className="flex flex-col gap-1 text-sm font-medium">
-              Status
+              <span className="flex items-center gap-1">Status <InfoTip label="Status">Only Published templates are visible on the public site.</InfoTip></span>
               <select id="template-status" className={`${field} w-48`} value={status} onChange={(e) => setStatus(e.target.value as TemplateStatus)}>
                 {TEMPLATE_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
-              <span className="text-xs font-normal text-muted-foreground">Only Published templates are visible on the public site.</span>
             </label>
             {status !== "published" ? <p role="status" className="-mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">Not published: customers will not see this template in the library until its status is Published.</p> : null}
             
@@ -586,12 +589,16 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   );
   const backgroundFieldset = (
     <fieldset className="flex flex-col gap-2 rounded-xl border p-3">
-              <legend className="px-1 text-sm font-medium">Box background image</legend>
-              <p className="text-xs text-muted-foreground">
-                {builtin
-                  ? "A starting picture for the box: new projects from this template begin with it as their box background (customers can change or remove it)."
-                  : "A picture that fills the box on this template's page, inside the cut outline."}
-              </p>
+              <legend className="px-1 text-sm font-medium">
+                <span className="flex items-center gap-1">
+                  Box background image
+                  <InfoTip label="Box background image">
+                    {builtin
+                      ? "A starting picture for the box: new projects from this template begin with it as their box background (customers can change or remove it). PNG or JPEG, up to 10 MB."
+                      : "A picture that fills the box on this template's page, inside the cut outline. PNG or JPEG, up to 10 MB."}
+                  </InfoTip>
+                </span>
+              </legend>
               <div className="flex items-center gap-3">
                 <div className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-lg border bg-muted">
                   {bgShown ? (
@@ -609,7 +616,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
                   ) : null}
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">PNG or JPEG, up to 10 MB. {bgFile ? "It is uploaded when you save." : ""}</p>
+              {bgFile ? <p className="text-xs text-muted-foreground">It is uploaded when you save.</p> : null}
             </fieldset>
   );
   const summaryAside = (
@@ -683,8 +690,10 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
             {!builtin && foldSection ? <div id="sec-fold" className={card}>{foldSection}</div> : null}
             {builtin || initial.fold ? (
               <section id="sec-view" aria-labelledby="s-view" className={card}>
-                <h2 id="s-view" className="mb-1 text-lg font-semibold">Starting 3D view</h2>
-                <p className="mb-4 text-sm text-muted-foreground">Set how the 3D preview looks when a customer opens this template. It is saved on its own, not with the Save button below.{!builtin && !foldOk ? " Save the 3D fold first." : ""}</p>
+                <div className="mb-4 flex items-center gap-1.5">
+                  <h2 id="s-view" className="text-lg font-semibold">Starting 3D view</h2>
+                  <InfoTip label="Starting 3D view">Set how the 3D preview looks when a customer opens this template. It is saved on its own, not with the Save button below.{!builtin && !foldOk ? " Save the 3D fold first." : ""}</InfoTip>
+                </div>
                 <ViewSettingsInline slug={initial.slug} onSaved={setStartView} />
               </section>
             ) : null}

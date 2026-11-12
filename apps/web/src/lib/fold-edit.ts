@@ -128,8 +128,9 @@ export function makeMain(setup: FoldSetup, partRootId: string): FoldSetup {
       // the old main body becomes this part: it keeps the main body's name and is placed against the new main body
       const { relativeTo: _r, ...free } = placement;
       void _r;
-      const { name: _n, ...noName } = p;
+      const { name: _n, link: _l, ...noName } = p;
       void _n;
+      void _l;
       return { ...noName, rootId: oldRoot, placement: free, ...(setup.mainName ? { name: setup.mainName } : {}) };
     }),
   };

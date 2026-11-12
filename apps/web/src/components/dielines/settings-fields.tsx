@@ -1,12 +1,73 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { Check, ChevronDown, ChevronRight } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, CircleHelp } from "lucide-react";
 import type { ParamDescriptor } from "@packaging/dieline-engine";
 import { MM_PER_INCH, fmtRange, fromDisplay, gradeLabel, toDisplay, type MaterialGrade, type MaterialType, type Unit } from "./units";
 
 const inputCls =
   "h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground";
+
+
+/**
+ * A small help icon beside a field's label. A click opens the note in a popup next to it (fixed, so the
+ * scrolling side panel cannot clip it); the icon again, Esc, a click elsewhere or scrolling closes it.
+ */
+function FieldHelp({ label, children }: { label: string; children: string }) {
+  const [box, setBox] = useState<{ left: number; top: number } | null>(null);
+  const btn = useRef<HTMLButtonElement>(null);
+  const note = useRef<HTMLDivElement>(null);
+  const id = useId();
+  useEffect(() => {
+    if (!box) return;
+    const close = () => setBox(null);
+    const down = (e: globalThis.PointerEvent) => {
+      const t = e.target as Node;
+      if (!note.current?.contains(t) && !btn.current?.contains(t)) close();
+    };
+    const esc = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") {
+        close();
+        btn.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", down);
+    document.addEventListener("keydown", esc);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      document.removeEventListener("pointerdown", down);
+      document.removeEventListener("keydown", esc);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [box]);
+  const toggle = () => {
+    if (box) return setBox(null);
+    const r = btn.current?.getBoundingClientRect();
+    if (r) setBox({ left: Math.max(8, Math.min(r.left - 8, window.innerWidth - 248)), top: r.bottom + 6 });
+  };
+  return (
+    <>
+      <button
+        ref={btn}
+        type="button"
+        aria-label={`Help: ${label}`}
+        aria-expanded={box !== null}
+        aria-controls={box ? id : undefined}
+        onClick={toggle}
+        className="ml-1 inline-grid size-4 translate-y-[2px] place-items-center rounded-full text-muted-foreground hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+      >
+        <CircleHelp className="size-3.5" aria-hidden />
+      </button>
+      {box ? (
+        <div ref={note} id={id} role="note" style={{ position: "fixed", left: box.left, top: box.top, width: 240 }} className="z-50 rounded-xl border bg-popover p-3 text-xs leading-relaxed font-normal text-popover-foreground shadow-lg">
+          {children}
+        </div>
+      ) : null}
+    </>
+  );
+}
 
 /** One engine parameter. Numbers are stored in mm; the unit switch only changes what is typed and shown. */
 export function ParamField({
@@ -30,18 +91,21 @@ export function ParamField({
   const id = `param-${p.key}`;
   const [draft, setDraft] = useState<string | null>(null);
   const hintId = `${id}-hint`;
-  const hint = error ?? p.help;
+  const hint = error; // the help text itself lives behind the help icon; only a problem stays visible
 
   if (p.kind === "enum") {
     return (
       <div className="flex flex-col gap-1">
-        <label htmlFor={id} className="text-xs font-medium">{p.label}</label>
+        <div className="flex items-center">
+          <label htmlFor={id} className="text-xs font-medium">{p.label}</label>
+          {p.help ? <FieldHelp label={p.label}>{p.help}</FieldHelp> : null}
+        </div>
         <select id={id} value={value} aria-describedby={hint ? hintId : undefined} onChange={(e) => onChange(e.target.value)} className={inputCls}>
           {p.options.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
-        {hint ? <p id={hintId} className={`text-xs ${error ? "text-destructive" : "text-muted-foreground"}`}>{hint}</p> : null}
+        {hint ? <p id={hintId} className="text-xs text-destructive">{hint}</p> : null}
       </div>
     );
   }
@@ -53,10 +117,13 @@ export function ParamField({
   const ph = placeholderMm === undefined ? (p.optional ? "auto" : undefined) : `${p.optional ? "auto" : "default"} (${toDisplay(String(placeholderMm.toFixed(2)), u)})`;
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-xs font-medium">
-        {p.label}
-        <span className="font-normal text-muted-foreground"> ({isLength ? unit : "×"})</span>
-      </label>
+      <div className="flex items-center">
+        <label htmlFor={id} className="text-xs font-medium">
+          {p.label}
+          <span className="font-normal text-muted-foreground"> ({isLength ? unit : "×"})</span>
+        </label>
+        {p.help ? <FieldHelp label={p.label}>{p.help}</FieldHelp> : null}
+      </div>
       <input
         id={id}
         type="number"
@@ -76,7 +143,7 @@ export function ParamField({
         onBlur={() => setDraft(null)}
         className={inputCls}
       />
-      {hint ? <p id={hintId} className={`text-xs ${error ? "text-destructive" : "text-muted-foreground"}`}>{hint}</p> : null}
+      {hint ? <p id={hintId} className="text-xs text-destructive">{hint}</p> : null}
     </div>
   );
 }
@@ -272,6 +339,7 @@ export function ThicknessField({
   const locked = grade?.fixed ?? false;
   const mm = Number(value);
   const stepMm = unit === "mm" ? 0.1 : MM_PER_INCH * 0.004;
+  const digits = unit === "in" ? 4 : 3; // a board is a fraction of a millimetre: show a digit or two more than a length
   const bump = (dir: 1 | -1) => {
     const base = Number.isFinite(mm) ? mm : (grade?.thickness ?? p.min);
     const next = Math.min(p.max, Math.max(p.min, Math.round((base + dir * stepMm) * 1000) / 1000));
@@ -282,10 +350,13 @@ export function ThicknessField({
   const btn = "grid size-9 shrink-0 place-items-center rounded-lg border bg-background text-lg leading-none hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40";
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor="param-thickness" className="text-xs font-medium">
-        {locked ? "Thickness" : "Custom thickness"}
-        {grade?.suggest ? <span className="font-normal text-muted-foreground"> ({fmtRange(grade.suggest, unit)})</span> : null}
-      </label>
+      <div className="flex items-center">
+        <label htmlFor="param-thickness" className="text-xs font-medium">
+          {locked ? "Thickness" : "Custom thickness"}
+          {grade?.suggest ? <span className="font-normal text-muted-foreground"> ({fmtRange(grade.suggest, unit)})</span> : null}
+        </label>
+        <FieldHelp label="Thickness">{locked ? "Set by the material. With Size mode set to Inner, the fold allowance follows it." : "With Size mode set to Inner, the fold allowance follows this thickness."}</FieldHelp>
+      </div>
       <div className="flex items-center gap-2">
         <button type="button" aria-label="Thinner" disabled={locked} onClick={() => bump(-1)} className={btn}>−</button>
         <input
@@ -296,9 +367,9 @@ export function ThicknessField({
           max={unit === "in" ? p.max / MM_PER_INCH : p.max}
           step="any"
           disabled={locked}
-          value={draft ?? toDisplay(value, unit)}
+          value={draft ?? toDisplay(value, unit, digits)}
           aria-invalid={error ? true : undefined}
-          aria-describedby="param-thickness-hint"
+          aria-describedby={error || outside ? "param-thickness-hint" : undefined}
           onChange={(e) => {
             setDraft(e.target.value);
             onChange(fromDisplay(e.target.value, unit));
@@ -309,9 +380,11 @@ export function ThicknessField({
         <span className="w-6 shrink-0 text-xs text-muted-foreground">{unit}</span>
         <button type="button" aria-label="Thicker" disabled={locked} onClick={() => bump(1)} className={btn}>+</button>
       </div>
-      <p id="param-thickness-hint" className={`text-xs ${error ? "text-destructive" : outside ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>
-        {error ?? (locked ? "Set by the material. With Size mode set to Inner, the fold allowance follows it." : outside ? `Outside the suggested range ${fmtRange(grade!.suggest!, unit)}. Check it with your supplier.` : "With Size mode set to Inner, the fold allowance follows this thickness.")}
-      </p>
+      {error || outside ? (
+        <p id="param-thickness-hint" className={`text-xs ${error ? "text-destructive" : "text-amber-700 dark:text-amber-400"}`}>
+          {error ?? `Outside the suggested range ${fmtRange(grade!.suggest!, unit)}. Check it with your supplier.`}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { InfoTip } from "./help-tip";
 import { useMemo, useRef, useState } from "react";
 import { Camera, ImageDown, RotateCcw, Save, Trash2 } from "lucide-react";
 import { createImportedGenerator, generateDieline, importedDefaults, type DielineGeometry, type FlatDieline } from "@packaging/dieline-engine";
@@ -58,7 +59,7 @@ function Num({ label, value, suffix, step, min, max, onCommit }: { label: string
  * customer would; the numbers follow the camera (or type them), and "Save view"
  * stores exactly what is on screen, including how far the box is folded.
  */
-export function ViewSettingsEditor({ slug, data, onSaved }: { slug: string; data: TemplateViewData; onSaved?: (v: ViewSettings | null) => void }) {
+export function ViewSettingsEditor({ slug, data, onSaved, onDone }: { slug: string; data: TemplateViewData; onSaved?: (v: ViewSettings | null) => void; /** Called after an action button (save / remove) succeeded, so the host can close the editor. */ onDone?: () => void }) {
   const ref = useRef<CartonViewHandle>(null);
   const [saved, setSaved] = useState<ViewSettings | null>(data.view);
   const [live, setLive] = useState<ViewSettings>(data.view ?? STANDARD_VIEW);
@@ -93,6 +94,7 @@ export function ViewSettingsEditor({ slug, data, onSaved }: { slug: string; data
         notify.success(r.message);
         setSaved({ ...v, progress });
         onSaved?.({ ...v, progress });
+        onDone?.();
       } else notify.error(r.message);
     } catch {
       notify.error("Could not save the view. Please try again.");
@@ -116,6 +118,7 @@ export function ViewSettingsEditor({ slug, data, onSaved }: { slug: string; data
       if (!res.ok || !out.url) throw new Error(out.error ?? `Could not save the image (${res.status}).`);
       setProductImage(out.url);
       notify.success("Product image saved", { description: "The template list now shows this picture." });
+      onDone?.();
     } catch (e) {
       notify.error(e instanceof Error ? e.message : "Could not save the image. Please try again.");
     } finally {
@@ -130,6 +133,7 @@ export function ViewSettingsEditor({ slug, data, onSaved }: { slug: string; data
       if (!res.ok) throw new Error("Could not remove the image.");
       setProductImage(null);
       notify.success("Product image removed");
+      onDone?.();
     } catch (e) {
       notify.error(e instanceof Error ? e.message : "Could not remove the image.");
     } finally {
@@ -145,6 +149,7 @@ export function ViewSettingsEditor({ slug, data, onSaved }: { slug: string; data
         notify.success(r.message);
         setSaved(null);
         onSaved?.(null);
+        onDone?.();
         setProgress(STANDARD_VIEW.progress);
         setLive(STANDARD_VIEW);
         ref.current?.setView(STANDARD_VIEW);
@@ -178,7 +183,10 @@ export function ViewSettingsEditor({ slug, data, onSaved }: { slug: string; data
           {/* The template list crops the picture to its middle: these lines show what stays. */}
           <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 w-[71%] -translate-x-1/2 border-x border-dashed border-foreground/30" />
         </div>
-        <p className="text-xs text-muted-foreground">Drag to turn the box, scroll to zoom, right-drag or two fingers to move it. The numbers follow the camera. Between the dashed lines is what the template list shows of the product image.</p>
+        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+          Camera
+          <InfoTip label="Camera">Drag to turn the box, scroll to zoom, right-drag or two fingers to move it. The numbers follow the camera. Between the dashed lines is what the template list shows of the product image.</InfoTip>
+        </p>
       </div>
 
       <div className="flex flex-col gap-4">
@@ -210,12 +218,12 @@ export function ViewSettingsEditor({ slug, data, onSaved }: { slug: string; data
               <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => { move({ ...STANDARD_VIEW, progress }); }} title="Move the camera back to the standard position"><RotateCcw aria-hidden /> Standard view</Button>
               {saved ? <Button type="button" variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={busy} onClick={() => void clear()}><Trash2 aria-hidden /> Remove saved</Button> : null}
             </div>
-            {!saved ? <p className="text-xs text-muted-foreground">Customers see the standard view until you save one.</p> : null}
+            {!saved ? <p className="flex items-center gap-1 text-xs text-muted-foreground">Not saved yet <InfoTip label="Not saved yet">Customers see the standard view until you save one.</InfoTip></p> : null}
           </div>
         </section>
 
         <section aria-label="Product image" className="flex flex-col gap-3 rounded-xl border p-4">
-          <h3 className="flex items-center gap-2 text-sm font-semibold"><ImageDown className="size-4" aria-hidden /> Product image</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold"><ImageDown className="size-4" aria-hidden /> Product image <InfoTip label="Product image">{productImage ? "Shown next to the dieline in the template list." : "A picture of the box exactly as it is on screen. The template list shows it next to the dieline."}</InfoTip></h3>
           <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-3">
             {productImage ? (
               // eslint-disable-next-line @next/next/no-img-element -- admin preview of a stored PNG
@@ -226,9 +234,6 @@ export function ViewSettingsEditor({ slug, data, onSaved }: { slug: string; data
               </div>
             )}
             <div className="flex min-w-0 flex-col justify-between gap-2">
-              <p className="text-xs text-muted-foreground">
-                {productImage ? "Shown next to the dieline in the template list." : "A picture of the box exactly as it is on screen. The template list shows it next to the dieline."}
-              </p>
               <div className="flex flex-col gap-1.5">
                 <Button type="button" size="lg" className="w-full whitespace-nowrap" disabled={busy || !built.geo} onClick={() => void saveProductImage()}>
                   <ImageDown className="size-4" aria-hidden /> {productImage ? "Replace image" : "Save as product image"}

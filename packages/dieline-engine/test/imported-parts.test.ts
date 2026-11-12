@@ -459,11 +459,11 @@ describe("a part's starting position", () => {
 });
 
 describe("the board of a template without box settings", () => {
-  const detected = detectFoldSetup(BOX_AND_LID).setup; // two pieces: no box settings
+  const detected = detectFoldSetup(BOX_AND_LID).setup; // two pieces
   const keys = (g: ReturnType<typeof createImportedGenerator>) => g.params.map((p) => p.key);
 
   it("is still offered, in the Material group, starting at the suggested 0.5 mm", () => {
-    const g = createImportedGenerator("t", BOX_AND_LID, detected);
+    const g = createImportedGenerator("t", BOX_AND_LID); // flat only: nothing to stretch
     expect(keys(g)).toEqual(["width", "thickness", "bleed"]);
     expect(g.params.find((p) => p.key === "thickness")).toMatchObject({ group: "Material", unit: "mm", kind: "number" });
     expect(g.generate({}).params).toMatchObject({ thickness: 0.5 });
@@ -482,5 +482,122 @@ describe("the board of a template without box settings", () => {
     expect(b.cutBounds).toEqual(a.cutBounds);
     expect(b.foldTree.panels.map((p) => p.polygon)).toEqual(a.foldTree.panels.map((p) => p.polygon));
     expect(() => g.generate({ thickness: 99 })).toThrow();
+  });
+});
+
+describe("sizes of a box with a lid", () => {
+  const setup = detectFoldSetup(BOX_AND_LID).setup;
+  const gen = createImportedGenerator("t", BOX_AND_LID, setup);
+  const extent = (g: ReturnType<typeof gen.generate>, id: string) => {
+    const p = g.foldTree.panels.find((q) => q.id === id)!;
+    const xs = p.polygon.map((v) => v.x);
+    const ys = p.polygon.map((v) => v.y);
+    return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+  };
+  const bodyBase = (g: ReturnType<typeof gen.generate>) => extent(g, setup.rootId);
+  const lidBase = (g: ReturnType<typeof gen.generate>) => extent(g, setup.parts![0]!.rootId);
+  const keys = gen.params.map((p) => p.key);
+
+  it("offers real box sizes, the lid's own height and fit gap, and the board", () => {
+    expect(keys).toEqual(expect.arrayContaining(["baseWidth", "baseHeight", "boxHeight", "p1_boxHeight", "p1_gap", "sizeMode", "thickness", "allowanceFactor"]));
+    expect(gen.schemaKeys).toEqual(expect.arrayContaining(["p1_boxHeight", "p1_gap"]));
+    expect(gen.params.find((p) => p.key === "p1_boxHeight")!.label).toBe("Part 2 height");
+    expect(gen.generate({}).params).toMatchObject({ baseWidth: 40, boxHeight: 30, p1_boxHeight: 15, p1_baseWidth: 44, p1_gap: 2 });
+  });
+
+  it("draws exactly the plain scaled sheet while no size is typed", () => {
+    const g = gen.generate({ width: 448, bleed: 3 });
+    expect(bodyBase(g).w).toBeCloseTo(80, 5);
+    expect(lidBase(g).w).toBeCloseTo(88, 5);
+    expect(lidBase(g).x0).toBeCloseTo(2 * (150 + 15), 5);
+    expect(g.cutBounds.max.x).toBeCloseTo(448, 5);
+  });
+
+  it("makes the body bigger, the lid follows and moves over so the gap stays", () => {
+    const plain = gen.generate({ width: 224 });
+    const g = gen.generate({ width: 224, baseWidth: 60, baseHeight: 50 });
+    expect(bodyBase(g).w).toBeCloseTo(60, 5);
+    expect(bodyBase(g).h).toBeCloseTo(50, 5);
+    expect(lidBase(g).w).toBeCloseTo(64, 5); // still 4 mm wider, as drawn
+    expect(lidBase(g).h).toBeCloseTo(54, 5);
+    expect(lidBase(g).x0 - plain.foldTree.panels.find((p) => p.id === setup.parts![0]!.rootId)!.polygon[0]!.x).toBeCloseTo(20, 4);
+    // the gap between the two pieces on the sheet is unchanged
+    expect(lidBase(g).x0 - bodyBase(g).x1).toBeCloseTo(lidBase(plain).x0 - bodyBase(plain).x1, 4);
+    expect(g.cutBounds.max.x).toBeCloseTo(224 + 20 + 20, 4); // body and lid are both 20 wider
+  });
+
+  it("sets the lid's height and fit gap on their own", () => {
+    const tall = gen.generate({ width: 224, p1_boxHeight: 40 });
+    expect(bodyBase(tall).w).toBeCloseTo(40, 5);
+    expect(lidBase(tall).w).toBeCloseTo(44, 5);
+    expect(tall.cutBounds.max.y - tall.cutBounds.min.y).toBeCloseTo(44 + 80, 4);
+    const snug = gen.generate({ width: 224, p1_gap: 0.5 });
+    expect(lidBase(snug).w).toBeCloseTo(41, 5);
+    expect(lidBase(snug).h).toBeCloseTo(41, 5);
+    const inside = gen.generate({ width: 224, p1_gap: -3 });
+    expect(lidBase(inside).w).toBeCloseTo(34, 5);
+  });
+
+  it("still folds in 3D after a resize, and rejects a gap that leaves no lid", () => {
+    const g = gen.generate({ width: 224, baseWidth: 70, p1_boxHeight: 20, p1_gap: 1 });
+    expect(g.foldTree.parts).toHaveLength(1);
+    expect(() => foldTree(g.foldTree as FoldTree)).not.toThrow();
+    expect(() => gen.generate({ p1_gap: -100 })).toThrow(/between/);
+  });
+
+  it("follows the inner size mode like the main body does", () => {
+    const g = gen.generate({ width: 224, sizeMode: "inner", thickness: 1, allowanceFactor: 1, p1_boxHeight: 20 });
+    expect(g.params).toMatchObject({ p1_boxHeight: 20 });
+    // 20 inside + 1 allowance x 1 mm board = 21 crease to crease; the lid base is the body's 40.5 plus the drawn 4
+    expect(lidBase(g).h).toBeCloseTo(44.5, 5);
+    expect(g.cutBounds.max.y - g.cutBounds.min.y).toBeCloseTo(Math.max(40.5 + 2 * 30.5, 44.5 + 2 * 21), 4);
+  });
+});
+
+describe("how a lid's sizes are linked to the main body", () => {
+  const detected = detectFoldSetup(BOX_AND_LID).setup;
+  const link = (l: NonNullable<FoldSetup["parts"]>[number]["link"]): FoldSetup => ({ ...detected, parts: detected.parts!.map((p) => ({ ...p, ...(l ? { link: l } : {}) })) });
+  const extent = (g: ReturnType<ReturnType<typeof createImportedGenerator>["generate"]>, id: string) => {
+    const p = g.foldTree.panels.find((q) => q.id === id)!;
+    const xs = p.polygon.map((v) => v.x);
+    const ys = p.polygon.map((v) => v.y);
+    return { w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys), x0: Math.min(...xs) };
+  };
+  const lidId = detected.parts![0]!.rootId;
+
+  it("fixed: the lid only scales; it gets no options and no resize, but still moves over", () => {
+    const setup = link({ mode: "fixed" });
+    const gen = createImportedGenerator("t", BOX_AND_LID, setup);
+    expect(gen.params.some((p) => p.key.startsWith("p1_"))).toBe(false);
+    const g = gen.generate({ width: 224, baseWidth: 60 });
+    expect(extent(g, setup.rootId).w).toBeCloseTo(60, 5);
+    expect(extent(g, lidId).w).toBeCloseTo(44, 5);
+    expect(extent(g, lidId).x0 - extent(createImportedGenerator("t", BOX_AND_LID, setup).generate({ width: 224 }), lidId).x0).toBeCloseTo(20, 4);
+  });
+
+  it("own: the lid has its own width, depth, height and no fit gap", () => {
+    const setup = link({ mode: "own" });
+    const gen = createImportedGenerator("t", BOX_AND_LID, setup);
+    const keys = gen.params.map((p) => p.key);
+    expect(keys).toEqual(expect.arrayContaining(["p1_baseWidth", "p1_baseHeight", "p1_boxHeight"]));
+    expect(keys).not.toContain("p1_gap");
+    const g = gen.generate({ width: 224, baseWidth: 60, p1_baseWidth: 90, p1_baseHeight: 50 });
+    expect(extent(g, setup.rootId).w).toBeCloseTo(60, 5);
+    expect(extent(g, lidId).w).toBeCloseTo(90, 5);
+    expect(extent(g, lidId).h).toBeCloseTo(50, 5);
+    expect(g.params).toMatchObject({ p1_baseWidth: 90, p1_baseHeight: 50 });
+  });
+
+  it("swap: pairs the lid's sizes crosswise with the main body's", () => {
+    const setup = link({ swap: true });
+    const g = createImportedGenerator("t", BOX_AND_LID, setup).generate({ width: 224, baseWidth: 60 });
+    expect(extent(g, lidId).w).toBeCloseTo(44, 5); // follows the body's other size now (unchanged)
+    expect(extent(g, lidId).h).toBeCloseTo(64, 5); // follows the 60 (+ 4 as drawn)
+  });
+
+  it("follow is the default, and a bad link is refused", () => {
+    expect(createImportedGenerator("t", BOX_AND_LID, link({ mode: "follow" })).params.map((p) => p.key)).toContain("p1_gap");
+    expect(validateFoldSetup(link({ mode: "wide" as never })).join(" ")).toMatch(/size link/);
+    expect(validateFoldSetup(link({ mode: "own", swap: true }))).toEqual([]);
   });
 });

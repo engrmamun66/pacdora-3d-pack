@@ -77,5 +77,5 @@ export function ViewSettingsInline({ slug, onSaved }: { slug: string; onSaved?: 
   }
   if (state.status === "loading") return <p className="py-10 text-center text-sm text-muted-foreground">Loading…</p>;
   if (state.status === "error") return <p role="alert" className="text-sm text-destructive">{state.message}</p>;
-  return <ViewSettingsEditor slug={slug} data={state.data} {...(onSaved ? { onSaved } : {})} />;
+  return <ViewSettingsEditor slug={slug} data={state.data} onDone={() => setState(null)} {...(onSaved ? { onSaved } : {})} />;
 }

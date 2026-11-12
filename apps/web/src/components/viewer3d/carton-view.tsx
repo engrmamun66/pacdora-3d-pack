@@ -60,6 +60,12 @@ export interface CartonViewHandle {
   /** Show or hide a floor grid (10 mm-style cells) behind the carton. */
   setGridVisible(on: boolean): void;
   isGridVisible(): boolean;
+  /**
+   * Keep the camera (turn, tilt, roll, zoom, pan) when the model is rebuilt for new geometry, instead of framing
+   * the new box from the standard position. Only the 3D object changes. The view is kept relative to the box size.
+   */
+  setKeepView(on: boolean): void;
+  isKeepView(): boolean;
   /** Be told when the camera moves (dragging, buttons, reset). Returns the way to stop. */
   onRotation(cb: (r: Rotation) => void): () => void;
   /**
@@ -98,6 +104,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   });
   const gridObj = useRef<THREE.GridHelper | null>(null);
   const gridOn = useRef(false);
+  const keepView = useRef(false);
   /** Cell size (mm) of the floor grid; set when the camera is framed. */
   const gridStep = useRef(10);
   const rotationListeners = useRef(new Set<(r: Rotation) => void>());
@@ -255,6 +262,10 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       rebuildGrid();
     },
     isGridVisible: () => gridOn.current,
+    setKeepView: (on) => {
+      keepView.current = on;
+    },
+    isKeepView: () => keepView.current,
     getRotation,
     setRotation: (r) => {
       const v = getView();
@@ -475,6 +486,8 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       t.texSource = texture;
     }
     const useTex = Boolean(t.tex && textureRect);
+    // With the view kept, note where the camera is (measured against the box that is still shown) before the box is replaced.
+    const kept = keepView.current && lastGeo.current !== geo ? getView() : null;
     const build = (p: number, hingeProgress?: Readonly<Record<string, number>>) => {
       lastBuild.current = { p, ...(hingeProgress ? { hp: hingeProgress } : {}) };
       if (t.model) {
@@ -497,6 +510,10 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     if (lastGeo.current !== geo) {
       lastGeo.current = geo;
       frame();
+      if (kept) {
+        applyView(kept);
+        notifyRotation();
+      }
     }
   // `frame` only reads frameMm, which stays constant for the life of a view.
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -3,11 +3,16 @@ import type { DielineGeometry } from "@packaging/dieline-engine";
 export type Unit = "mm" | "in";
 export const MM_PER_INCH = 25.4;
 
-/** mm (as stored) -> text shown in the chosen unit. Empty stays empty. */
-export function toDisplay(mmText: string, unit: Unit): string {
-  if (unit === "mm" || mmText.trim() === "") return mmText;
+/**
+ * mm (as stored) -> text shown in the chosen unit, with at most `digits` digits after the point (default 2).
+ * Only what is shown is rounded; the stored value keeps its precision. Empty stays empty.
+ */
+export function toDisplay(mmText: string, unit: Unit, digits = 2): string {
+  if (mmText.trim() === "") return mmText;
   const v = Number(mmText);
-  return Number.isFinite(v) ? String(Math.round((v / MM_PER_INCH) * 10_000) / 10_000) : mmText;
+  if (!Number.isFinite(v)) return mmText;
+  const f = 10 ** digits;
+  return String(Math.round((unit === "mm" ? v : v / MM_PER_INCH) * f) / f);
 }
 
 /** Text typed in the chosen unit -> mm text for storage. */

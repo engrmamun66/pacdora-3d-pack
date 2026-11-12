@@ -1,5 +1,6 @@
 "use client";
 
+import { InfoTip } from "./help-tip";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Eye, Maximize, Minus, Plus, X } from "lucide-react";
 import type { ImportedDieline, Role } from "@packaging/svg-import";
@@ -171,8 +172,8 @@ export function SvgPreviewButton({
           <div className="grid h-full grid-rows-[auto_1fr_auto]">
             <div className="flex items-center justify-between border-b px-5 py-3">
               <div>
-                <h2 id="svg-preview-title" className="font-semibold">Your SVG</h2>
-                <p className="text-xs text-muted-foreground">{dieline.widthMm.toFixed(1)} × {dieline.heightMm.toFixed(1)} mm, {dieline.styles.length} line {dieline.styles.length === 1 ? "style" : "styles"}. Look at it, then set each style&apos;s role on the right.</p>
+                <h2 id="svg-preview-title" className="flex items-center gap-1 font-semibold">Your SVG <InfoTip label="Your SVG">Look at it, then set each style&apos;s role on the right.</InfoTip></h2>
+                <p className="text-xs text-muted-foreground">{dieline.widthMm.toFixed(1)} × {dieline.heightMm.toFixed(1)} mm, {dieline.styles.length} line {dieline.styles.length === 1 ? "style" : "styles"}.</p>
               </div>
               <button type="button" aria-label="Close" className="rounded p-1 hover:bg-muted" onClick={() => ref.current?.close()}><X className="size-4" /></button>
             </div>
@@ -203,10 +204,13 @@ export function SvgPreviewButton({
                     )}
                   </ZoomPane>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {view === "original"
-                    ? "This is your file exactly as it was drawn. Scroll to zoom, drag to move. White lines need the dark background."
-                    : "Every line in the colour of its style. Hover or click a style on the right to see which lines it covers."}
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                  {view === "original" ? "Original" : "By style"}
+                  <InfoTip label="About this view">
+                    {view === "original"
+                      ? "This is your file exactly as it was drawn. Scroll to zoom, drag to move. White lines need the dark background."
+                      : "Every line in the colour of its style. Hover or click a style on the right to see which lines it covers."}
+                  </InfoTip>
                 </p>
               </div>
 

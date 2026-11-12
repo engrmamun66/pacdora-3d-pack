@@ -140,6 +140,7 @@ const foldSchema = z.object({
         }),
         name: z.string().trim().min(1).max(40).optional(),
         timing: z.enum(["together", "after"]).optional(),
+        link: z.object({ mode: z.enum(["follow", "own", "fixed"]).optional(), swap: z.boolean().optional() }).optional(),
       }),
     )
     .max(8)

@@ -7,8 +7,8 @@ import type { FlatDielineData } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { applyFoldSequence, compactOrders, depthOf, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootAt, rootsOf, setGround, sortedHinges, stepsOf, updateHinge, updatePanel } from "@/lib/fold-edit";
-import { ConstructionEditor } from "./construction-editor";
-import { HelpTip } from "./help-tip";
+import { ConstructionEditor, PieceLinksEditor } from "./construction-editor";
+import { HelpTip, InfoTip } from "./help-tip";
 import { PiecesEditor } from "./pieces-editor";
 import { HingeList } from "./hinge-list";
 import { PanelKindHelp } from "./panel-kind-help";
@@ -190,17 +190,19 @@ export function FoldSetupEditor({
   if (!fold) {
     return (
       <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed p-6">
-        <p className="text-sm">This template is <strong>flat only</strong>: customers can resize it, add artwork and export it, but there is no 3D view.</p>
-        <p className="text-sm text-muted-foreground">To give it a 3D view, we find the panels between your cut and fold lines, then you check how each fold goes.</p>
+        <p className="text-sm">
+          This template is <strong>flat only</strong>: customers can resize it, add artwork and export it, but there is no 3D view.{" "}
+          <InfoTip label="3D view">To give it a 3D view, we find the panels between your cut and fold lines, then you check how each fold goes.</InfoTip>
+        </p>
         <Button type="button" onClick={detect}><Wand2 className="size-4" aria-hidden /> Detect panels and folds</Button>
       </div>
     );
   }
 
   const pieceCount = (fold.parts?.length ?? 0) + 1;
-  // The tabs under the pictures: one per piece, "Piece placement" when there is more than one piece, then "Material & Paper".
-  type TabKind = { k: "piece"; i: number } | { k: "placement" } | { k: "material" };
-  const tabKinds: TabKind[] = [...Array.from({ length: pieceCount }, (_, i): TabKind => ({ k: "piece", i })), ...(pieceCount > 1 ? [{ k: "placement" } as TabKind] : []), { k: "material" }];
+  // The tabs under the pictures: one per piece, "Piece placement" and "Piece links" when there is more than one piece, then "Material & Paper".
+  type TabKind = { k: "piece"; i: number } | { k: "placement" } | { k: "links" } | { k: "material" };
+  const tabKinds: TabKind[] = [...Array.from({ length: pieceCount }, (_, i): TabKind => ({ k: "piece", i })), ...(pieceCount > 1 ? [{ k: "placement" } as TabKind, { k: "links" } as TabKind] : []), { k: "material" }];
   const tabNow = Math.min(tab, tabKinds.length - 1);
   const curTab = tabKinds[tabNow]!;
   const hingeName = (id: string) => {
@@ -306,11 +308,11 @@ export function FoldSetupEditor({
           </div>
           <div className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
             <label htmlFor="ground-panel" className="font-medium">Bottom (on the ground)</label>
+            <InfoTip label="Bottom (on the ground)">The panel chosen here lies flat on the floor with its printed side down, like the bottom of a box. Pick the panel that is the base, and the box stands up on it.</InfoTip>
             <select id="ground-panel" className={`${field} min-w-0 flex-1 basis-40`} value={fold.groundId ?? ""} onChange={(e) => onChange(setGround(fold, e.target.value || null))}>
               <option value="">Automatic</option>
               {fold.panels.map((p) => <option key={p.id} value={p.id}>{p.label || p.id}</option>)}
             </select>
-            <p className="basis-full text-xs text-muted-foreground">The panel chosen here lies flat on the floor with its printed side down, like the bottom of a box. Pick the panel that is the base, and the box stands up on it.</p>
           </div>
         </div>
 
@@ -367,11 +369,11 @@ export function FoldSetupEditor({
             <div className="flex items-center gap-1.5">
               <label htmlFor="panel-kind">Kind</label>
               <PanelKindHelp />
+              <InfoTip label="This kind">{ROLE_OPTIONS.find((r) => r.value === shownPanel.role)?.hint ?? ""}</InfoTip>
             </div>
             <select id="panel-kind" className={field} value={shownPanel.role} onChange={(e) => onChange(updatePanel(fold, shownPanel.id, { role: e.target.value as PanelRole }))}>
               {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
-            <span className="text-xs font-normal text-muted-foreground">{ROLE_OPTIONS.find((r) => r.value === shownPanel.role)?.hint}</span>
           </div>
           {/* Same shape as the fields beside it (an empty label line, then a 36px row), so the checkbox sits level with the inputs. */}
           <div className="flex flex-col gap-1">
@@ -399,8 +401,8 @@ export function FoldSetupEditor({
         <section aria-label="Fold settings" className="rounded-xl border p-4 text-sm">
           <p className="font-medium">{label(selHinge.parentId)} → {label(selHinge.childId)}</p>
           <p className="text-muted-foreground">
-            {label(selHinge.childId)} swings about this fold line while {label(selHinge.parentId)} stays. Line length{" "}
-            <strong className="tabular-nums text-foreground">{Math.hypot(selHinge.line[2] - selHinge.line[0], selHinge.line[3] - selHinge.line[1]).toFixed(1)} mm</strong>. Change step, angle and direction in the list below.
+            Line length <strong className="tabular-nums text-foreground">{Math.hypot(selHinge.line[2] - selHinge.line[0], selHinge.line[3] - selHinge.line[1]).toFixed(1)} mm</strong>.{" "}
+            <InfoTip label="Fold settings">{label(selHinge.childId)} swings about this fold line while {label(selHinge.parentId)} stays. Change step, angle and direction in the list below.</InfoTip>
           </p>
         </section>
       ) : null}
@@ -431,22 +433,25 @@ export function FoldSetupEditor({
                   {pieceName(roots[t.i]!)}
                   <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">{sortedHinges(fold, t.i).length} folds</span>
                 </>
-              ) : t.k === "placement" ? "Piece placement" : "Material & Paper"}
+              ) : t.k === "placement" ? "Piece placement" : t.k === "links" ? "Piece links" : "Material & Paper"}
             </button>
           ))}
         </div>
         <div role="tabpanel" id="fold-tabpanel" aria-labelledby={`fold-tab-${tabNow}`} className="flex flex-col gap-2">
           {curTab.k === "placement" ? (
             <PiecesEditor fold={fold} fits={fits} label={label} onChange={onChange} />
+          ) : curTab.k === "links" ? (
+            stale ? <p className="rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Detect the panels again first: the lines changed after the fold was set up.</p> : <PieceLinksEditor fold={fold} onChange={onChange} />
           ) : curTab.k === "material" ? (
             stale ? <p className="rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Detect the panels again first: the lines changed after the fold was set up.</p> : <ConstructionEditor fold={fold} onChange={onChange} />
           ) : (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs text-muted-foreground">
-                  {pieceCount > 1
-                    ? `${pieceName(roots[curTab.i]!)} has its own steps (${stepsOf(fold, curTab.i).length} ${stepsOf(fold, curTab.i).length === 1 ? "step" : "steps"}). Lines with the same step number fold together.`
-                    : "Lines with the same step number fold together."}
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                  {pieceCount > 1 ? `${stepsOf(fold, curTab.i).length} ${stepsOf(fold, curTab.i).length === 1 ? "step" : "steps"}` : "Steps"}
+                  <InfoTip label="Steps">
+                    {pieceCount > 1 ? `${pieceName(roots[curTab.i]!)} has its own steps. ` : ""}Lines with the same step number fold together. Drag a row by its handle (or focus it and press the up / down arrow keys) to change which fold happens first. Type a step number to fold several lines together: give them the same number.
+                  </InfoTip>
                 </p>
                 {curTab.i > 0 ? <Button type="button" variant="outline" size="xs" onClick={() => onChange(makeMain(fold, roots[curTab.i]!))}>Make main body</Button> : null}
               </div>
@@ -461,7 +466,6 @@ export function FoldSetupEditor({
       </div>
       {curTab.k === "piece" ? (
         <>
-        <p className="-mt-2 text-xs text-muted-foreground">Drag a row by its handle (or focus it and press the up / down arrow keys) to change which fold happens first. Type a step number to fold several lines together: give them the same number.</p>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => onChange(compactOrders(fold))}>Tidy step numbers</Button>
           <Button type="button" variant="outline" size="sm" onClick={() => onChange({ ...fold, hinges: fold.hinges.map((h) => ({ ...h, angleDeg: Math.sign(h.angleDeg || 1) * 90 })) })}>Set every angle to 90°</Button>

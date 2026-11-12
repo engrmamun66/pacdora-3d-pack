@@ -1,5 +1,6 @@
 "use client";
 
+import { InfoTip } from "./help-tip";
 import { useMemo, useRef, useState } from "react";
 import { BoxSelect, Eraser, MousePointer2, RotateCcw, Sparkles } from "lucide-react";
 import { groupPathIds, suggestExclusions, type ImportedDieline } from "@packaging/svg-import";
@@ -124,14 +125,13 @@ export function CleanupEditor({
         {suggestions.length > 0 ? (
           <div className="rounded-xl border border-amber-300/70 bg-amber-50/60 p-3 dark:border-amber-500/30 dark:bg-amber-500/5">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="flex items-center gap-1.5 text-sm font-medium"><Sparkles className="size-4 text-amber-600" aria-hidden /> Suggested to leave out</h3>
+              <h3 className="flex items-center gap-1.5 text-sm font-medium"><Sparkles className="size-4 text-amber-600" aria-hidden /> Suggested to leave out <InfoTip label="Suggested to leave out">Nothing is removed until you approve it. Hover a row to see it in the preview.</InfoTip></h3>
               {pending.size > 0 ? (
                 <Button type="button" size="sm" onClick={() => set(pending, true)}>Approve all</Button>
               ) : (
                 <span className="text-xs text-muted-foreground">All approved</span>
               )}
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">Nothing is removed until you approve it. Hover a row to see it in the preview.</p>
             <ul className="mt-2 flex flex-col gap-2">
               {suggestions.map((s) => {
                 const st = state(s.ids);
@@ -163,8 +163,7 @@ export function CleanupEditor({
 
         {groups.length > 0 ? (
           <div className="rounded-xl border p-3">
-            <h3 className="text-sm font-medium">Named groups in the file</h3>
-            <p className="mt-0.5 text-xs text-muted-foreground">Tick a group to leave all of it out.</p>
+            <h3 className="flex items-center gap-1 text-sm font-medium">Named groups in the file <InfoTip label="Named groups">Tick a group to leave all of it out.</InfoTip></h3>
             <ul className="mt-2 flex max-h-64 flex-col gap-0.5 overflow-y-auto pr-1">
               {groups.map((g, i) => {
                 const st = state(g.ids);
@@ -202,9 +201,12 @@ export function CleanupEditor({
           {toolBtn("box-out", "Box: leave out", <BoxSelect className="size-4" aria-hidden />)}
           {toolBtn("box-in", "Box: bring back", <Eraser className="size-4" aria-hidden />)}
         </div>
-        <p className="text-xs text-muted-foreground">
-          {tool === "click" ? "Click a line to leave it out, or click a faded one to bring it back." : "Drag a box. Lines that fit completely inside it are " + (tool === "box-out" ? "left out." : "brought back.")}
-          {shapes.length > MAX_HIT_PATHS ? " This drawing has too many lines to click one by one; use boxes or groups." : ""}
+        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+          How this tool works
+          <InfoTip label="How this tool works">
+            {tool === "click" ? "Click a line to leave it out, or click a faded one to bring it back." : "Drag a box. Lines that fit completely inside it are " + (tool === "box-out" ? "left out." : "brought back.")}
+            {shapes.length > MAX_HIT_PATHS ? " This drawing has too many lines to click one by one; use boxes or groups." : ""}
+          </InfoTip>
         </p>
         <div className="rounded-xl border bg-white p-3">
           <svg
@@ -269,8 +271,9 @@ export function CleanupEditor({
             ) : null}
           </svg>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Left out lines are removed for good: they are not drawn, not in the 3D box, and not counted in the sheet size. To keep lines only as a faint picture for customers, set them to <em>Ignore</em> in the next step instead.
+        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+          About left out lines
+          <InfoTip label="About left out lines">Left out lines are removed for good: they are not drawn, not in the 3D box, and not counted in the sheet size. To keep lines only as a faint picture for customers, set them to <em>Ignore</em> in the next step instead.</InfoTip>
         </p>
       </div>
     </div>
