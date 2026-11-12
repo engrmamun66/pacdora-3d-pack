@@ -4,13 +4,14 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import type { DielineGeometry, WatermarkSpec } from "@packaging/dieline-engine";
 import { buildCartonModel, disposeCartonModel, type CartonModel, type TextureRect } from "@packaging/model3d";
 import { cameraToView, viewToCamera, type ViewSettings } from "@/lib/view-settings";
 import { drawWatermark } from "@/lib/watermark-canvas";
 
 /** Fine, repeatable speckle and fibres, so a plain board colour reads as board and not as paint. */
-function paintGrain(c: CanvasRenderingContext2D, w: number, h: number): void {
+function paintGrain(c: CanvasRenderingContext2D, w: number, h: number, strength: number): void {
   let seed = 0x9e3779b9;
   const rnd = () => {
     seed = (seed + 0x6d2b79f5) | 0;
@@ -20,7 +21,7 @@ function paintGrain(c: CanvasRenderingContext2D, w: number, h: number): void {
   };
   const dots = Math.min(220000, Math.round((w * h) / 28));
   for (let i = 0; i < dots; i++) {
-    c.fillStyle = rnd() < 0.5 ? "rgba(70,45,15,0.07)" : "rgba(255,240,210,0.07)";
+    c.fillStyle = rnd() < 0.5 ? `rgba(70,45,15,${(0.07 * strength).toFixed(3)})` : `rgba(255,240,210,${(0.07 * strength).toFixed(3)})`;
     c.fillRect(rnd() * w, rnd() * h, 1 + rnd() * 1.5, 1 + rnd() * 1.5);
   }
   c.lineWidth = 1;
@@ -28,7 +29,7 @@ function paintGrain(c: CanvasRenderingContext2D, w: number, h: number): void {
   for (let i = 0; i < fibres; i++) {
     const x = rnd() * w;
     const y = rnd() * h;
-    c.strokeStyle = rnd() < 0.5 ? "rgba(60,38,10,0.06)" : "rgba(255,238,205,0.08)";
+    c.strokeStyle = rnd() < 0.5 ? `rgba(60,38,10,${(0.06 * strength).toFixed(3)})` : `rgba(255,238,205,${(0.08 * strength).toFixed(3)})`;
     c.beginPath();
     c.moveTo(x, y);
     c.lineTo(x + (rnd() - 0.5) * 14, y + (rnd() - 0.5) * 3);
@@ -41,7 +42,7 @@ function paintGrain(c: CanvasRenderingContext2D, w: number, h: number): void {
  * and the watermark on them. `rect` is the part of the flat sheet (mm) both cover. The inside has the watermark
  * mirrored, so it reads the right way from inside the box.
  */
-function boardPictures(geo: DielineGeometry, spec: WatermarkSpec | null, art: HTMLCanvasElement | null, artRect: TextureRect | null, outsideColor: string, insideColor: string, grain: boolean): { outside: HTMLCanvasElement; inside: HTMLCanvasElement; rect: TextureRect } {
+function boardPictures(geo: DielineGeometry, spec: WatermarkSpec | null, art: HTMLCanvasElement | null, artRect: TextureRect | null, outsideColor: string, insideColor: string, grain: number): { outside: HTMLCanvasElement; inside: HTMLCanvasElement; rect: TextureRect } {
   let rect: TextureRect;
   let w: number;
   let h: number;
@@ -66,12 +67,44 @@ function boardPictures(geo: DielineGeometry, spec: WatermarkSpec | null, art: HT
     else {
       c.fillStyle = color;
       c.fillRect(0, 0, w, h);
-      if (grain) paintGrain(c, w, h);
+      if (grain > 0) paintGrain(c, w, h, grain);
     }
     if (spec) drawWatermark(c, geo, spec, rect, pxPerMm, mirror);
     return canvas;
   };
   return { outside: make(outsideColor, art && artRect ? art : null, false), inside: make(insideColor, null, true), rect };
+}
+
+/** The cut edge of corrugated board: two liners with a wavy core between them (the picture's height is the thickness). */
+const fluteCache = new Map<string, THREE.CanvasTexture>();
+function fluteTexture(color: string): THREE.CanvasTexture {
+  const cached = fluteCache.get(color);
+  if (cached) return cached;
+  const w = 128;
+  const h = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const c = canvas.getContext("2d")!;
+  c.fillStyle = color;
+  c.fillRect(0, 0, w, h);
+  c.strokeStyle = "rgba(70,45,15,0.55)";
+  c.lineWidth = 3;
+  c.beginPath();
+  for (let x = 0; x <= w; x++) {
+    const y = h / 2 + Math.sin((x / w) * Math.PI * 2 * 2) * (h * 0.28);
+    if (x === 0) c.moveTo(x, y);
+    else c.lineTo(x, y);
+  }
+  c.stroke();
+  c.fillStyle = "rgba(70,45,15,0.45)";
+  c.fillRect(0, 0, w, 6); // the two liners
+  c.fillRect(0, h - 6, w, 6);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  fluteCache.set(color, tex);
+  return tex;
 }
 
 export interface CartonViewProps {
@@ -87,8 +120,10 @@ export interface CartonViewProps {
   thickness?: number;
   /** Printed faintly on the outside of the box (over the artwork, if any). null/absent = none. */
   watermark?: WatermarkSpec | null;
-  /** Draw a fine board grain on the plain board colour (no artwork). Default off. */
-  boardGrain?: boolean;
+  /** Fine board grain on the plain board colour (no artwork): 0 = none (default), 1 = kraft-like fibre. `true` = 1. */
+  boardGrain?: number | boolean;
+  /** The cut edge of the board (with a thickness): its colour, and whether it shows corrugation. Default: a darker board colour. */
+  boardEdge?: { color: string; flute?: boolean };
   className?: string;
   /** Slowly orbit the camera (the user can still drag). Default off. */
   autoRotate?: boolean;
@@ -158,10 +193,11 @@ export interface CartonViewHandle {
 
 /** Interactive 3D carton built from the engine's fold tree (three.js, no React renderer). */
 export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function CartonView(
-  { geo, texture, textureRect, progress, outsideColor, insideColor, thickness = 0, watermark = null, boardGrain = false, className, autoRotate = false, transparent = false, shadows = true, frameMm, rotateOnly = false, initialView = null, onViewChange },
+  { geo, texture, textureRect, progress, outsideColor, insideColor, thickness = 0, watermark = null, boardGrain = 0, boardEdge, className, autoRotate = false, transparent = false, shadows = true, frameMm, rotateOnly = false, initialView = null, onViewChange },
   ref,
 ) {
   const host = useRef<HTMLDivElement>(null);
+  const grainAmount = boardGrain === true ? 1 : boardGrain === false ? 0 : boardGrain;
   const transparentAtStart = useRef(transparent);
   const shadowsAtStart = useRef(shadows);
   const rotateOnlyAtStart = useRef(rotateOnly);
@@ -192,7 +228,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     tex: THREE.CanvasTexture | null;
     texSource: HTMLCanvasElement | null;
     /** The outside picture with the watermark on it, kept until something it is made from changes. */
-    wm: { outside: THREE.CanvasTexture; inside: THREE.CanvasTexture; rect: TextureRect; geo: DielineGeometry; art: HTMLCanvasElement | null; artRect: TextureRect | null; spec: WatermarkSpec | null; color: string; inColor: string; grain: boolean } | null;
+    wm: { outside: THREE.CanvasTexture; inside: THREE.CanvasTexture; rect: TextureRect; geo: DielineGeometry; art: HTMLCanvasElement | null; artRect: TextureRect | null; spec: WatermarkSpec | null; color: string; inColor: string; grain: number } | null;
   } | null>(null);
   /** Geometry the camera was last framed for (reset when the renderer is recreated). */
   const lastGeo = useRef<DielineGeometry | null>(null);
@@ -364,7 +400,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       let temp: { model: CartonModel; tex: THREE.CanvasTexture[] } | null = null;
       if (watermark) {
         // A copy of the model whose outside carries the watermark (and the artwork under it).
-        const pics = boardPictures(geo, watermark, t.texSource, textureRect, outsideColor, insideColor, boardGrain);
+        const pics = boardPictures(geo, watermark, t.texSource, textureRect, outsideColor, insideColor, grainAmount);
         const rect = pics.rect;
         const tex = new THREE.CanvasTexture(pics.outside);
         tex.colorSpace = THREE.SRGBColorSpace;
@@ -372,7 +408,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
         const inTex = new THREE.CanvasTexture(pics.inside);
         inTex.colorSpace = THREE.SRGBColorSpace;
         const { p, hp } = lastBuild.current;
-        model = buildCartonModel(geo, { progress: p, ...(hp ? { hingeProgress: hp } : {}), outsideTexture: tex, textureRect: rect, outsideColor: 0xffffff, insideTexture: inTex, insideColor, thickness });
+        model = buildCartonModel(geo, { progress: p, ...(hp ? { hingeProgress: hp } : {}), outsideTexture: tex, textureRect: rect, outsideColor: 0xffffff, insideTexture: inTex, insideColor, thickness, ...(boardEdge ? { boardEdgeColor: boardEdge.color, ...(boardEdge.flute ? { boardEdgeTexture: fluteTexture(boardEdge.color) } : {}) } : {}) });
         temp = { model, tex: [tex, inTex] };
       }
       try {
@@ -454,8 +490,14 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       controls.enablePan = false;
       renderer.domElement.style.touchAction = "pan-y"; // vertical swipes scroll the page, horizontal ones turn the box
     }
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xc9c2b4, 2.0));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+    // Soft studio light from all sides (so no face goes flat and dark), plus one sun for the shadow.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const studio = pmrem.fromScene(new RoomEnvironment(), 0.04);
+    pmrem.dispose();
+    scene.environment = studio.texture;
+    scene.environmentIntensity = 0.42;
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xc9c2b4, 0.55));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.25);
     sun.castShadow = shadowsAtStart.current;
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.bias = -0.0005; // scene units are mm
@@ -508,6 +550,8 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
         gridObj.current = null;
       }
       if (t?.model) disposeCartonModel(t.model);
+      scene.environment = null;
+      studio.dispose();
       t?.tex?.dispose();
       t?.wm?.outside.dispose();
       t?.wm?.inside.dispose();
@@ -548,19 +592,19 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     let outsideTex = t.tex;
     let outsideRect = textureRect;
     let insideTex: THREE.CanvasTexture | null = null;
-    if (watermark || boardGrain) {
+    if (watermark || grainAmount > 0) {
       let wm = t.wm;
-      if (!wm || wm.geo !== geo || wm.art !== texture || wm.artRect !== textureRect || wm.spec !== watermark || wm.color !== outsideColor || wm.inColor !== insideColor || wm.grain !== boardGrain) {
+      if (!wm || wm.geo !== geo || wm.art !== texture || wm.artRect !== textureRect || wm.spec !== watermark || wm.color !== outsideColor || wm.inColor !== insideColor || wm.grain !== grainAmount) {
         wm?.outside.dispose();
         wm?.inside.dispose();
-        const made = boardPictures(geo, watermark, texture, textureRect, outsideColor, insideColor, boardGrain);
+        const made = boardPictures(geo, watermark, texture, textureRect, outsideColor, insideColor, grainAmount);
         const outside = new THREE.CanvasTexture(made.outside);
         outside.colorSpace = THREE.SRGBColorSpace;
         outside.anisotropy = t.renderer.capabilities.getMaxAnisotropy();
         const inside = new THREE.CanvasTexture(made.inside);
         inside.colorSpace = THREE.SRGBColorSpace;
         inside.anisotropy = outside.anisotropy;
-        wm = { outside, inside, rect: made.rect, geo, art: texture, artRect: textureRect, spec: watermark, color: outsideColor, inColor: insideColor, grain: boardGrain };
+        wm = { outside, inside, rect: made.rect, geo, art: texture, artRect: textureRect, spec: watermark, color: outsideColor, inColor: insideColor, grain: grainAmount };
         t.wm = wm;
       }
       outsideTex = wm.outside;
@@ -589,6 +633,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
         ...(useTex && insideTex ? { insideTexture: insideTex } : {}),
         insideColor,
         thickness,
+        ...(boardEdge ? { boardEdgeColor: boardEdge.color, ...(boardEdge.flute ? { boardEdgeTexture: fluteTexture(boardEdge.color) } : {}) } : {}),
       });
       t.model.object.position.y = t.model.size.y / 2 + 0.5;
       t.scene.add(t.model.object);
@@ -605,7 +650,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     }
   // `frame` only reads frameMm, which stays constant for the life of a view.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [geo, texture, textureRect, progress, outsideColor, insideColor, thickness, watermark, boardGrain]);
+  }, [geo, texture, textureRect, progress, outsideColor, insideColor, thickness, watermark, grainAmount, boardEdge?.color, boardEdge?.flute]);
 
   return <div ref={host} className={className} data-testid="carton-3d" />;
 });

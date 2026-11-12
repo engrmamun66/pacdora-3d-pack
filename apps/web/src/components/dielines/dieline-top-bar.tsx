@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, CopyPlus, Download, ExternalLink, Menu, Pencil, Save, Share2 } from "lucide-react";
+import { ChevronDown, ChevronRight, CopyPlus, Download, ExternalLink, Menu, Pencil, Save, Share2 } from "lucide-react";
 import { deleteProject } from "@/app/(app)/projects/actions";
 import { authClient } from "@/lib/auth-client";
 import { notify } from "@/lib/notify";
@@ -164,6 +164,69 @@ function MainMenu({
 }
 
 /**
+ * One grouped button: "Save", and a down arrow that opens a small menu with "Save as…".
+ * Both need an account, so the whole group is switched off for a visitor who is not signed in.
+ */
+function SaveSplit({ saving, disabled, why, saveTitle, onSaveAs }: { saving: boolean; disabled: boolean; why: string | undefined; saveTitle: string; onSaveAs: () => void }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setOpen(false);
+    };
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc, true);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", esc, true);
+    };
+  }, [open]);
+  const part = "inline-flex h-8 items-center gap-1.5 border bg-background text-[13px] font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60";
+  return (
+    <div ref={box} className="relative hidden sm:inline-flex">
+      <button type="submit" form="project-form" disabled={saving || disabled} title={why ?? saveTitle} className={`${part} rounded-l-lg px-3`}>
+        <Save className="size-3.5" aria-hidden /> {saving ? "Saving…" : "Save"}
+      </button>
+      <button
+        type="button"
+        disabled={disabled}
+        aria-label="More save options"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={why ?? "More save options"}
+        onClick={() => setOpen((o) => !o)}
+        className={`${part} -ml-px w-8 justify-center rounded-r-lg px-0`}
+      >
+        <ChevronDown className="size-3.5" aria-hidden />
+      </button>
+      {open ? (
+        <div role="menu" aria-label="Save options" className="absolute top-full right-0 z-30 mt-1.5 w-44 rounded-xl border bg-background p-1 shadow-lg">
+          <button
+            type="button"
+            role="menuitem"
+            autoFocus
+            title="Save what you see as a new project with another name"
+            onClick={() => {
+              setOpen(false);
+              onSaveAs();
+            }}
+            className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            <CopyPlus className="size-4 text-muted-foreground" aria-hidden /> Save as…
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * "Save as": asks for a name and keeps the current values as a new project (the open one stays as it is).
  * Slides down from the top like the other popups; Enter saves, Esc or Cancel closes. The form is only
  * mounted while the dialog is open, so it starts with the suggested name each time.
@@ -285,6 +348,7 @@ export function DielineTopBar({
   onSaveAs,
   saveOptions = null,
   viewer = null,
+  centre,
 }: {
   title: string;
   name: string;
@@ -303,6 +367,8 @@ export function DielineTopBar({
   saveOptions?: SaveAsOptions | null;
   /** Signed-in visitor: shown as a profile icon with an account menu. */
   viewer?: { name: string; email: string; image: string | null } | null;
+  /** Shown in the middle of the header on wide screens (e.g. the Dieline | 3D tabs). */
+  centre?: React.ReactNode;
 }) {
   const share = async () => {
     try {
@@ -312,8 +378,8 @@ export function DielineTopBar({
       notify.error("Could not copy the link", { description: window.location.href });
     }
   };
-  const ghost = "inline-flex h-10 items-center gap-2 rounded-lg border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60";
-  const primary = "inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-70";
+  const ghost = "inline-flex h-8 items-center gap-1.5 rounded-lg border bg-background px-3 text-[13px] font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60";
+  const primary = "inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-[13px] font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-70";
   const saveAsDialog = useRef<HTMLDialogElement>(null);
   const [saveAsOpen, setSaveAsOpen] = useState(false);
   const openSaveAs = () => {
@@ -325,36 +391,33 @@ export function DielineTopBar({
   const mayHere = canSave && signedIn;
   const whyNot = signedIn ? undefined : "Log in to save";
   return (
-    <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4">
+    <header className="relative flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4">
       <Link href="/" aria-label={`${site.name} home`} className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
         <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden><path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z" /><path d="M3 7.5 12 12l9-4.5M12 12v9" /></svg>
       </Link>
       <h1 className="mr-1 hidden min-w-0 max-w-[16rem] truncate text-base font-semibold sm:block" title={title}>{title}</h1>
       <MainMenu name={name} onName={onName} projectId={projectId} canSave={mayHere} saveHint={whyNot} saving={saving} onSaveAs={openSaveAs} />
 
+      {centre ? <div className="pointer-events-none absolute inset-x-0 top-1/2 hidden -translate-y-1/2 justify-center lg:flex"><div className="pointer-events-auto">{centre}</div></div> : null}
+
       <div className="ml-auto flex items-center gap-2">
-        <button type="submit" form="project-form" disabled={saving || !mayHere} className={`${ghost} hidden sm:inline-flex`} title={whyNot ?? (mode === "edit" ? "Save the changes to this project" : "Save this as a project in My projects")}>
-          <Save className="size-4" aria-hidden /> {saving ? "Saving…" : "Save"}
-        </button>
-        <button type="button" disabled={!mayHere} onClick={openSaveAs} className={`${ghost} hidden md:inline-flex`} title={whyNot ?? "Save what you see as a new project with another name"}>
-          <CopyPlus className="size-4" aria-hidden /> Save as
-        </button>
+        <SaveSplit saving={saving} disabled={!mayHere} why={whyNot} saveTitle={mode === "edit" ? "Save the changes to this project" : "Save this as a project in My projects"} onSaveAs={openSaveAs} />
         {mode === "edit" && projectId ? (
           <Link href={`/editor/${projectId}`} className={ghost}>
-            Design Online <ExternalLink className="size-4" aria-hidden />
+            Design Online <ExternalLink className="size-3.5" aria-hidden />
           </Link>
         ) : (
           <button type="submit" form="project-form" name="next" value="editor" disabled={saving || !canSave} className={ghost} title="Create a project and open the artwork editor">
-            {saving ? "Creating…" : "Design Online"} <ExternalLink className="size-4" aria-hidden />
+            {saving ? "Creating…" : "Design Online"} <ExternalLink className="size-3.5" aria-hidden />
           </button>
         )}
         {mode === "create" ? (
-          <button type="button" aria-label="Copy link" title="Copy link" onClick={() => void share()} className="grid size-10 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
-            <Share2 className="size-5" aria-hidden />
+          <button type="button" aria-label="Copy link" title="Copy link" onClick={() => void share()} className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+            <Share2 className="size-4" aria-hidden />
           </button>
         ) : null}
         <button type="button" disabled={!canDownload || downloading} onClick={onDownload} className={primary}>
-          <Download className="size-4" aria-hidden /> {downloading ? "Preparing…" : downloadLabel}
+          <Download className="size-3.5" aria-hidden /> {downloading ? "Preparing…" : downloadLabel}
         </button>
         {viewer ? <UserMenuClient name={viewer.name} email={viewer.email} image={viewer.image} /> : null}
       </div>

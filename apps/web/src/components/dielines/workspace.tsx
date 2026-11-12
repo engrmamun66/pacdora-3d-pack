@@ -290,6 +290,23 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
     { group: "Print", title: "Print", open: true },
     { group: "Flaps (advanced)", title: "Flaps (advanced)", open: false },
   ];
+  // Dieline | 3D: what the centre shows. In the header's middle on wide screens, over the canvas on small ones.
+  const viewTabs = (
+    <div role="tablist" aria-label="What to show" className="flex rounded-lg border bg-background/90 p-0.5 text-xs shadow-xs backdrop-blur">
+      {([["dieline", "Dieline"], ["3d", "3D"]] as const).map(([id, text]) => (
+        <button
+          key={id}
+          type="button"
+          role="tab"
+          aria-selected={centre === id}
+          onClick={() => setCentre(id)}
+          className={`rounded-md px-3 py-1 font-medium transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${centre === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+        >
+          {text}
+        </button>
+      ))}
+    </div>
+  );
   const issueText = result.error ?? (otherIssues.length ? otherIssues.map((i) => `${i.path}: ${i.message}`).join("; ") : state.message);
   const issueOk = state.ok && !result.error && !otherIssues.length;
   const num = (k: string) => (typeof resolved[k] === "number" ? (resolved[k] as number) : null);
@@ -333,6 +350,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
         onSaveAs={saveAs}
         saveOptions={saveOptions}
         viewer={viewer}
+        {...(shown && foldable ? { centre: viewTabs } : {})}
       />
 
       {issueText ? (
@@ -446,25 +464,11 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
 
         {/* Centre: the sheet, or the 3D box filling the same space. The tabs sit in the top right corner. */}
         <main className="relative flex min-h-[55vh] min-w-0 flex-col lg:min-h-0">
-          {shown && foldable ? (
-            <div role="tablist" aria-label="What to show" className="absolute top-3 right-4 z-20 flex rounded-lg border bg-background/90 p-0.5 text-sm shadow-xs backdrop-blur">
-              {([["dieline", "Dieline"], ["3d", "3D"]] as const).map(([id, text]) => (
-                <button
-                  key={id}
-                  type="button"
-                  role="tab"
-                  aria-selected={centre === id}
-                  onClick={() => setCentre(id)}
-                  className={`rounded-md px-3.5 py-1.5 font-medium transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${centre === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
-                >
-                  {text}
-                </button>
-              ))}
-            </div>
-          ) : null}
+          {/* Small screens: the tabs stay here; from lg up they are in the middle of the header. */}
+          {shown && foldable ? <div className="absolute top-3 right-4 z-20 lg:hidden">{viewTabs}</div> : null}
           {shown && foldable && centre === "3d" ? (
-            <div className="flex min-h-0 flex-1 flex-col p-4 pt-16">
-              <FoldPreview large thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
+            <div className="flex min-h-0 flex-1 flex-col p-4 max-lg:pt-16">
+              <FoldPreview large materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
             </div>
           ) : shown && src ? (
             <SheetCanvas {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} />
@@ -476,7 +480,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
 
         {/* Right: 3D + file formats */}
         <aside className="flex min-h-0 flex-col gap-4 overflow-y-auto border-t p-4 lg:border-t-0 lg:border-l">
-          {shown && foldable && centre !== "3d" ? <FoldPreview thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} /> : null}
+          {shown && foldable && centre !== "3d" ? <FoldPreview materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} /> : null}
           {shown && !foldable ? (
             <section aria-label="Imported dieline" className="shrink-0 rounded-2xl border p-4 text-sm">
               <h2 className="font-semibold">Imported dieline</h2>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Hand, Maximize, Minus, Plus } from "lucide-react";
+import { Hand, Maximize, Minus, Plus, SlidersHorizontal } from "lucide-react";
 import type { WatermarkStyle } from "@/lib/watermark-settings";
 import { DEFAULT_WATERMARK, SheetWatermark } from "./sheet-watermark";
 
@@ -129,6 +129,27 @@ export function SheetCanvas<T extends Record<string, boolean>>({
     e.preventDefault();
   };
 
+  // The view options sit in a small popup (one button in the toolbar) instead of a row of buttons.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const away = (e: PointerEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc, true);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", esc, true);
+    };
+  }, [menuOpen]);
+
   const toggle = (key: Extract<keyof T, string>, label: string) => (
     <button
       key={key}
@@ -136,9 +157,12 @@ export function SheetCanvas<T extends Record<string, boolean>>({
       role="switch"
       aria-checked={toggles[key]}
       onClick={() => onToggles({ ...toggles, [key]: !toggles[key] })}
-      className={`h-8 whitespace-nowrap rounded-md px-2.5 text-xs font-medium transition-colors ${toggles[key] ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+      className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
-      {label}
+      <span className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${toggles[key] ? "bg-primary" : "bg-muted-foreground/30"}`} aria-hidden>
+        <span className={`absolute top-0.5 size-3 rounded-full bg-background shadow transition-[left] ${toggles[key] ? "left-[0.8125rem]" : "left-0.5"}`} />
+      </span>
+      <span className="whitespace-nowrap">{label}</span>
     </button>
   );
 
@@ -206,7 +230,24 @@ export function SheetCanvas<T extends Record<string, boolean>>({
           <Maximize className="size-4" />
         </button>
         <span className="mx-1 h-5 w-px bg-border" aria-hidden />
-        {toggleDefs.map((d) => toggle(d.key, d.label))}
+        <div ref={menuRef} className="relative">
+          <button
+            type="button"
+            aria-label="View options"
+            aria-haspopup="true"
+            aria-expanded={menuOpen}
+            title="View options"
+            onClick={() => setMenuOpen((o) => !o)}
+            className={`flex size-8 items-center justify-center rounded-md hover:bg-muted ${menuOpen ? "bg-muted" : ""}`}
+          >
+            <SlidersHorizontal className="size-4" />
+          </button>
+          {menuOpen ? (
+            <div role="group" aria-label="View options" className="absolute bottom-full left-1/2 z-20 mb-3 flex w-44 -translate-x-1/2 flex-col rounded-xl border bg-background p-1 shadow-lg">
+              {toggleDefs.map((d) => toggle(d.key, d.label))}
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );

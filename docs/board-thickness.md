@@ -67,6 +67,15 @@ same point of the drawing, and a pointwise map sends one input point to one outp
 - Rounded fold: a strip of radius t about the hinge line (on the inside face) from the parent's printed normal to the
   child's, plus sector caps at both ends; skipped for hinges whose panels are stacked flaps, and for tiny angles.
 - Pictures: outside = artwork (or board colour) + board grain + watermark; inside = inside colour + grain + flipped watermark.
+- No dark outline lines when there is a real thickness (the board's own silhouette shows the edge); the thin outline
+  only belongs to paper-thin panels (`thickness` 0).
+- Rounded folds use the SAME outside picture as the panels: UV runs from the parent's side of the hinge to the child's
+  over the curved length (board x angle), so colour, grain and watermark wrap around the corner without a seam. Without
+  a picture the strip takes the outside colour. Never give them a flat lighter colour (looked like a highlighted seam).
+- Material decides the look (`apps/web/src/lib/board-look.ts`, by board family id): inside colour, cut-edge colour, grain
+  strength (kraft/corrugated 1, white card 0.2, art paper 0) and corrugation on the cut edge (a flute picture, two liners
+  and a wavy core, repeated along the edge). The outside colour is the family's own colour in `units.ts`. New board family =
+  add it to both files. `CartonView` gets this as `insideColor`, `boardGrain` (number), `boardEdge {color, flute}`.
 
 ## 5. Tests that guard it (keep them green, extend them when a rule changes)
 
@@ -108,3 +117,6 @@ folds and no overlaps. The page console must stay clean.
 - Forgetting `+2t` in `model.size` (the box sinks into the floor), and rebuilding the watermark pictures on every
   fold-slider tick (slow).
 - Flipping inside watermark text horizontally (it must be vertical, checked on screen).
+- Showing the rounded corners / board edges as highlighted, dark-outlined shapes "to show the thickness": it reads as a
+  diagram, not a box. The thickness must be visible only through true geometry (silhouette, rounded edge, cut edge).
+- Headless-browser checks hang when the machine is busy (other Chrome windows, GPU): give the script a long default timeout.

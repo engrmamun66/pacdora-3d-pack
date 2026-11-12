@@ -50,7 +50,7 @@ describe("buildCartonModel", () => {
     const ids = new Set(geo.foldTree.panels.map((p) => p.id));
     const panels = thick.object.children[0]!.children.filter((c) => ids.has(c.name));
     expect(panels).toHaveLength(geo.foldTree.panels.length);
-    for (const g of panels) expect(g.children).toHaveLength(4);
+    for (const g of panels) expect(g.children).toHaveLength(3); // outside, inside, edge walls (no dark outline with a real thickness)
     // Folds between the outer panels are rounded (folds of the stacked inner flaps are not).
     const strips = thick.object.children[0]!.children.filter((c) => c.name.startsWith("fold-"));
     expect(strips.length).toBeGreaterThan(0);

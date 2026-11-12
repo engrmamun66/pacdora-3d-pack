@@ -29,6 +29,11 @@ export interface CartonModelOptions extends FoldOptions {
   /** Picture for the inside face, laid out in flat dieline space over `textureRect` (also needs `textureRect`). */
   readonly insideTexture?: THREE.Texture | null;
   readonly outsideColor?: THREE.ColorRepresentation;
+  /** Colour of the board's cut edge (with a thickness). Default: the outside colour a little darker. */
+  readonly boardEdgeColor?: THREE.ColorRepresentation;
+  /** Picture of the cut edge (e.g. corrugation), repeated every `edgePitchMm` along the edge; its height is the thickness. */
+  readonly boardEdgeTexture?: THREE.Texture | null;
+  readonly edgePitchMm?: number;
   readonly insideColor?: THREE.ColorRepresentation;
   readonly edgeColor?: THREE.ColorRepresentation;
   /**
@@ -96,11 +101,23 @@ function groundTurn(geo: DielineGeometry, closed: Map<string, Mat4>): THREE.Quat
  */
 /**
  * The outside of every fold is a rounded corner of radius `board`, centred on the hinge line (which lies on the
- * board's inside face): a strip along the hinge with a sector cap at each end. Folds of flaps that are stacked
- * (they are moved off their hinge) get none.
+ * board's inside face): a strip along the hinge with a sector cap at each end. A stacked flap (moved off its hinge to
+ * clear the layer below) is joined by a strip that drifts from the hinge line to the flap's own, so it stays smooth.
  */
-function addRoundedFolds(inner: THREE.Group, geo: DielineGeometry, world: Map<string, Mat4>, board: number, color: THREE.ColorRepresentation): void {
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0, side: THREE.DoubleSide });
+type Vec2Like = { readonly x: number; readonly y: number };
+
+function addRoundedFolds(
+  inner: THREE.Group,
+  geo: DielineGeometry,
+  world: Map<string, Mat4>,
+  board: number,
+  color: THREE.ColorRepresentation,
+  texture: { map: THREE.Texture; rect: TextureRect } | null,
+): void {
+  // The rounded corner looks like the board next to it: same picture (sampled along the hinge line, so the colour runs on
+  // without a seam), else the same colour.
+  const mat = new THREE.MeshStandardMaterial({ color: texture ? 0xffffff : color, map: texture?.map ?? null, roughness: 0.75, metalness: 0, side: THREE.DoubleSide });
+  const uvAt = (x: number, y: number): [number, number] => (texture ? [(x - texture.rect.minX) / texture.rect.width, 1 - (y - texture.rect.minY) / texture.rect.height] : [0, 0]);
   const panels = new Map(geo.foldTree.panels.map((p) => [p.id, p]));
   for (const h of geo.foldTree.hinges) {
     const parent = panels.get(h.parentId);
@@ -108,9 +125,15 @@ function addRoundedFolds(inner: THREE.Group, geo: DielineGeometry, world: Map<st
     const mP = world.get(h.parentId);
     const mC = world.get(h.childId);
     if (!parent || !child || !mP || !mC) continue;
-    if ((LAYER[parent.role] ?? 0) > 0 || (LAYER[child.role] ?? 0) > 0) continue;
-    const A = new THREE.Vector3(...Object.values(transformPoint(mP, flatPoint(h.a))) as [number, number, number]);
-    const B = new THREE.Vector3(...Object.values(transformPoint(mP, flatPoint(h.b))) as [number, number, number]);
+    const vec3 = (m: Mat4, p: Vec2Like) => {
+      const q = transformPoint(m, { x: p.x, y: p.y, z: 0 });
+      return new THREE.Vector3(q.x, q.y, q.z);
+    };
+    const A = vec3(mP, h.a);
+    const B = vec3(mP, h.b);
+    // A stacked flap was moved off its hinge to clear the layer below: the strip drifts from the parent's hinge line to the flap's own.
+    const A2 = vec3(mC, h.a).sub(A);
+    const B2 = vec3(mC, h.b).sub(B);
     const axis = B.clone().sub(A);
     if (axis.length() < 1e-9) continue;
     axis.normalize();
@@ -130,29 +153,51 @@ function addRoundedFolds(inner: THREE.Group, geo: DielineGeometry, world: Map<st
     const around = new THREE.Vector3().crossVectors(axis, nP);
     const rim = (k: number) => nP.clone().multiplyScalar(Math.cos(psi * k)).addScaledVector(around, Math.sin(psi * k)).multiplyScalar(board);
     const pos: number[] = [];
+    const uv: number[] = [];
     const idx: number[] = [];
+    // The picture runs on around the corner: the strip samples the flat sheet from the parent's side of the hinge to the child's,
+    // over the length of the curved outside (board x angle).
+    const hx = h.b.x - h.a.x;
+    const hy = h.b.y - h.a.y;
+    const hl = Math.hypot(hx, hy) || 1;
+    let nfx = -hy / hl;
+    let nfy = hx / hl;
+    const cc = child.polygon.reduce((acc, q) => ({ x: acc.x + q.x / child.polygon.length, y: acc.y + q.y / child.polygon.length }), { x: 0, y: 0 });
+    if ((cc.x - h.a.x) * nfx + (cc.y - h.a.y) * nfy < 0) {
+      nfx = -nfx;
+      nfy = -nfy;
+    }
+    const arc = board * Math.abs(psi);
+    const uvOf = (end: Vec2Like, k: number) => uvAt(end.x + nfx * (k - 0.5) * arc, end.y + nfy * (k - 0.5) * arc);
     for (let i = 0; i <= steps; i++) {
-      const r = rim(i / steps);
-      const a = A.clone().add(r);
-      const b = B.clone().add(r);
+      const k = i / steps;
+      const r = rim(k);
+      const a = A.clone().addScaledVector(A2, k).add(r);
+      const b = B.clone().addScaledVector(B2, k).add(r);
       pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
+      uv.push(...uvOf(h.a, i / steps), ...uvOf(h.b, i / steps));
       if (i > 0) {
         const o = (i - 1) * 2;
         idx.push(o, o + 1, o + 2, o + 1, o + 3, o + 2);
       }
     }
     // Sector caps: a fan from the hinge line to the rim, at each end.
-    for (const end of [A, B]) {
+    for (const [end, drift, flat] of [[A, A2, h.a], [B, B2, h.b]] as const) {
       const c = pos.length / 3;
-      pos.push(end.x, end.y, end.z);
+      const mid = end.clone().addScaledVector(drift, 0.5);
+      pos.push(mid.x, mid.y, mid.z);
+      uv.push(...uvOf(flat, 0.5));
       for (let i = 0; i <= steps; i++) {
-        const r = end.clone().add(rim(i / steps));
+        const k = i / steps;
+        const r = end.clone().addScaledVector(drift, k).add(rim(k));
         pos.push(r.x, r.y, r.z);
+        uv.push(...uvOf(flat, k));
       }
       for (let i = 0; i < steps; i++) idx.push(c, c + 1 + i, c + 2 + i);
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
     g.setIndex(idx);
     g.computeVertexNormals();
     const mesh = new THREE.Mesh(g, mat);
@@ -199,7 +244,16 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
   });
   const edgeMat = new THREE.LineBasicMaterial({ color: opts.edgeColor ?? 0x444444 });
   // The cut edge of the board (only with a thickness).
-  const wallMat = new THREE.MeshStandardMaterial({ color: opts.insideColor ?? 0xc8a97e, roughness: 0.95, metalness: 0, side: THREE.DoubleSide });
+  const edgeTexture = opts.boardEdgeTexture ?? null;
+  if (edgeTexture) edgeTexture.wrapS = THREE.RepeatWrapping;
+  const edgePitch = opts.edgePitchMm && opts.edgePitchMm > 0 ? opts.edgePitchMm : 8;
+  const wallMat = new THREE.MeshStandardMaterial({
+    color: edgeTexture ? 0xffffff : opts.boardEdgeColor ?? new THREE.Color(opts.outsideTexture ? (opts.insideColor ?? 0xc8a97e) : (opts.outsideColor ?? 0xffffff)).multiplyScalar(0.9),
+    map: edgeTexture,
+    roughness: 0.95,
+    metalness: 0,
+    side: THREE.DoubleSide,
+  });
 
   const inner = new THREE.Group();
   if (turn && turnedBox) {
@@ -210,6 +264,8 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
     inner.position.set(-centre.x, -centre.y, -centre.z);
   }
 
+  /** Where each panel finally stands (its fold, plus the shift of a stacked flap), for the rounded folds. */
+  const placed = new Map<string, Mat4>();
   for (const panel of geo.foldTree.panels) {
     const outline = flattenOutline(panelOutline(panel), 0.05); // arcs as fine polylines for display
     const shape = new THREE.Shape(outline.map((v) => new THREE.Vector2(v.x, v.y)));
@@ -259,23 +315,32 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
       matrix.premultiply(new THREE.Matrix4().makeTranslation(n.x * s, n.y * s, n.z * s));
     }
 
+    placed.set(panel.id, matrix.elements.slice() as Mat4);
     const g = new THREE.Group();
     g.name = panel.id;
     g.matrixAutoUpdate = false;
     g.matrix.copy(matrix);
-    g.add(outside, insideMesh, edges);
+    // With a real thickness the board's own silhouette shows the edge; the thin dark outline only belongs to paper-thin panels.
+    g.add(outside, insideMesh);
+    if (board === 0) g.add(edges);
     if (board > 0) {
-      // Walls along the outline, from the printed face to the inside face.
+      // Walls along the outline, from the printed face to the inside face (each edge has its own vertices: its picture runs along it).
       const wall: number[] = [];
+      const wallUv: number[] = [];
       const idx: number[] = [];
+      let run = 0;
       outline.forEach((v, i) => {
-        wall.push(v.x, v.y, -board, v.x, v.y, 0);
-        const a = i * 2;
-        const b = ((i + 1) % outline.length) * 2;
-        idx.push(a, a + 1, b, a + 1, b + 1, b);
+        const w = outline[(i + 1) % outline.length]!;
+        const len = Math.hypot(w.x - v.x, w.y - v.y);
+        const c = wall.length / 3;
+        wall.push(v.x, v.y, -board, v.x, v.y, 0, w.x, w.y, -board, w.x, w.y, 0);
+        wallUv.push(run / edgePitch, 0, run / edgePitch, 1, (run + len) / edgePitch, 0, (run + len) / edgePitch, 1);
+        idx.push(c, c + 1, c + 2, c + 1, c + 3, c + 2);
+        run += len;
       });
       const wallGeom = new THREE.BufferGeometry();
       wallGeom.setAttribute("position", new THREE.Float32BufferAttribute(wall, 3));
+      wallGeom.setAttribute("uv", new THREE.Float32BufferAttribute(wallUv, 2));
       wallGeom.setIndex(idx);
       wallGeom.computeVertexNormals();
       const wallMesh = new THREE.Mesh(wallGeom, wallMat);
@@ -285,7 +350,7 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
     inner.add(g);
   }
 
-  if (board > 0) addRoundedFolds(inner, geo, world, board, opts.outsideTexture ? (opts.insideColor ?? 0xc8a97e) : (opts.outsideColor ?? 0xffffff));
+  if (board > 0) addRoundedFolds(inner, geo, placed, board, opts.outsideColor ?? 0xffffff, opts.outsideTexture && rect ? { map: opts.outsideTexture, rect } : null);
 
   const object = new THREE.Group();
   object.name = "carton";

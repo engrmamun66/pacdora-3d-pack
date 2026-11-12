@@ -5,6 +5,7 @@ import { Box, Check, DraftingCompass, FileText, PenTool, Play, RotateCcw, Spline
 import type { DielineGeometry, WatermarkSpec } from "@packaging/dieline-engine";
 import { ILLUSTRATOR_PROFILES } from "@packaging/render-print/profiles";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
+import { boardLookOf } from "@/lib/board-look";
 import { GridToggle } from "@/components/viewer3d/grid-toggle";
 import { RotationControls } from "@/components/viewer3d/rotation-controls";
 import type { ViewSettings } from "@/lib/view-settings";
@@ -81,7 +82,10 @@ export function FoldPreview({
   large = false,
   thickness = 0,
   watermark = null,
+  materialId,
 }: {
+  /** Board family (units.ts id): decides the look of the inside, the cut edge and the surface grain. */
+  materialId?: string;
   /** Board thickness in mm, shown as the thickness of the panels in 3D. */
   thickness?: number;
   /** Printed faintly on the outside of the box; null = none. */
@@ -95,6 +99,7 @@ export function FoldPreview({
   color: string;
   viewRef: React.RefObject<CartonViewHandle | null>;
 }) {
+  const look = boardLookOf(materialId);
   const anim = useRef<number | null>(null);
   const play = () => {
     if (anim.current) cancelAnimationFrame(anim.current);
@@ -110,7 +115,7 @@ export function FoldPreview({
   };
   return (
     <section aria-label="3D preview" className={`relative overflow-hidden rounded-2xl border bg-muted/40 ${large ? "flex min-h-0 flex-1 flex-col" : "shrink-0"}`}>
-      <CartonView ref={viewRef} className={large ? "min-h-0 w-full flex-1" : "h-56 w-full"} geo={geo} texture={null} textureRect={null} progress={progress} outsideColor={color} insideColor="#c8a97e" thickness={thickness} watermark={watermark} boardGrain initialView={initialView} />
+      <CartonView ref={viewRef} className={large ? "min-h-0 w-full flex-1" : "h-56 w-full"} geo={geo} texture={null} textureRect={null} progress={progress} outsideColor={color} insideColor={look.inside} thickness={thickness} watermark={watermark} boardGrain={look.grain} boardEdge={{ color: look.edge, flute: look.flute }} initialView={initialView} />
       <div className="flex items-center gap-2 border-t bg-background px-3 py-2 text-xs">
         <label className="flex flex-1 items-center gap-2">
           Open

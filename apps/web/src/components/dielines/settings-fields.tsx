@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { Check, ChevronDown, ChevronRight, CircleHelp } from "lucide-react";
 import type { ParamDescriptor } from "@packaging/dieline-engine";
-import { MM_PER_INCH, fmtRange, fromDisplay, gradeLabel, toDisplay, type MaterialGrade, type MaterialType, type Unit } from "./units";
+import { MM_PER_INCH, fmtLength, fmtRange, fromDisplay, gradeLabel, toDisplay, type MaterialGrade, type MaterialType, type Unit } from "./units";
 
 const inputCls =
   "h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground";
@@ -301,8 +301,10 @@ export function MaterialPicker({
                     className={`${row} hover:bg-muted focus-visible:bg-muted ${on ? "font-medium text-primary" : ""}`}
                   >
                     <span className="size-5 shrink-0 rounded-full border" style={{ background: activeType.color }} aria-hidden />
-                    <span className="flex-1">{gradeLabel(g, unit)}</span>
-                    {on ? <Check className="size-4" aria-hidden /> : null}
+                    <span className="flex-1">{g.name}</span>
+                    {/* The thickness a standard grade has, or the one a flute / custom item starts with. */}
+                    <span className="text-xs font-normal text-muted-foreground tabular-nums">{fmtLength(g.thickness, unit)}</span>
+                    <span className="grid size-4 place-items-center">{on ? <Check className="size-4" aria-hidden /> : null}</span>
                   </button>
                 );
               })}
