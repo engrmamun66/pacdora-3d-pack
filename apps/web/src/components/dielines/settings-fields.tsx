@@ -323,9 +323,12 @@ export function ThicknessField({
   value,
   unit,
   grade,
+  sizeMode,
   error,
   onChange,
 }: {
+  /** "manufacture" or "inner": only inner lets the thickness change the sheet. */
+  sizeMode?: string;
   /** The engine's thickness parameter (limits in mm). */
   p: ParamDescriptor & { kind: "number" };
   /** mm text. */
@@ -355,7 +358,12 @@ export function ThicknessField({
           {locked ? "Thickness" : "Custom thickness"}
           {grade?.suggest ? <span className="font-normal text-muted-foreground"> ({fmtRange(grade.suggest, unit)})</span> : null}
         </label>
-        <FieldHelp label="Thickness">{locked ? "Set by the material. With Size mode set to Inner, the fold allowance follows it." : "With Size mode set to Inner, the fold allowance follows this thickness."}</FieldHelp>
+        <FieldHelp label="Thickness">{(locked ? "Set by the material. " : "") +
+            "A thicker board moves the fold lines outward, so the flat sheet and the 3D box both change and the inside of the box stays the same. " +
+            (sizeMode === "inner"
+              ? "Sizes you type are the inside of the box."
+              : "A size you type is taken as the crease-to-crease size, so it does not move. Clear it to follow the thickness.")}
+        </FieldHelp>
       </div>
       <div className="flex items-center gap-2">
         <button type="button" aria-label="Thinner" disabled={locked} onClick={() => bump(-1)} className={btn}>−</button>

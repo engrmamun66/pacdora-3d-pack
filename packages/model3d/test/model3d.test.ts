@@ -44,6 +44,30 @@ describe("buildCartonModel", () => {
     for (const g of panels) expect(g.children).toHaveLength(3);
   });
 
+  it("with a board thickness the dieline is the inside face, the board grows outward and folds are rounded", () => {
+    const thin = buildCartonModel(geo, { progress: 1 });
+    const thick = buildCartonModel(geo, { progress: 1, thickness: 2 });
+    const ids = new Set(geo.foldTree.panels.map((p) => p.id));
+    const panels = thick.object.children[0]!.children.filter((c) => ids.has(c.name));
+    expect(panels).toHaveLength(geo.foldTree.panels.length);
+    for (const g of panels) expect(g.children).toHaveLength(4);
+    // Folds between the outer panels are rounded (folds of the stacked inner flaps are not).
+    const strips = thick.object.children[0]!.children.filter((c) => c.name.startsWith("fold-"));
+    expect(strips.length).toBeGreaterThan(0);
+    expect(strips.length).toBeLessThanOrEqual(geo.foldTree.hinges.length);
+    // The front panel keeps its inside face where it was and grows 2 mm outward.
+    const front = (m: typeof thick) => worldBox(m.object.getObjectByName("front")!);
+    expect(front(thick).min.z).toBeCloseTo(front(thin).min.z, 4);
+    expect(front(thick).max.z - front(thick).min.z).toBeCloseTo(2, 4);
+    // Folds turn about the inside face, so the closed box is exactly 2 x 2 mm larger each way: nothing pokes out or sinks in.
+    const a = worldBox(thin.object).getSize(new THREE.Vector3());
+    const b = worldBox(thick.object).getSize(new THREE.Vector3());
+    expect(b.x - a.x).toBeCloseTo(4, 3);
+    expect(b.y - a.y).toBeCloseTo(4, 3);
+    expect(b.z - a.z).toBeCloseTo(4, 3);
+    expect(thick.size.x - thin.size.x).toBeCloseTo(4, 6);
+  });
+
   it("closed model is exactly width x height x depth, centred, y-up", () => {
     const { object, size } = buildCartonModel(geo, { progress: 1 });
     expect(size.x).toBeCloseTo(100, 6);

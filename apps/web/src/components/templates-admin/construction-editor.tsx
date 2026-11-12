@@ -213,7 +213,7 @@ export function ConstructionEditor({ fold, onChange }: { fold: FoldSetup; onChan
           <NumberBox label="Allowance" value={c?.allowanceFactor} placeholder={String(CONSTRUCTION_DEFAULTS.allowanceFactor)} min={FACTOR_RANGE.min} max={FACTOR_RANGE.max} step={0.1} onChange={(v) => set({ allowanceFactor: v })} />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
-          <span className="flex items-center gap-1">Cut gap (x thickness) <InfoTip label="Cut gap">Slot between a dust flap and the closure beside it ({Math.round(res.cutGapFactor * res.thickness * 100) / 100} mm). Shown in the dieline info; the drawn slots are not changed.</InfoTip></span>
+          <span className="flex items-center gap-1">Cut gap (x thickness) <InfoTip label="Cut gap">Slot between a dust flap and the closure beside it ({Math.round(res.cutGapFactor * res.thickness * 100) / 100} mm at the drawn board). A thicker board pulls each flap corner back by this factor x the extra thickness (a thinner one narrows a drawn slot), so the dieline and the 3D box follow the board.</InfoTip></span>
           <NumberBox label="Cut gap" value={c?.cutGapFactor} placeholder={String(CONSTRUCTION_DEFAULTS.cutGapFactor)} min={FACTOR_RANGE.min} max={FACTOR_RANGE.max} step={0.1} onChange={(v) => set({ cutGapFactor: v })} />
         </label>
       </div>

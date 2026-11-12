@@ -15,6 +15,7 @@ import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { DielineInfo } from "./dieline-info";
 import { boxSizes, dielineStats } from "./info-math";
 import { DielineTopBar } from "./dieline-top-bar";
+import type { SaveAsOptions } from "@/server/projects";
 import { TemplatePicker } from "./template-picker";
 import { MaterialInfoButton } from "./material-info";
 import { MaterialPicker, ParamField, ThicknessField } from "./settings-fields";
@@ -42,6 +43,8 @@ interface Props {
   watermark?: WatermarkSpec | null;
   /** The signed-in visitor (profile icon in the header); null/absent = signed out. */
   viewer?: { name: string; email: string; image: string | null } | null;
+  /** The visitor's own categories and tags for "Save as" (absent or empty lists = nothing to choose). */
+  saveOptions?: SaveAsOptions | null;
 }
 
 type TabId = "dielines" | "basic" | "info" | "more";
@@ -75,7 +78,7 @@ function saveBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-export function DielineWorkspace({ mode, generatorId, imported, initialView = null, title, description, initialName, initialParams, modelId, watermark, viewer = null }: Props) {
+export function DielineWorkspace({ mode, generatorId, imported, initialView = null, title, description, initialName, initialParams, modelId, watermark, viewer = null, saveOptions = null }: Props) {
   const router = useRouter();
   const gen = useMemo(() => (imported ? createImportedGenerator(imported.templateId, imported.flat as FlatDieline, imported.fold ?? null) : getGenerator(generatorId)), [generatorId, imported]);
   const [values, setValues] = useState<Values>(() =>
@@ -139,6 +142,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
     [shown, unit, toggles, imported],
   );
 
+  const [centre, setCentre] = useState<"dieline" | "3d">("dieline");
   const action = mode.kind === "create" ? createProject : updateProject;
   const [state, formAction, pending] = useActionState<DesignState, FormData>(action, IDLE);
 
@@ -176,9 +180,14 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   };
 
   /** "Save as": the current values become a new project, which then opens. */
-  const saveAs = async (newName: string): Promise<{ ok: boolean; message: string | null }> => {
+  const saveAs = async (newName: string, organize?: { categoryId: string | null; tagIds: string[] }): Promise<{ ok: boolean; message: string | null }> => {
     const fd = formData(mode.kind === "edit" ? mode.projectId : undefined);
     fd.set("name", newName);
+    if (organize) {
+      fd.set("organized", "1");
+      fd.set("categoryId", organize.categoryId ?? "");
+      for (const id of organize.tagIds) fd.append("tagId", id);
+    }
     const r = await saveProjectAs(fd);
     if (r.ok && r.id) {
       notify.success("Saved as a new project", { description: newName });
@@ -322,6 +331,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
         downloadLabel="Download the dieline"
         onDownload={() => void download()}
         onSaveAs={saveAs}
+        saveOptions={saveOptions}
         viewer={viewer}
       />
 
@@ -394,6 +404,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
                       value={values.thickness || (typeof resolved.thickness === "number" ? String(resolved.thickness) : "")}
                       unit={unit}
                       grade={materialGrade}
+                      sizeMode={typeof resolved.sizeMode === "string" ? resolved.sizeMode : "manufacture"}
                       {...(issueFor("thickness") ? { error: issueFor("thickness")! } : {})}
                       onChange={(v) => setValues((s) => ({ ...s, thickness: v }))}
                     />
@@ -433,9 +444,29 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
           </div>
         </aside>
 
-        {/* Centre: sheet */}
-        <main className="flex min-h-[55vh] min-w-0 flex-col lg:min-h-0">
-          {shown && src ? (
+        {/* Centre: the sheet, or the 3D box filling the same space. The tabs sit in the top right corner. */}
+        <main className="relative flex min-h-[55vh] min-w-0 flex-col lg:min-h-0">
+          {shown && foldable ? (
+            <div role="tablist" aria-label="What to show" className="absolute top-3 right-4 z-20 flex rounded-lg border bg-background/90 p-0.5 text-sm shadow-xs backdrop-blur">
+              {([["dieline", "Dieline"], ["3d", "3D"]] as const).map(([id, text]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={centre === id}
+                  onClick={() => setCentre(id)}
+                  className={`rounded-md px-3.5 py-1.5 font-medium transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${centre === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {shown && foldable && centre === "3d" ? (
+            <div className="flex min-h-0 flex-1 flex-col p-4 pt-16">
+              <FoldPreview large thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
+            </div>
+          ) : shown && src ? (
             <SheetCanvas {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} />
           ) : (
             <p className="p-6 text-sm text-muted-foreground">Enter valid dimensions to see the dieline.</p>
@@ -445,7 +476,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
 
         {/* Right: 3D + file formats */}
         <aside className="flex min-h-0 flex-col gap-4 overflow-y-auto border-t p-4 lg:border-t-0 lg:border-l">
-          {shown && foldable ? <FoldPreview initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} /> : null}
+          {shown && foldable && centre !== "3d" ? <FoldPreview thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} /> : null}
           {shown && !foldable ? (
             <section aria-label="Imported dieline" className="shrink-0 rounded-2xl border p-4 text-sm">
               <h2 className="font-semibold">Imported dieline</h2>

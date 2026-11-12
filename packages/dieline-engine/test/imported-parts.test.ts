@@ -475,12 +475,13 @@ describe("the board of a template without box settings", () => {
     expect(g.generate({ thickness: 1.2 }).params).toMatchObject({ thickness: 1.2 });
   });
 
-  it("does not change the drawing, and rejects a board outside the range", () => {
+  it("a template with box settings follows the board; one without keeps its drawing; a board outside the range is rejected", () => {
     const g = createImportedGenerator("t", BOX_AND_LID, detected);
     const a = g.generate({ width: 224 });
     const b = g.generate({ width: 224, thickness: 2 });
-    expect(b.cutBounds).toEqual(a.cutBounds);
-    expect(b.foldTree.panels.map((p) => p.polygon)).toEqual(a.foldTree.panels.map((p) => p.polygon));
+    expect(b.cutBounds).not.toEqual(a.cutBounds);
+    const flatOnly = createImportedGenerator("t", BOX_AND_LID); // no box settings
+    expect(flatOnly.generate({ width: 224, thickness: 2 }).cutBounds).toEqual(flatOnly.generate({ width: 224 }).cutBounds);
     expect(() => g.generate({ thickness: 99 })).toThrow();
   });
 });

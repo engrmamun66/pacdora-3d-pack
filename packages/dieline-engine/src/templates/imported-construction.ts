@@ -30,7 +30,7 @@ export interface Construction {
   readonly thickness?: number;
   /** Inner mode: crease-to-crease = inner + allowanceFactor x thickness. Default 1. */
   readonly allowanceFactor?: number;
-  /** Slot between a dust flap and the closure beside it = cutGapFactor x thickness. Information only. Default 1. */
+  /** The cut slot between a dust flap and the closure beside it follows the board: it is cutGapFactor x (thickness - the drawn thickness) wider than drawn. Default 1. */
   readonly cutGapFactor?: number;
   /** What each of the three sizes is called. Missing = guessed from the sizes. */
   readonly names?: Partial<Record<DimKey, DimName>>;
@@ -149,6 +149,8 @@ export const partKey = (index: number, key: string) => `p${index}_${key}`;
 export function sizeTargets(plan: ResizePlan, c: ResolvedConstruction, k: number, input: SizeInput): SizeTargets {
   const off = sizeOffset(input.mode, input.allowance, input.thickness);
   const adminOff = sizeOffset(c.sizeMode, input.allowance, c.thickness);
+  // The cut slots beside the dust flaps are as wide as drawn at the board the drawing was made for, and follow the thickness from there.
+  const slotDelta = c.cutGapFactor * (input.thickness - c.thickness);
   const sizes: Record<string, number> = {};
   const shown: Record<string, number> = {};
   const range: Record<string, { min: number; max: number }> = {};
@@ -157,9 +159,10 @@ export function sizeTargets(plan: ResizePlan, c: ResolvedConstruction, k: number
   /** One size: what the sheet gets, what the customer sees, and the allowed range. */
   const solve = (natural: number, isDim: boolean, typed: number | undefined, start: number | undefined) => {
     const plain = natural * k;
-    // Crease-to-crease size with nothing typed: the starting size, or as drawn; the inside stays the same when the board thickness changes.
+    // Crease-to-crease size with nothing typed: the starting size, or as drawn. A thicker board moves the folds
+    // outward (the inside stays the same), in either size mode; a size the customer typed is taken as it is.
     const base = start !== undefined ? start + (isDim ? adminOff : 0) : plain;
-    const byDefault = isDim && input.mode === "inner" ? base + input.allowance * (input.thickness - c.thickness) : base;
+    const byDefault = isDim ? base + input.allowance * (input.thickness - c.thickness) : base;
     const crease = typed !== undefined ? typed + (isDim ? off : 0) : byDefault;
     const dimOff = isDim ? off : 0;
     return { plain, crease, shown: typed !== undefined ? typed : crease - dimOff, range: { min: Math.max(0.1, plain * 0.1 - dimOff), max: plain * 10 - dimOff } };
@@ -220,7 +223,8 @@ export function sizeTargets(plan: ResizePlan, c: ResolvedConstruction, k: number
       range[pre(key)] = r.range;
     }
   });
-  return { sizes: { ...(sizes as PartSizes), ...(partSizes.length > 0 ? { parts: partSizes } : {}) }, shown, range, problems };
+  const withSlots = (one: PartSizes): PartSizes => (Math.abs(slotDelta) > 1e-9 ? { ...one, slotDelta } : one);
+  return { sizes: { ...withSlots(sizes as PartSizes), ...(partSizes.length > 0 ? { parts: partSizes.map(withSlots) } : {}) }, shown, range, problems };
 }
 
 /**
@@ -233,6 +237,8 @@ export function creaseSizesOf(params: unknown): PartSizes {
   const mode: SizeMode = p.sizeMode === "inner" ? "inner" : "manufacture";
   const off = sizeOffset(mode, n("allowanceFactor") ?? CONSTRUCTION_DEFAULTS.allowanceFactor, n("thickness") ?? CONSTRUCTION_DEFAULTS.thickness);
   const out: Record<string, number> = {};
+  const slot = n("slotDelta");
+  if (slot !== undefined && slot !== 0) out.slotDelta = slot;
   for (const key of DIM_KEYS) {
     const v = n(key);
     if (v !== undefined) out[key] = v + off;
@@ -248,6 +254,7 @@ export function creaseSizesOf(params: unknown): PartSizes {
       const v = n(partKey(i, key));
       if (v !== undefined) one[key] = (DIM_KEYS as readonly string[]).includes(key) ? v + off : v;
     }
+    if (slot !== undefined && slot !== 0 && Object.keys(one).length > 0) one.slotDelta = slot;
     parts.push(one);
   }
   while (parts.length > 0 && Object.keys(parts[parts.length - 1]!).length === 0) parts.pop();

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { requireUser } from "@/server/session";
-import { getProject } from "@/server/projects";
+import { getProject, getSaveAsOptions } from "@/server/projects";
 import { DielineWorkspace } from "@/components/dielines/workspace";
 import { getWatermark } from "@/server/site-settings";
 import { IMPORTED_GENERATOR_ID } from "@packaging/dieline-engine";
@@ -34,6 +34,7 @@ async function ProjectView({ params }: { params: PageProps<"/projects/[id]">["pa
       initialParams={project.doc.template.params}
       watermark={watermark}
       viewer={{ name: user.name, email: user.email, image: user.image ?? null }}
+      saveOptions={await getSaveAsOptions(user.id, project.id)}
     />
   );
 }

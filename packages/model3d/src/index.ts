@@ -26,6 +26,8 @@ export interface CartonModelOptions extends FoldOptions {
   readonly outsideTexture?: THREE.Texture | null;
   /** Required when `outsideTexture` is given. */
   readonly textureRect?: TextureRect;
+  /** Picture for the inside face, laid out in flat dieline space over `textureRect` (also needs `textureRect`). */
+  readonly insideTexture?: THREE.Texture | null;
   readonly outsideColor?: THREE.ColorRepresentation;
   readonly insideColor?: THREE.ColorRepresentation;
   readonly edgeColor?: THREE.ColorRepresentation;
@@ -35,6 +37,13 @@ export interface CartonModelOptions extends FoldOptions {
    * Not part of the engineering geometry.
    */
   readonly layerGap?: number;
+  /**
+   * Board thickness (mm). The flat dieline is the INSIDE face of the board (folds turn about it, as real board
+   * does); the board grows from it toward the printed side, with edge walls, and every fold gets a rounded
+   * outside corner of radius = thickness. Flaps are stacked clear of it. Default 0 = paper-thin panels.
+   * Visual only: the engineering geometry stays zero-thickness.
+   */
+  readonly thickness?: number;
 }
 
 export interface CartonModel {
@@ -85,8 +94,76 @@ function groundTurn(geo: DielineGeometry, closed: Map<string, Mat4>): THREE.Quat
  * the panel's own flat-sheet coordinates, so artwork drawn on the 2D dieline
  * appears on exactly the same panel in 3D.
  */
+/**
+ * The outside of every fold is a rounded corner of radius `board`, centred on the hinge line (which lies on the
+ * board's inside face): a strip along the hinge with a sector cap at each end. Folds of flaps that are stacked
+ * (they are moved off their hinge) get none.
+ */
+function addRoundedFolds(inner: THREE.Group, geo: DielineGeometry, world: Map<string, Mat4>, board: number, color: THREE.ColorRepresentation): void {
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0, side: THREE.DoubleSide });
+  const panels = new Map(geo.foldTree.panels.map((p) => [p.id, p]));
+  for (const h of geo.foldTree.hinges) {
+    const parent = panels.get(h.parentId);
+    const child = panels.get(h.childId);
+    const mP = world.get(h.parentId);
+    const mC = world.get(h.childId);
+    if (!parent || !child || !mP || !mC) continue;
+    if ((LAYER[parent.role] ?? 0) > 0 || (LAYER[child.role] ?? 0) > 0) continue;
+    const A = new THREE.Vector3(...Object.values(transformPoint(mP, flatPoint(h.a))) as [number, number, number]);
+    const B = new THREE.Vector3(...Object.values(transformPoint(mP, flatPoint(h.b))) as [number, number, number]);
+    const axis = B.clone().sub(A);
+    if (axis.length() < 1e-9) continue;
+    axis.normalize();
+    const nP = new THREE.Vector3(...(Object.values(transformDirection(mP, PRINTED_NORMAL)) as [number, number, number]));
+    const nC = new THREE.Vector3(...(Object.values(transformDirection(mC, PRINTED_NORMAL)) as [number, number, number]));
+    let psi = Math.atan2(axis.dot(new THREE.Vector3().crossVectors(nP, nC)), nP.dot(nC));
+    if (Math.abs(psi) > Math.PI - 1e-4) {
+      // A full fold back: which way it turned follows the side of the hinge the child lies on.
+      const dx = h.b.x - h.a.x;
+      const dy = h.b.y - h.a.y;
+      const cx = child.polygon.reduce((a, q) => a + q.x, 0) / child.polygon.length - h.a.x;
+      const cy = child.polygon.reduce((a, q) => a + q.y, 0) / child.polygon.length - h.a.y;
+      psi = Math.sign(dx * cy - dy * cx) * Math.sign(h.foldAngleDeg || 1) * Math.PI;
+    }
+    if (Math.abs(psi) < 0.02) continue;
+    const steps = Math.max(2, Math.ceil(Math.abs(psi) / (Math.PI / 16)));
+    const around = new THREE.Vector3().crossVectors(axis, nP);
+    const rim = (k: number) => nP.clone().multiplyScalar(Math.cos(psi * k)).addScaledVector(around, Math.sin(psi * k)).multiplyScalar(board);
+    const pos: number[] = [];
+    const idx: number[] = [];
+    for (let i = 0; i <= steps; i++) {
+      const r = rim(i / steps);
+      const a = A.clone().add(r);
+      const b = B.clone().add(r);
+      pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
+      if (i > 0) {
+        const o = (i - 1) * 2;
+        idx.push(o, o + 1, o + 2, o + 1, o + 3, o + 2);
+      }
+    }
+    // Sector caps: a fan from the hinge line to the rim, at each end.
+    for (const end of [A, B]) {
+      const c = pos.length / 3;
+      pos.push(end.x, end.y, end.z);
+      for (let i = 0; i <= steps; i++) {
+        const r = end.clone().add(rim(i / steps));
+        pos.push(r.x, r.y, r.z);
+      }
+      for (let i = 0; i < steps; i++) idx.push(c, c + 1 + i, c + 2 + i);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.castShadow = mesh.receiveShadow = true;
+    mesh.name = `fold-${h.id}`;
+    inner.add(mesh);
+  }
+}
+
 export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions = {}): CartonModel {
-  if (opts.outsideTexture && !opts.textureRect) throw new Error("textureRect is required with outsideTexture");
+  if ((opts.outsideTexture || opts.insideTexture) && !opts.textureRect) throw new Error("textureRect is required with outsideTexture or insideTexture");
   const world = foldTree(geo.foldTree, opts);
   // Centre on the CLOSED carton so the model does not jump while animating.
   const closedWorld = foldTree(geo.foldTree, { progress: 1 });
@@ -99,8 +176,11 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
   const turn = groundTurn(geo, closedWorld);
   const turnedBox = turn ? foldedBounds(geo, closedWorld, turn) : null;
   const standUp = !turn && (geo.foldTree.parts?.length ?? 0) > 0;
-  const size = turnedBox ? turnedBox.getSize(new THREE.Vector3()) : standUp ? new THREE.Vector3(flatSize.x, flatSize.z, flatSize.y) : flatSize;
-  const gap = opts.layerGap ?? 0.3;
+  const sizeFlat = turnedBox ? turnedBox.getSize(new THREE.Vector3()) : standUp ? new THREE.Vector3(flatSize.x, flatSize.z, flatSize.y) : flatSize;
+  const board = Number.isFinite(opts.thickness) && (opts.thickness as number) > 0 ? (opts.thickness as number) : 0;
+  const layerGap = opts.layerGap ?? 0.3;
+  // The board sits outside the dieline's (inside-face) plane on every side.
+  const size = sizeFlat.clone().addScalar(2 * board);
   const rect = opts.textureRect;
 
   const outsideMat = new THREE.MeshStandardMaterial({
@@ -111,12 +191,15 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
     side: THREE.BackSide, // printed side faces -z in the flat frame
   });
   const insideMat = new THREE.MeshStandardMaterial({
-    color: opts.insideColor ?? 0xc8a97e,
+    color: opts.insideTexture ? 0xffffff : (opts.insideColor ?? 0xc8a97e),
+    map: opts.insideTexture ?? null,
     roughness: 0.9,
     metalness: 0,
     side: THREE.FrontSide,
   });
   const edgeMat = new THREE.LineBasicMaterial({ color: opts.edgeColor ?? 0x444444 });
+  // The cut edge of the board (only with a thickness).
+  const wallMat = new THREE.MeshStandardMaterial({ color: opts.insideColor ?? 0xc8a97e, roughness: 0.95, metalness: 0, side: THREE.DoubleSide });
 
   const inner = new THREE.Group();
   if (turn && turnedBox) {
@@ -143,6 +226,8 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
 
     const outside = new THREE.Mesh(geom, outsideMat);
     const insideMesh = new THREE.Mesh(geom, insideMat);
+    // With a thickness the dieline is the inside face; the printed face sits one board thickness outside it.
+    if (board > 0) outside.position.z = -board;
     outside.castShadow = insideMesh.castShadow = true;
     outside.receiveShadow = insideMesh.receiveShadow = true;
     const edges = new THREE.LineLoop(
@@ -153,8 +238,8 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
     const m = world.get(panel.id)!;
     const matrix = new THREE.Matrix4().fromArray(m as number[]);
     const layer = LAYER[panel.role] ?? 0;
-    if (layer > 0 && gap > 0) {
-      // Push the flap toward the box centre along its own normal.
+    if (layer > 0 && layerGap + board > 0) {
+      // Push the flap toward the box centre along its own normal, so it stacks on the layer below.
       const n: Vec3 = transformDirection(m, PRINTED_NORMAL);
       const c = panel.polygon.reduce<Vec3>(
         (acc, v) => {
@@ -165,7 +250,12 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
         { x: 0, y: 0, z: 0 },
       );
       const toCentre = (centre.x - c.x) * n.x + (centre.y - c.y) * n.y + (centre.z - c.z) * n.z;
-      const s = Math.sign(toCentre) * gap * layer;
+      const toward = Math.sign(toCentre);
+      // Distance of the flap's board from the layer below: a small gap per layer plus the boards between.
+      const d = layerGap * layer + board * (layer - 1);
+      // The board grows from the flap's plane toward the printed normal. Facing the centre, it grows toward the
+      // centre already; facing away, it grows toward the wall, so the plane moves one thickness further in.
+      const s = toward * (d + (toward < 0 ? board : 0));
       matrix.premultiply(new THREE.Matrix4().makeTranslation(n.x * s, n.y * s, n.z * s));
     }
 
@@ -174,8 +264,28 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
     g.matrixAutoUpdate = false;
     g.matrix.copy(matrix);
     g.add(outside, insideMesh, edges);
+    if (board > 0) {
+      // Walls along the outline, from the printed face to the inside face.
+      const wall: number[] = [];
+      const idx: number[] = [];
+      outline.forEach((v, i) => {
+        wall.push(v.x, v.y, -board, v.x, v.y, 0);
+        const a = i * 2;
+        const b = ((i + 1) % outline.length) * 2;
+        idx.push(a, a + 1, b, a + 1, b + 1, b);
+      });
+      const wallGeom = new THREE.BufferGeometry();
+      wallGeom.setAttribute("position", new THREE.Float32BufferAttribute(wall, 3));
+      wallGeom.setIndex(idx);
+      wallGeom.computeVertexNormals();
+      const wallMesh = new THREE.Mesh(wallGeom, wallMat);
+      wallMesh.castShadow = wallMesh.receiveShadow = true;
+      g.add(wallMesh);
+    }
     inner.add(g);
   }
+
+  if (board > 0) addRoundedFolds(inner, geo, world, board, opts.outsideTexture ? (opts.insideColor ?? 0xc8a97e) : (opts.outsideColor ?? 0xffffff));
 
   const object = new THREE.Group();
   object.name = "carton";

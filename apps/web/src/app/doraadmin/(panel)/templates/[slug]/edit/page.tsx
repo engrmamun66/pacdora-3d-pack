@@ -1,5 +1,4 @@
 import { PageHeader } from "@/components/admin/page-header";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getGenerator, type FoldSetup } from "@packaging/dieline-engine";
 import type { ImportedDieline, Role } from "@packaging/svg-import";
@@ -31,7 +30,6 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
       <PageHeader
         title={`Edit ${t.name}`}
         description={t.source === "builtin" ? "Built-in parametric template: you can change its name, description, categories, order, default material, background image and visibility. Its shape comes from the dieline generator in code." : undefined}
-        actions={t.published ? <Link href={`/template/dieline/${t.id}`} target="_blank" rel="noreferrer" className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">Open public page ↗</Link> : <span className="text-sm text-muted-foreground">Not published: not shown to customers</span>}
       />
       <TemplateWizard
         svgColors={svgColors}

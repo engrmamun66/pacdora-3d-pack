@@ -23,7 +23,7 @@ import { CleanupEditor } from "./cleanup-editor";
 import { linesKey } from "@/lib/fold-edit";
 import { colorRoles, type SvgColorSettings } from "@/lib/svg-colors";
 import type { ViewSettings } from "@/lib/view-settings";
-import { TEMPLATE_STATUSES, type TemplateStatus } from "@/lib/template-status";
+import { TEMPLATE_STATUSES, isPublicStatus, type TemplateStatus } from "@/lib/template-status";
 
 type Unit = "auto" | "mm" | "cm" | "in" | "pt" | "px";
 interface Options {
@@ -706,6 +706,11 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
           </div>
           <div className="flex items-center gap-3">
             <Link href="/doraadmin/templates" className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">Back to list</Link>
+            {isPublicStatus(initial.status) ? (
+              <Link href={`/template/dieline/${initial.slug}`} target="_blank" rel="noreferrer" className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">Open public page ↗</Link>
+            ) : (
+              <span className="text-sm text-muted-foreground" title="Customers only see templates with the status Published">Not published</span>
+            )}
             <Button type="button" className="h-10" disabled={!canSave} onClick={() => void save()} title="Ctrl/Cmd + S">
               {saving ? "Saving…" : "Save changes"}
             </Button>

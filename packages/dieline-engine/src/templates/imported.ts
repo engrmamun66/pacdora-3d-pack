@@ -7,7 +7,7 @@ import { type Vec2, vec } from "../primitives/vec2";
 import { ENGINE_VERSION, ParamValidationError } from "./carton-common";
 import { CONSTRUCTION_DEFAULTS, DIM_KEYS, partKey, DIM_NAMES, FACTOR_RANGE, FLAP_SIZE_KEYS, THICKNESS_RANGE, type DimKey, type SizeMode, importedPlan, predictNames, resolveConstruction, sizeTargets } from "./imported-construction";
 import { type FoldSetup, validateFoldSetup } from "./imported-fold";
-import { type PartSizes, type ResizePlan, sheetMap, stretchPlanOf } from "./imported-resize";
+import { type PartSizes, type ResizePlan, sheetMap, slotEdits, stretchPlanOf } from "./imported-resize";
 import type { GeneratorDefinition, ParamDescriptor } from "./registry";
 
 /**
@@ -235,29 +235,35 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
     // Scale about the outline's corner so everything keeps its place relative to it, then stretch the chosen parts.
     const map = sheetMap(ob.min, k, plan, sizes);
     const mapAll = (pts: readonly Vec2[]) => pts.map(map);
+    // A board thicker than the drawing pulls each dust flap's corner back from the closure beside it (a cut slot).
+    const edits = slotEdits(plan, sizes, map);
 
-    const cutLoops: Outline[] = loops.map((l) => ({ points: mapAll(l) }));
+    const cutLoops: Outline[] = loops.map((l) => ({ points: edits.active ? edits.loop(l) : mapAll(l) }));
     const outer = cutLoops[0]!.points;
 
     let segments = 0;
-    const segs = (paths: readonly FlatPath[], prefix: string): { id: string; a: Vec2; b: Vec2 }[] => {
+    const segs = (paths: readonly FlatPath[], prefix: string, withEdits = false): { id: string; a: Vec2; b: Vec2 }[] => {
       const out: { id: string; a: Vec2; b: Vec2 }[] = [];
       paths.forEach((p, pi) => {
-        const pts = mapAll(toPoints(p));
-        const n = p.closed ? pts.length : pts.length - 1;
-        for (let i = 0; i < n; i++) {
-          const a = pts[i]!;
-          const b = pts[(i + 1) % pts.length]!;
-          if (Math.hypot(a.x - b.x, a.y - b.y) < 1e-9) continue;
-          if (++segments > MAX_SEGMENTS) throw new ImportedDielineError("This dieline has too many line segments.");
-          out.push({ id: `${prefix}-${pi}-${i}`, a, b });
-        }
+        const raw = toPoints(p);
+        // Open fold lines may end at a flap corner that moved, or run through it (then they are cut in two there).
+        const lines: Vec2[][] = withEdits && edits.active && !p.closed ? edits.crease(raw) : [mapAll(raw)];
+        lines.forEach((pts, li) => {
+          const n = p.closed ? pts.length : pts.length - 1;
+          for (let i = 0; i < n; i++) {
+            const a = pts[i]!;
+            const b = pts[(i + 1) % pts.length]!;
+            if (Math.hypot(a.x - b.x, a.y - b.y) < 1e-9) continue;
+            if (++segments > MAX_SEGMENTS) throw new ImportedDielineError("This dieline has too many line segments.");
+            out.push({ id: lines.length > 1 ? `${prefix}-${pi}-${li}-${i}` : `${prefix}-${pi}-${i}`, a, b });
+          }
+        });
       });
       return out;
     };
     // Open cut lines are slits; closed ones that are not the outline or a hole already are loops.
     const slitLines: CutSegment[] = segs(flat.cut.filter((p) => !p.closed), "slit");
-    const creaseLines: CreaseLine[] = segs(flat.crease, "fold").map((s) => ({ ...s, hingeId: s.id, foldAngleDeg: 90 }));
+    const creaseLines: CreaseLine[] = segs(flat.crease, "fold", true).map((s) => ({ ...s, hingeId: s.id, foldAngleDeg: 90 }));
 
     // One piece: the cut outline grown by the bleed. Several pieces: one box around all of them.
     const sheetBox = pieces.length > 1 ? unionBounds(pieces.map(mapAll)) : { min: vec(ob.min.x, ob.min.y), max: map(vec(ob.max.x, ob.max.y)) };
@@ -286,18 +292,15 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
     if (fold) {
       panels = fold.panels.map((p) => {
         const polygon: Vec2[] = [];
-        for (let i = 0; i + 1 < p.polygon.length; i += 2) polygon.push(map(vec(p.polygon[i]!, p.polygon[i + 1]!)));
+        const own: Vec2[] = [];
+        for (let i = 0; i + 1 < p.polygon.length; i += 2) own.push(vec(p.polygon[i]!, p.polygon[i + 1]!));
+        polygon.push(...(edits.active ? edits.panel(p.id, own) : own.map(map)));
         return { id: p.id, role: p.role, label: p.label, polygon, printable: p.printable };
       });
-      hinges = fold.hinges.map((h) => ({
-        id: h.id,
-        parentId: h.parentId,
-        childId: h.childId,
-        a: map(vec(h.line[0], h.line[1])),
-        b: map(vec(h.line[2], h.line[3])),
-        foldAngleDeg: h.angleDeg,
-        foldOrder: h.order,
-      }));
+      hinges = fold.hinges.map((h) => {
+        const [a, b] = edits.hinge(h.id, vec(h.line[0], h.line[1]), vec(h.line[2], h.line[3]));
+        return { id: h.id, parentId: h.parentId, childId: h.childId, a, b, foldAngleDeg: h.angleDeg, foldOrder: h.order };
+      });
       rootId = fold.rootId;
       groundId = fold.groundId;
       parts = (fold.parts ?? []).map((q) => ({ rootId: q.rootId, placement: q.placement, ...(q.name ? { name: q.name } : {}), ...(q.timing ? { timing: q.timing } : {}) }));
@@ -328,7 +331,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
         ? { name: "Imported shape", pass: true, detail: "Fixed shape from an SVG file: only the overall size can change." }
         : { name: "Imported shape", pass: true, detail: "Fixed shape from an SVG file: only the overall size can change. No 3D fold." },
     ];
-    if (cons) checks.push({ name: "Cut gap", pass: true, detail: `${round2(cons.cutGapFactor * thickness)} mm (${round2(cons.cutGapFactor)} x board thickness). Set by the template; the drawing keeps its own slots.` });
+    if (cons) checks.push({ name: "Cut gap", pass: true, detail: `${round2(cons.cutGapFactor * thickness)} mm (${round2(cons.cutGapFactor)} x board thickness). The slots beside the dust flaps are ${round2(cons.cutGapFactor * (thickness - cons.thickness))} mm ${cons.cutGapFactor * (thickness - cons.thickness) >= 0 ? "wider" : "narrower"} than drawn for a ${round2(cons.thickness)} mm board.` });
     if (fold) checks.push({ name: "Folds into 3D", pass: true, detail: `${panels.length} ${panels.length === 1 ? "panel" : "panels"}, ${hinges.length} ${hinges.length === 1 ? "hinge" : "hinges"}` });
 
     return {
@@ -346,6 +349,7 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
               thickness: round2(thickness),
               allowanceFactor: round2(allowance),
               cutGapFactor: round2(cons.cutGapFactor),
+              slotDelta: round2(cons.cutGapFactor * (thickness - cons.thickness)),
             }
           : {}),
       },

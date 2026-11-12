@@ -7,6 +7,7 @@ import { getWatermark } from "@/server/site-settings";
 import { getSession } from "@/server/session";
 import { db } from "@/server/db";
 import { importedStartParams, loadImportedSource } from "@/server/imported-templates";
+import { getSaveAsOptions } from "@/server/projects";
 import { readViewSettings } from "@/lib/view-settings";
 
 const prefillSchema = z.record(z.string().max(60), z.union([z.number().finite(), z.string().max(100), z.boolean()]));
@@ -35,6 +36,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
   const user = session?.user ?? null;
   const viewer = user ? { name: user.name, email: user.email, image: user.image ?? null } : null;
   const watermark = await getWatermark(user);
+  const saveOptions = user ? await getSaveAsOptions(user.id) : null;
 
   // Imported SVG template: a fixed shape you can resize, add artwork to and export (no 3D fold).
   if (row.source === "svg") {
@@ -53,6 +55,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
         initialParams={importedStartParams(imported.flat, imported.fold)}
         watermark={watermark}
         viewer={viewer}
+        saveOptions={saveOptions}
       />
     );
   }
@@ -73,6 +76,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
       initialParams={{ ...preset.defaults, ...(row.defaultThickness ? { thickness: row.defaultThickness } : {}), ...prefill }}
       watermark={watermark}
       viewer={viewer}
+      saveOptions={saveOptions}
     />
   );
 }

@@ -18,6 +18,7 @@ import {
   transformPoint,
   validateFoldSetup,
 } from "../src";
+import { segmentOnPolygonEdge } from "../src/templates/imported-fold-util";
 
 const toFlat = (geo: DielineGeometry): FlatDieline => ({
   cut: [
@@ -126,11 +127,77 @@ describe("box settings of an imported dieline", () => {
     expect(geoB.cutBounds.max.x - geoB.cutBounds.min.x).toBeGreaterThan(geoA.cutBounds.max.x - geoA.cutBounds.min.x);
   });
 
-  it("manufacture mode: the thickness does not change the sheet", () => {
+  it("manufacture mode: a thicker board moves the folds outward, by allowance x the extra thickness", () => {
     const gen = createImportedGenerator("t", flat, setup);
     const a = gen.generate({});
-    const b = gen.generate({ thickness: 3 });
-    expect(b.cutBounds).toEqual(a.cutBounds);
+    const b = gen.generate({ thickness: 3 }); // the drawing is made for 0.5 mm
+    const pa = a.params as Record<string, number>;
+    const pb = b.params as Record<string, number>;
+    for (const key of ["baseWidth", "baseHeight", "boxHeight"]) expect(pb[key]! - pa[key]!).toBeCloseTo(2.5, 1);
+    expect(b.cutBounds.max.x - b.cutBounds.min.x).toBeGreaterThan(a.cutBounds.max.x - a.cutBounds.min.x);
+    // Back at the drawn thickness the sheet is as drawn.
+    expect(gen.generate({ thickness: 0.5 }).cutBounds).toEqual(a.cutBounds);
+    // The 3D fold follows the same lines.
+    const wall = (g: DielineGeometry) => g.foldTree.panels.map((p) => p.polygon);
+    expect(wall(b)).not.toEqual(wall(a));
+    // A size the customer typed is taken as it is.
+    const typed = gen.generate({ baseWidth: 100, thickness: 3 }).params as Record<string, number>;
+    expect(typed.baseWidth).toBeCloseTo(100, 1);
+  });
+
+  describe("cut slots beside the dust flaps follow the thickness", () => {
+    const xr = (geo: DielineGeometry, id: string) => {
+      const pts = flattenOutline({ points: geo.foldTree.panels.find((p) => p.id === id)!.polygon });
+      return { x0: Math.min(...pts.map((v) => v.x)), x1: Math.max(...pts.map((v) => v.x)) };
+    };
+    /** Distance between each dust flap and the closure beside it, along x (the flaps whose edge faces a closure). */
+    const gaps = (geo: DielineGeometry) => {
+      const lids = geo.foldTree.panels.filter((p) => p.role === "closure").map((p) => xr(geo, p.id));
+      const out: number[] = [];
+      for (const f of geo.foldTree.panels.filter((p) => p.role === "dust-flap")) {
+        const d = xr(geo, f.id);
+        for (const l of lids) {
+          for (const g of [l.x0 - d.x1, d.x0 - l.x1]) if (g > 0.01 && g < 12) out.push(g);
+        }
+      }
+      return out.sort((x, y) => x - y);
+    };
+
+    it("finds the slots of the carton", () => {
+      expect(planResize(setup)!.slots?.length ?? 0).toBeGreaterThan(0);
+    });
+
+    it("a thicker board widens each slot by cut gap factor x the extra thickness, and no wall changes size", () => {
+      const gen = createImportedGenerator("t", flat, setup);
+      const a = gen.generate({});
+      const b = gen.generate({ thickness: 3 }); // drawn for 0.5 mm
+      const ga = gaps(a);
+      const gb = gaps(b);
+      expect(ga.length).toBeGreaterThan(0);
+      expect(gb).toHaveLength(ga.length);
+      // Each slot opens by cut gap factor (1) x (3 - 0.5 mm), give or take the little the stretch itself moves the drawn strip.
+      ga.forEach((g, i) => {
+        expect(gb[i]! - g).toBeGreaterThan(2.2);
+        expect(gb[i]! - g).toBeLessThan(2.8);
+      });
+      // The dust flaps gave way: the box sizes themselves grew only by allowance x thickness, as before.
+      const pa = a.params as Record<string, number>;
+      const pb = b.params as Record<string, number>;
+      expect(pb.baseWidth! - pa.baseWidth!).toBeCloseTo(2.5, 1);
+      // Back at the drawn board the sheet is as drawn.
+      expect(gen.generate({ thickness: 0.5 }).cutBounds).toEqual(a.cutBounds);
+    });
+
+    it("the hinges still lie on the edges of their panels after the flap corners moved (so it still folds)", () => {
+      for (const thickness of [0.1, 3]) {
+        const b = createImportedGenerator("t", flat, setup).generate({ thickness });
+        expect(() => foldTree(b.foldTree)).not.toThrow();
+        const poly = (id: string) => flattenOutline({ points: b.foldTree.panels.find((p) => p.id === id)!.polygon }).flatMap((v) => [v.x, v.y]);
+        for (const h of b.foldTree.hinges) {
+          for (const id of [h.parentId, h.childId]) expect(segmentOnPolygonEdge(poly(id), [h.a.x, h.a.y, h.b.x, h.b.y], 0.05), `${h.id} on ${id}`).toBe(true);
+        }
+      }
+    });
   });
 
   it("typed sizes are in the chosen mode and read back as sheet sizes", () => {

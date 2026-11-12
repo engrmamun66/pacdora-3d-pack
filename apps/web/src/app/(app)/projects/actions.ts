@@ -146,6 +146,22 @@ export async function updateProject(_prev: DesignState, formData: FormData): Pro
 }
 
 /**
+ * The category (at most one) and tags the customer picked in "Save as". Only the customer's own are accepted;
+ * anything else is ignored. Does nothing when the dialog sent no choice (`organized` missing).
+ */
+async function applyOrganize(projectId: string, formData: FormData): Promise<void> {
+  if (formData.get("organized") !== "1") return;
+  const user = await requireUser();
+  const categoryId = String(formData.get("categoryId") ?? "");
+  const category = categoryId ? await db.userCategory.findFirst({ where: { id: categoryId, userId: user.id }, select: { id: true } }) : null;
+  const wanted = formData.getAll("tagId").map(String).slice(0, 50);
+  const tags = wanted.length > 0 ? await db.userTag.findMany({ where: { id: { in: wanted }, userId: user.id }, select: { id: true } }) : [];
+  await db.project.update({ where: { id: projectId }, data: { categoryId: category?.id ?? null } });
+  await db.projectTag.deleteMany({ where: { projectId } });
+  if (tags.length > 0) await db.projectTag.createMany({ data: tags.map((t) => ({ projectId, tagId: t.id })) });
+}
+
+/**
  * "Save as": keep the current values as a new project with its own name, and leave the original as it is.
  * With a `projectId` the new project is a copy of that project (artwork, 3D settings, uploaded images) with
  * the new values; without one (a template page, nothing saved yet) it is a fresh project from `presetId`.
@@ -155,7 +171,9 @@ export async function saveProjectAs(formData: FormData): Promise<DesignState & {
   const projectId = String(formData.get("projectId") ?? "");
   if (!projectId) {
     const r = await insertProject(formData);
-    return "id" in r ? { ok: true, message: "Saved.", issues: [], id: r.id } : fail(r);
+    if (!("id" in r)) return fail(r);
+    await applyOrganize(r.id, formData);
+    return { ok: true, message: "Saved.", issues: [], id: r.id };
   }
   const user = await requireUser();
   const row = await db.project.findFirst({ where: { id: projectId, userId: user.id } });
@@ -196,8 +214,11 @@ export async function saveProjectAs(formData: FormData): Promise<DesignState & {
     }
   }
   if (assets.length > 0) await db.project.update({ where: { id: copy.id }, data: { projectData: parseProjectDoc(JSON.parse(json)) } });
-  const tags = await db.projectTag.findMany({ where: { projectId: row.id }, select: { tagId: true } });
-  if (tags.length > 0) await db.projectTag.createMany({ data: tags.map((t) => ({ projectId: copy.id, tagId: t.tagId })) });
+  if (formData.get("organized") === "1") await applyOrganize(copy.id, formData);
+  else {
+    const tags = await db.projectTag.findMany({ where: { projectId: row.id }, select: { tagId: true } });
+    if (tags.length > 0) await db.projectTag.createMany({ data: tags.map((t) => ({ projectId: copy.id, tagId: t.tagId })) });
+  }
   revalidatePath("/projects");
   return { ok: true, message: "Saved as a new project.", issues: [], id: copy.id };
 }

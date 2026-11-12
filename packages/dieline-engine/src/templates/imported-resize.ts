@@ -45,7 +45,31 @@ export interface ResizePlan {
   readonly box?: Box2;
   /** Extra pieces (lid, insert...) in the order of the fold setup. Absent for a single piece. */
   readonly parts?: readonly PartPlan[];
+  /** Cut slots beside the dust flaps: the strips whose width follows the board thickness. */
+  readonly slots?: readonly Slot[];
 }
+
+/**
+ * A cut slot: a dust flap's hinge ends at `m`, and the panel it hangs from ends at `e` (`m` = `e` when the hinge
+ * runs the whole edge, the flap's corner then touching the closure beside it). `o` is the hinge's other end and
+ * `at` where the hinge lies across (all places in imported mm). A thicker board pulls the flap's corner back from
+ * `e`, so a cut slot of (factor x the extra thickness) opens between the flap and the closure.
+ */
+export interface Slot {
+  readonly axis: "x" | "y";
+  readonly m: number;
+  readonly e: number;
+  readonly o: number;
+  readonly at: number;
+  readonly flapId: string;
+  readonly parentId: string;
+  readonly hingeId: string;
+  /** The flap's own outline neighbour of the hinge end that is not along the hinge (imported mm): its slanted or straight side. Absent if the flap has none there. */
+  readonly side?: { readonly x: number; readonly y: number };
+}
+
+/** A drawn strip between a flap's hinge end and its panel's end wider than this (imported mm) is not a slot but a different shape. */
+const SLOT_MAX = 10;
 
 /** A rectangle on the flat sheet (imported mm). */
 export interface Box2 {
@@ -91,6 +115,8 @@ export interface PartSizes {
   readonly dustFlapDepth?: number;
   /** Customer input only: the space between an extra piece's walls and the main body's (mm, each side). */
   readonly gap?: number;
+  /** How much wider (mm, on the sheet) the cut slots beside the dust flaps are than drawn: follows the board thickness. */
+  readonly slotDelta?: number;
   /** Sizes of the extra pieces, in the order of the fold setup. */
   readonly parts?: readonly PartSizes[];
 }
@@ -313,7 +339,75 @@ function planPiece(setup: PieceSetup, flapOf: Partial<Record<PanelRole, SizeClas
     const longest = Math.max(runLength(xs, xClass, cls), runLength(ys, yClass, cls));
     if (longest > 0) flaps[FLAP_KEYS[cls]] = longest;
   }
-  return { natural: { baseWidth, baseHeight, boxHeight, ...flaps }, xs, xClass, ys, yClass, tube: setup.panels.some((p) => p.role === "tuck") };
+  const slots = findSlots(setup, boxes);
+  return { natural: { baseWidth, baseHeight, boxHeight, ...flaps }, xs, xClass, ys, yClass, tube: setup.panels.some((p) => p.role === "tuck"), ...(slots.length > 0 ? { slots } : {}) };
+}
+
+/** True if the point lies on the outline of the polygon (a flat x,y,x,y list), vertices included. */
+function onOutline(poly: readonly number[], x: number, y: number): boolean {
+  const n = poly.length / 2;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const [x1, y1, x2, y2] = [poly[i * 2]!, poly[i * 2 + 1]!, poly[j * 2]!, poly[j * 2 + 1]!];
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len2 = dx * dx + dy * dy;
+    const t = len2 < 1e-12 ? 0 : Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / len2));
+    if (Math.hypot(x - (x1 + t * dx), y - (y1 + t * dy)) < 1e-3) return true;
+  }
+  return false;
+}
+
+/** Roles of the flaps whose corner next to another panel gets a cut slot. */
+const SLOT_ROLES: readonly PanelRole[] = ["dust-flap", "tuck"];
+
+/**
+ * The cut slots beside flaps: the ends of a flap's hinge that lie at the end of the panel it hangs from, with another
+ * panel (the closure, a neighbouring wall...) touching the flap's corner there, or that stop a little short of that end.
+ */
+function findSlots(setup: PieceSetup, boxes: ReadonlyMap<string, Box>): Slot[] {
+  const out: Slot[] = [];
+  // A flap is a leaf: nothing hangs from it (a panel that carries flaps of its own is a wall or a closure).
+  const parents = new Set(setup.hinges.map((h) => h.parentId));
+  for (const h of setup.hinges) {
+    const flap = setup.panels.find((p) => p.id === h.childId);
+    const parent = boxes.get(h.parentId);
+    if (!flap || !SLOT_ROLES.includes(flap.role) || !parent || parents.has(flap.id)) continue;
+    const alongX = Math.abs(h.line[2] - h.line[0]) >= Math.abs(h.line[3] - h.line[1]); // the hinge runs along x
+    const lo = alongX ? Math.min(h.line[0], h.line[2]) : Math.min(h.line[1], h.line[3]);
+    const hi = alongX ? Math.max(h.line[0], h.line[2]) : Math.max(h.line[1], h.line[3]);
+    const at = alongX ? (h.line[1] + h.line[3]) / 2 : (h.line[0] + h.line[2]) / 2;
+    const [p0, p1] = alongX ? [parent.x0, parent.x1] : [parent.y0, parent.y1];
+    const axis = alongX ? "x" : "y";
+    const base = { axis, at, flapId: h.childId, parentId: h.parentId, hingeId: h.id } as const;
+    const touched = (along: number) =>
+      setup.panels.some((q) => q.id !== h.childId && q.id !== h.parentId && onOutline(q.polygon, alongX ? along : at, alongX ? at : along));
+    /** The flap's outline neighbour of the vertex at this end that is off the hinge line. */
+    const sideOf = (along: number): { x: number; y: number } | undefined => {
+      const poly = flap.polygon;
+      const n = poly.length / 2;
+      const [vx, vy] = alongX ? [along, at] : [at, along];
+      for (let i = 0; i < n; i++) {
+        if (Math.hypot(poly[i * 2]! - vx, poly[i * 2 + 1]! - vy) > 1e-3) continue;
+        for (const j of [(i + 1) % n, (i + n - 1) % n]) {
+          const x = poly[j * 2]!;
+          const y = poly[j * 2 + 1]!;
+          if (Math.abs((alongX ? y : x) - at) > 1e-3) return { x, y };
+        }
+      }
+      return undefined;
+    };
+    const end = (along: number, edge: number) => {
+      const gap = Math.abs(edge - along);
+      if (gap > SLOT_MAX) return false;
+      return gap > MERGE || touched(along);
+    };
+    const sideHi = sideOf(hi);
+    const sideLo = sideOf(lo);
+    if (end(hi, p1) && hi <= p1 + MERGE) out.push({ ...base, m: hi, e: p1, o: lo, ...(sideHi ? { side: sideHi } : {}) });
+    if (end(lo, p0) && lo >= p0 - MERGE) out.push({ ...base, m: lo, e: p0, o: hi, ...(sideLo ? { side: sideLo } : {}) });
+  }
+  return out;
 }
 
 /** Length of the longest unbroken stretch of one class along an axis (0 if none). */
@@ -428,5 +522,154 @@ function multiMap(origin: Vec2, k: number, plan: ResizePlan, sizes: PartSizes, p
   return (p) => {
     const i = pick(p);
     return vec(maps[i]!.fx(p.x) + sx[i]!, maps[i]!.fy(p.y) + sy[i]!);
+  };
+}
+
+/** A flap corner that moves because of the board thickness (see `slotEdits`). */
+interface SlotCorner {
+  readonly slot: Slot;
+  /** The hinge end in imported coordinates, and where the flap's corner goes on the sheet. */
+  readonly vIn: Vec2;
+  readonly mOut: Vec2;
+  /** Where the panel's own end (the closure's corner) goes on the sheet. */
+  readonly eOut: Vec2;
+  /** Which way from the panel's end the flap's other end lies, along the slot's axis, in imported coordinates. */
+  readonly towardFlap: number;
+  /** The drawn flap corner touches the closure (no drawn strip): the cut outline gets two corners there instead of one. */
+  readonly split: boolean;
+}
+
+const SAME = 1e-3;
+
+export interface SlotEdits {
+  /** Corner moves exist (the board differs from the drawn one and the sheet has dust flaps with slots). */
+  readonly active: boolean;
+  /** A closed cut outline: its flap corners pulled back from the closures. Input in imported coordinates, output on the sheet. */
+  loop(points: readonly Vec2[]): Vec2[];
+  /** The fold-line polylines of one path: those ending at a flap corner end at its new place; one passing through is cut in two. */
+  crease(points: readonly Vec2[]): Vec2[][];
+  /** A panel's outline (imported coordinates): the flap moves its corner (and, when the drawing left a strip, so does its parent). */
+  panel(panelId: string, points: readonly Vec2[]): Vec2[];
+  /** The ends of a hinge (imported coordinates). */
+  hinge(hingeId: string, a: Vec2, b: Vec2): [Vec2, Vec2];
+}
+
+/**
+ * The cut slot beside a dust flap follows the board: a thicker board than the drawing was made for (a thinner one
+ * narrows a drawn slot) pulls the flap's corner back from the closure beside it, by `slotDelta` mm. Only the flap's
+ * own corner moves (its polygon, the hinge end, the cut outline and the fold line), so no box size changes, and
+ * the closure keeps its corner. This cannot be done by stretching the sheet: the flap's corner and the closure's
+ * corner can be the very same point of the drawing.
+ */
+export function slotEdits(plan: ResizePlan | null, sizes: PartSizes, map: (p: Vec2) => Vec2): SlotEdits {
+  const corners: SlotCorner[] = [];
+  const pick = (pl: ResizePlan | null, sz: PartSizes) => {
+    const delta = sz.slotDelta ?? 0;
+    if (!pl?.slots || Math.abs(delta) < 1e-9) return;
+    for (const slot of pl.slots) {
+      const at = (along: number, across: number) => (slot.axis === "x" ? vec(along, across) : vec(across, along));
+      const vIn = at(slot.m, slot.at);
+      const eIn = at(slot.e, slot.at);
+      const oIn = at(slot.o, slot.at);
+      const [vm, ve, vo] = [map(vIn), map(eIn), map(oIn)];
+      const c = (p: Vec2) => (slot.axis === "x" ? p.x : p.y);
+      const toward = Math.sign(c(vo) - c(vm));
+      if (toward === 0) continue;
+      const strip = Math.abs(c(ve) - c(vm));
+      const flap = Math.abs(c(vo) - c(vm));
+      // A drawn strip can narrow to nothing; the flap keeps at least a fifth of its hinge.
+      const d = Math.max(-strip, Math.min(delta, flap * 0.8));
+      if (Math.abs(d) < 1e-6) continue;
+      const mOut = slot.axis === "x" ? vec(c(vm) + toward * d, vm.y) : vec(vm.x, c(vm) + toward * d);
+      corners.push({ slot, vIn, mOut, eOut: ve, towardFlap: Math.sign(slot.o - slot.m) || Math.sign(slot.m - slot.e) * -1 || 1, split: Math.abs(slot.m - slot.e) < SAME });
+    }
+  };
+  pick(plan, sizes);
+  (plan?.parts ?? []).forEach((q, i) => pick(stretchPlanOf(q), sizes.parts?.[i] ?? {}));
+  const near = (a: Vec2, b: Vec2, tol = SAME) => Math.abs(a.x - b.x) < tol && Math.abs(a.y - b.y) < tol;
+  /** Every flap corner at this point (two flaps may meet there: they then share the slot). */
+  const findAll = (p: Vec2) => corners.filter((c) => near(c.vIn, p));
+  const alongOf = (c: SlotCorner, p: Vec2) => (c.slot.axis === "x" ? p.x : p.y);
+  const acrossOf = (c: SlotCorner, p: Vec2) => (c.slot.axis === "x" ? p.y : p.x);
+  /** A neighbour of the corner that lies on the flap's hinge (same line across, toward the flap along the axis). */
+  const onHinge = (c: SlotCorner, n: Vec2 | undefined) => n !== undefined && Math.abs(acrossOf(c, n) - c.slot.at) < SAME && (alongOf(c, n) - c.slot.m) * c.towardFlap > SAME;
+  /** The corner whose flap owns the cut edge that runs from the point to `n` (the flap's own side), if any. */
+  const ownerOfEdge = (cs: readonly SlotCorner[], n: Vec2 | undefined) => (n === undefined ? undefined : cs.find((c) => c.slot.side !== undefined && near(vec(c.slot.side.x, c.slot.side.y), n, 1e-2)));
+  const ownerOfHinge = (cs: readonly SlotCorner[], n: Vec2 | undefined) => cs.find((c) => onHinge(c, n));
+  const same = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.y - b.y) < 1e-9;
+
+  return {
+    active: corners.length > 0,
+    loop(points) {
+      const out: Vec2[] = [];
+      const push = (...pts: Vec2[]) => {
+        for (const q of pts) if (out.length === 0 || !same(out[out.length - 1]!, q)) out.push(q);
+      };
+      const n = points.length;
+      points.forEach((p, i) => {
+        const cs = findAll(p);
+        if (cs.length === 0) {
+          push(map(p));
+          return;
+        }
+        // A drawn strip: the vertex is the flap's corner and simply moves.
+        if (!cs[0]!.split) {
+          push(cs[0]!.mOut);
+          return;
+        }
+        // Flap and closure share the point: the outline runs from one's edge to the other's, so each edge gets its own corner.
+        const prev = points[(i + n - 1) % n];
+        const next = points[(i + 1) % n];
+        const ends = [prev, next].map((q) => ownerOfEdge(cs, q)?.mOut ?? cs[0]!.eOut);
+        push(...ends);
+      });
+      if (out.length > 1 && same(out[0]!, out[out.length - 1]!)) out.pop();
+      return out;
+    },
+    crease(points) {
+      const result: Vec2[][] = [];
+      let run: Vec2[] = [];
+      const flush = () => {
+        if (run.length >= 2) result.push(run);
+        run = [];
+      };
+      points.forEach((p, i) => {
+        const cs = findAll(p);
+        if (cs.length === 0) {
+          run.push(map(p));
+          return;
+        }
+        const prev = points[i - 1];
+        const next = points[i + 1];
+        const before = ownerOfHinge(cs, prev);
+        const after = ownerOfHinge(cs, next);
+        if (!cs[0]!.split) {
+          run.push(before || after ? (before ?? after)!.mOut : map(p));
+          return;
+        }
+        if (!before && !after) {
+          run.push(map(p));
+          return;
+        }
+        // The fold line stops at the flap's new corner; what lies beyond (the closure's own line) starts at the closure's corner.
+        if (prev !== undefined) {
+          run.push(before ? before.mOut : cs[0]!.eOut);
+          flush();
+        }
+        if (next !== undefined) run.push(after ? after.mOut : cs[0]!.eOut);
+      });
+      flush();
+      return result;
+    },
+    panel(panelId, points) {
+      return points.map((p) => {
+        const c = findAll(p).find((x) => x.slot.flapId === panelId || (!x.split && x.slot.parentId === panelId));
+        return c ? c.mOut : map(p);
+      });
+    },
+    hinge(hingeId, a, b) {
+      const move = (p: Vec2) => findAll(p).find((c) => c.slot.hingeId === hingeId)?.mOut ?? map(p);
+      return [move(a), move(b)];
+    },
   };
 }

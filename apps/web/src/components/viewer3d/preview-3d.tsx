@@ -2,7 +2,7 @@
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Play, RotateCcw } from "lucide-react";
-import type { DielineGeometry } from "@packaging/dieline-engine";
+import type { DielineGeometry, WatermarkSpec } from "@packaging/dieline-engine";
 import type { Artwork, ProjectDoc } from "@packaging/schema";
 import { renderArtwork, type RasterRect } from "@/components/editor/artwork-raster";
 import type { ViewSettings } from "@/lib/view-settings";
@@ -23,7 +23,9 @@ export function Preview3D({
   onSettings,
   viewRef,
   initialView = null,
+  watermark = null,
 }: {
+  watermark?: WatermarkSpec | null;
   initialView?: ViewSettings | null;
   geo: DielineGeometry;
   artwork: Artwork;
@@ -78,6 +80,7 @@ export function Preview3D({
         progress={progress}
         outsideColor={settings.outsideColor}
         insideColor={settings.insideColor}
+        watermark={watermark}
       />
       <GridToggle viewRef={inner} />
       <RotationControls viewRef={inner} />

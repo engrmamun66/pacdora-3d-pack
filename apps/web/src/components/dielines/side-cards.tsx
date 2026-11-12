@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { Box, Check, DraftingCompass, FileText, PenTool, Play, RotateCcw, Spline, type LucideIcon } from "lucide-react";
-import type { DielineGeometry } from "@packaging/dieline-engine";
+import type { DielineGeometry, WatermarkSpec } from "@packaging/dieline-engine";
 import { ILLUSTRATOR_PROFILES } from "@packaging/render-print/profiles";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { GridToggle } from "@/components/viewer3d/grid-toggle";
@@ -78,8 +78,17 @@ export function FoldPreview({
   color,
   viewRef,
   initialView = null,
+  large = false,
+  thickness = 0,
+  watermark = null,
 }: {
+  /** Board thickness in mm, shown as the thickness of the panels in 3D. */
+  thickness?: number;
+  /** Printed faintly on the outside of the box; null = none. */
+  watermark?: WatermarkSpec | null;
   initialView?: ViewSettings | null;
+  /** Fill the space it is in (the centre of the page) instead of a small card. */
+  large?: boolean;
   geo: DielineGeometry;
   progress: number;
   onProgress: (p: number) => void;
@@ -100,8 +109,8 @@ export function FoldPreview({
     anim.current = requestAnimationFrame(step);
   };
   return (
-    <section aria-label="3D preview" className="relative shrink-0 overflow-hidden rounded-2xl border bg-muted/40">
-      <CartonView ref={viewRef} className="h-56 w-full" geo={geo} texture={null} textureRect={null} progress={progress} outsideColor={color} insideColor="#c8a97e" initialView={initialView} />
+    <section aria-label="3D preview" className={`relative overflow-hidden rounded-2xl border bg-muted/40 ${large ? "flex min-h-0 flex-1 flex-col" : "shrink-0"}`}>
+      <CartonView ref={viewRef} className={large ? "min-h-0 w-full flex-1" : "h-56 w-full"} geo={geo} texture={null} textureRect={null} progress={progress} outsideColor={color} insideColor="#c8a97e" thickness={thickness} watermark={watermark} boardGrain initialView={initialView} />
       <div className="flex items-center gap-2 border-t bg-background px-3 py-2 text-xs">
         <label className="flex flex-1 items-center gap-2">
           Open

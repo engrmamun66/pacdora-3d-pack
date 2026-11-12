@@ -409,7 +409,7 @@ export function ArtworkEditor({
 
         {show3d && foldable ? (
           <section className="min-h-0 min-w-0 border-l" aria-label="3D preview">
-            <Preview3D initialView={initialView} geo={geo} artwork={artworkForPreview} settings={threeD} onSettings={updateThreeD} viewRef={view3d} />
+            <Preview3D initialView={initialView} geo={geo} artwork={artworkForPreview} settings={threeD} onSettings={updateThreeD} viewRef={view3d} watermark={watermark} />
           </section>
         ) : null}
 

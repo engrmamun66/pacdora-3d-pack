@@ -9,6 +9,9 @@ import { authClient } from "@/lib/auth-client";
 import { notify } from "@/lib/notify";
 import { site } from "@/config/site";
 import { UserMenuClient } from "@/components/app/user-menu-client";
+import type { SaveAsOptions } from "@/server/projects";
+
+type SaveAs = (name: string, organize?: { categoryId: string | null; tagIds: string[] }) => Promise<{ ok: boolean; message: string | null }>;
 
 const row = "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm";
 const rowLive = `${row} hover:bg-muted focus-visible:bg-muted focus-visible:outline-none`;
@@ -165,7 +168,7 @@ function MainMenu({
  * Slides down from the top like the other popups; Enter saves, Esc or Cancel closes. The form is only
  * mounted while the dialog is open, so it starts with the suggested name each time.
  */
-function SaveAsDialog({ dlg, open, onOpenChange, name, onSaveAs }: { dlg: React.RefObject<HTMLDialogElement | null>; open: boolean; onOpenChange: (open: boolean) => void; name: string; onSaveAs: (name: string) => Promise<{ ok: boolean; message: string | null }> }) {
+function SaveAsDialog({ dlg, open, onOpenChange, name, options, onSaveAs }: { dlg: React.RefObject<HTMLDialogElement | null>; open: boolean; onOpenChange: (open: boolean) => void; name: string; options: SaveAsOptions | null; onSaveAs: SaveAs }) {
   return (
     <dialog
       ref={dlg}
@@ -176,13 +179,19 @@ function SaveAsDialog({ dlg, open, onOpenChange, name, onSaveAs }: { dlg: React.
       }}
       onClose={() => onOpenChange(false)}
     >
-      {open ? <SaveAsForm name={name} onSaveAs={onSaveAs} onDone={() => dlg.current?.close()} /> : null}
+      {open ? <SaveAsForm name={name} options={options} onSaveAs={onSaveAs} onDone={() => dlg.current?.close()} /> : null}
     </dialog>
   );
 }
 
-function SaveAsForm({ name, onSaveAs, onDone }: { name: string; onSaveAs: (name: string) => Promise<{ ok: boolean; message: string | null }>; onDone: () => void }) {
+function SaveAsForm({ name, options, onSaveAs, onDone }: { name: string; options: SaveAsOptions | null; onSaveAs: SaveAs; onDone: () => void }) {
   const [text, setText] = useState(name);
+  // The customer's own category and tags: a group with nothing to choose from is not shown at all.
+  const categories = options?.categories ?? [];
+  const tags = options?.tags ?? [];
+  const [categoryId, setCategoryId] = useState<string>(options?.categoryId ?? "");
+  const [tagIds, setTagIds] = useState<string[]>(options?.tagIds ?? []);
+  const toggleTag = (id: string) => setTagIds((t) => (t.includes(id) ? t.filter((x) => x !== id) : [...t, id]));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ghost = "inline-flex h-10 items-center gap-2 rounded-lg border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60";
@@ -196,7 +205,7 @@ function SaveAsForm({ name, onSaveAs, onDone }: { name: string; onSaveAs: (name:
         if (!value) return setError("Give the new project a name.");
         setBusy(true);
         setError(null);
-        const r = await onSaveAs(value).catch(() => ({ ok: false, message: "Could not save. Please try again." }));
+        const r = await onSaveAs(value, categories.length > 0 || tags.length > 0 ? { categoryId: categoryId || null, tagIds } : undefined).catch(() => ({ ok: false, message: "Could not save. Please try again." }));
         setBusy(false);
         if (r.ok) onDone();
         else setError(r.message ?? "Could not save.");
@@ -218,6 +227,36 @@ function SaveAsForm({ name, onSaveAs, onDone }: { name: string; onSaveAs: (name:
           className="h-10 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         />
       </label>
+      {categories.length > 0 ? (
+        <label className="flex flex-col gap-1 text-sm font-medium">
+          Category
+          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="h-10 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+            <option value="">No category</option>
+            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+      ) : null}
+      {tags.length > 0 ? (
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="mb-1 text-sm font-medium">Tags</legend>
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map((t) => {
+              const on = tagIds.includes(t.id);
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => toggleTag(t.id)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${on ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                >
+                  {t.name}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+      ) : null}
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
       <div className="flex justify-end gap-2">
         <button type="button" className={ghost} disabled={busy} onClick={onDone}>Cancel</button>
@@ -244,6 +283,7 @@ export function DielineTopBar({
   downloadLabel,
   onDownload,
   onSaveAs,
+  saveOptions = null,
   viewer = null,
 }: {
   title: string;
@@ -257,8 +297,10 @@ export function DielineTopBar({
   canDownload: boolean;
   downloadLabel: string;
   onDownload: () => void;
-  /** Keep the current values as a new project with this name; resolves with how it went (the page opens the new project). */
-  onSaveAs: (name: string) => Promise<{ ok: boolean; message: string | null }>;
+  /** Keep the current values as a new project with this name (and the category / tags picked); resolves with how it went (the page opens the new project). */
+  onSaveAs: SaveAs;
+  /** The visitor's own categories and tags to choose from in "Save as". */
+  saveOptions?: SaveAsOptions | null;
   /** Signed-in visitor: shown as a profile icon with an account menu. */
   viewer?: { name: string; email: string; image: string | null } | null;
 }) {
@@ -316,7 +358,7 @@ export function DielineTopBar({
         </button>
         {viewer ? <UserMenuClient name={viewer.name} email={viewer.email} image={viewer.image} /> : null}
       </div>
-      <SaveAsDialog dlg={saveAsDialog} open={saveAsOpen} onOpenChange={setSaveAsOpen} name={defaultCopyName(name, mode)} onSaveAs={onSaveAs} />
+      <SaveAsDialog dlg={saveAsDialog} open={saveAsOpen} onOpenChange={setSaveAsOpen} name={defaultCopyName(name, mode)} options={saveOptions} onSaveAs={onSaveAs} />
     </header>
   );
 }
