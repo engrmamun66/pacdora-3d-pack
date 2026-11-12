@@ -4,7 +4,7 @@ import { revalidatePath, updateTag } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { ImportedDielineError, assertImportable, createImportedGenerator, getGenerator, importedDefaults, validateFoldSetup, type FlatDieline, type FoldSetup } from "@packaging/dieline-engine";
-import { SvgImportError, importSvg, toFlatDieline, type ImportedDieline, type Role } from "@packaging/svg-import";
+import { SvgImportError, excludePaths, importSvg, toFlatDieline, type ImportedDieline, type Role } from "@packaging/svg-import";
 import { MAX_SVG_CHARS, thumbnailSvg } from "@/lib/template-import";
 import { isValidSlug } from "@/lib/slug";
 import { TEMPLATE_STATUS_VALUES, isPublicStatus, isTemplateStatus, templateStatusLabel } from "@/lib/template-status";
@@ -76,6 +76,8 @@ const saveSchema = z.object({
   scale: z.number().finite().min(0.001).max(1000).default(1),
   pxPerInch: z.number().finite().min(1).max(2400).default(96),
   roles: z.record(z.string().max(80), roleSchema).default({}),
+  /** Clean-up step: ids of the paths left out of the dieline (see ImportedPath.id). */
+  excluded: z.array(z.number().int().min(0).max(1_000_000)).max(200_000).default([]),
   /** How it folds in 3D (imported templates); null = flat only. Validated again here. */
   fold: z.unknown().optional(),
   /** Ignored line styles kept as an optional faint "Reference" picture on the dieline page. */
@@ -89,6 +91,10 @@ export type SaveTemplateResult = ActionResult & { slug?: string };
 interface StoredGeometry {
   v: 1;
   dieline: ImportedDieline;
+  /** Set when some parts were excluded in the clean-up step: the dieline as imported, before that. */
+  full?: ImportedDieline;
+  /** Ids of the excluded paths (they refer to `full`). */
+  excluded?: number[];
   roles: Record<string, Role>;
   options: { unit: string; scale: number; pxPerInch: number };
   /** 3D fold setup, or null for flat only. */
@@ -208,21 +214,30 @@ export async function saveTemplate(input: unknown): Promise<SaveTemplateResult> 
   }
 
   // ---- Geometry: parse a new SVG, or keep what is stored.
-  let dieline: ImportedDieline;
+  let base: ImportedDieline;
   let options: StoredGeometry["options"] = { unit: v.unit, scale: v.scale, pxPerInch: v.pxPerInch };
   if (v.svg) {
     try {
-      dieline = importSvg(v.svg, { unit: v.unit, scale: v.scale, pxPerInch: v.pxPerInch });
+      base = importSvg(v.svg, { unit: v.unit, scale: v.scale, pxPerInch: v.pxPerInch });
     } catch (e) {
       if (e instanceof SvgImportError) return { ok: false, message: e.message };
       throw e;
     }
   } else if (v.mode === "edit" && existing?.geometry) {
     const g = existing.geometry as unknown as StoredGeometry;
-    dieline = g.dieline;
+    base = g.full ?? g.dieline;
     options = g.options;
   } else {
     return { ok: false, message: "Upload an SVG file first." };
+  }
+  // Clean-up step: parts the admin left out. Done here again so the stored geometry never comes from the browser.
+  const excluded = [...new Set(v.excluded)].filter((id) => base.paths.some((p) => p.id === id)).sort((a, b) => a - b);
+  let dieline: ImportedDieline;
+  try {
+    dieline = excludePaths(base, excluded);
+  } catch (e) {
+    if (e instanceof SvgImportError) return { ok: false, message: e.message };
+    throw e;
   }
 
   const roles = finalRoles(dieline, v.roles);
@@ -260,7 +275,7 @@ export async function saveTemplate(input: unknown): Promise<SaveTemplateResult> 
   // Only styles that really are ignored can be kept as reference.
   const referenceStyles = [...new Set(v.referenceStyles)].filter((k) => roles[k] === "ignore");
 
-  const geometry: StoredGeometry = { v: 1, dieline, roles, options, fold, referenceStyles };
+  const geometry: StoredGeometry = { v: 1, dieline, ...(excluded.length ? { full: base, excluded } : {}), roles, options, fold, referenceStyles };
   if (JSON.stringify(geometry).length > MAX_GEOMETRY_JSON) return { ok: false, message: "This dieline is too detailed to store. Simplify the SVG and try again." };
   const thumbnail = thumbnailSvg(dieline, roles);
   const data = {

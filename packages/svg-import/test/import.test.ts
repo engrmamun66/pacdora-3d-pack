@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { importSvg, suggestRoles } from "../src";
+import { excludePaths, groupPathIds, importSvg, suggestExclusions, suggestRoles } from "../src";
 
 const NS = 'xmlns="http://www.w3.org/2000/svg"';
 /** Wraps content in an svg whose user units are millimetres. */
@@ -495,5 +495,99 @@ describe("style keys", () => {
       mm(`<g fill="none"><path stroke="#0000ff" d="M0 0 L9 0 L9 9"/><path stroke="#ff0000" d="M0 0 L9 0 L9 8"/><path stroke="#ff0000" d="M0 0 L9 0 L9 7"/></g>`),
     );
     expect(d.styles.map((s) => s.count)).toEqual([2, 1]);
+  });
+});
+
+describe("artwork heuristics", () => {
+  const wrap = (body: string) => `<svg xmlns="http://www.w3.org/2000/svg" width="200mm" height="100mm" viewBox="0 0 200 100">${body}</svg>`;
+
+  it("ignores fill-only tints when real strokes exist", () => {
+    const r = importSvg(
+      wrap(
+        `<polygon points="10,10 90,10 90,90 10,90" fill="#ead9bd" stroke="none"/>` +
+          `<polygon points="10,10 90,10 90,90 10,90" fill="none" stroke="#e4002b" stroke-width="0.5"/>`,
+      ),
+    );
+    const tint = r.styles.find((s) => s.stroke === "#ead9bd")!;
+    expect(tint.suggestedRole).toBe("ignore");
+    expect(r.styles.find((s) => s.stroke === "#e4002b")!.suggestedRole).toBe("cut");
+  });
+
+  it("keeps a fill-drawn outline when it is the only thing in the file", () => {
+    const r = importSvg(wrap(`<polygon points="10,10 90,10 90,90 10,90" fill="#000000" stroke="none"/>`));
+    expect(r.styles[0]!.suggestedRole).toBe("cut");
+  });
+
+  it("treats thin grey dashes as guide when a coloured dashed crease exists", () => {
+    const r = importSvg(
+      wrap(
+        `<rect x="10" y="10" width="80" height="80" fill="none" stroke="#e4002b" stroke-width="0.5"/>` +
+          `<line x1="10" y1="50" x2="90" y2="50" stroke="#0070c0" stroke-width="0.4" stroke-dasharray="4 2"/>` +
+          `<line x1="50" y1="0" x2="50" y2="100" stroke="#888" stroke-width="0.25" stroke-dasharray="1 2"/>`,
+      ),
+    );
+    expect(r.styles.find((s) => s.stroke === "#0070c0")!.suggestedRole).toBe("crease");
+    expect(r.styles.find((s) => s.stroke === "#888888")!.suggestedRole).toBe("guide");
+  });
+
+  it("still reads grey dashes as crease when nothing else is dashed", () => {
+    const r = importSvg(
+      wrap(
+        `<rect x="10" y="10" width="80" height="80" fill="none" stroke="#e4002b" stroke-width="0.5"/>` +
+          `<line x1="10" y1="50" x2="90" y2="50" stroke="#888" stroke-width="0.25" stroke-dasharray="4 2"/>`,
+      ),
+    );
+    expect(r.styles.find((s) => s.stroke === "#888888")!.suggestedRole).toBe("crease");
+  });
+})
+
+describe("clean-up: groups, suggestions, exclusion", () => {
+  const body =
+    `<g id="art"><rect x="10" y="10" width="80" height="80" fill="none" stroke="#e4002b" stroke-width="0.5"/>` +
+    `<line x1="10" y1="50" x2="90" y2="50" stroke="#0070c0" stroke-width="0.4" stroke-dasharray="4 2"/></g>` +
+    `<g id="Legend"><line x1="120" y1="90" x2="190" y2="90" stroke="#e4002b" stroke-width="0.5"/><g id="swatch-row"><line x1="120" y1="95" x2="190" y2="95" stroke="#00a651" stroke-width="0.4"/></g></g>` +
+    `<g id="dimensions"><line x1="10" y1="5" x2="90" y2="5" stroke="#888" stroke-width="0.25"/></g>`;
+  const d = importSvg(mm(body, 200, 100));
+
+  it("keeps everything by default and records ids and groups", () => {
+    expect(d.paths.map((p) => p.id)).toEqual([0, 1, 2, 3, 4]);
+    expect(d.widthMm).toBeCloseTo(180, 3);
+    expect(d.groups?.map((g) => [g.label, g.from, g.to, g.depth])).toEqual([
+      ["art", 0, 2, 0],
+      ["Legend", 2, 4, 0],
+      ["swatch-row", 3, 4, 1],
+      ["dimensions", 4, 5, 0],
+    ]);
+  });
+
+  it("suggests whole legend and dimension groups once (no nested duplicate)", () => {
+    const s = suggestExclusions(d);
+    expect(s.map((x) => [x.label, x.ids])).toEqual([["Legend", [2, 3]], ["dimensions", [4]]]);
+  });
+
+  it("excluding re-fits the sheet and rebuilds the styles", () => {
+    const e = excludePaths(d, suggestExclusions(d).flatMap((x) => x.ids));
+    expect(e.widthMm).toBeCloseTo(80, 3);
+    expect(e.heightMm).toBeCloseTo(80, 3);
+    expect(e.paths.map((p) => p.id)).toEqual([0, 1]);
+    expect(e.styles.map((x) => x.stroke).sort()).toEqual(["#0070c0", "#e4002b"]);
+    expect(Math.min(...e.paths.flatMap((p) => p.pts.filter((_, i) => i % 2 === 0)))).toBe(0);
+  });
+
+  it("returns the same object when nothing is excluded, and refuses to empty the drawing", () => {
+    expect(excludePaths(d, [])).toBe(d);
+    expect(excludePaths(d, [99])).toBe(d);
+    expect(() => excludePaths(d, [0, 1, 2, 3, 4])).toThrow(/Every line is excluded/);
+  });
+
+  it("groupPathIds lists a group's paths", () => {
+    const art = d.groups!.find((g) => g.label === "art")!;
+    expect(groupPathIds(d, art)).toEqual([0, 1]);
+  });
+
+  it("group names do not change the geometry or the first-pass roles", () => {
+    const plain = importSvg(mm(body.replace(/<g id="[^"]*">/g, "<g>"), 200, 100));
+    expect(plain.groups).toBeUndefined();
+    expect(plain.paths.map((p) => p.pts)).toEqual(d.paths.map((p) => p.pts));
   });
 });

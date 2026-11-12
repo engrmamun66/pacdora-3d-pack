@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, FileUp, ImagePlus, RotateCcw, Trash2, Wand2 } from "lucide-react";
 import { validateFoldSetup, type FoldSetup } from "@packaging/dieline-engine";
-import { SvgImportError, importSvg, suggestRoles, toFlatDieline, type ImportedDieline, type Role } from "@packaging/svg-import";
+import { SvgImportError, excludePaths, importSvg, suggestRoles, toFlatDieline, type ImportedDieline, type Role } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { saveTemplate } from "@/app/doraadmin/template-actions";
 import { notify } from "@/lib/notify";
@@ -18,6 +18,7 @@ import { SvgPreviewButton } from "./svg-preview";
 import { FoldSetupEditor } from "./fold-setup-editor";
 import { ViewSettingsInline } from "./view-settings-dialog";
 import { PageHeader } from "@/components/admin/page-header";
+import { CleanupEditor } from "./cleanup-editor";
 import { ConstructionEditor } from "./construction-editor";
 import { linesKey } from "@/lib/fold-edit";
 import { colorRoles, type SvgColorSettings } from "@/lib/svg-colors";
@@ -41,7 +42,10 @@ export interface WizardInitial {
   backgroundUrl: string | null;
   categoryIds: string[];
   source: "builtin" | "svg" | null;
+  /** The dieline as imported (before anything was left out in the clean-up step). */
   dieline: ImportedDieline | null;
+  /** Ids of the paths left out in the clean-up step. */
+  excluded: number[];
   roles: Record<string, Role>;
   options: Options;
   /** How the template folds in 3D (imported templates), or null for flat only. */
@@ -80,7 +84,7 @@ const mmToIn = (mm: number) => (mm / 25.4).toFixed(2);
 export function TemplateWizard({ mode, categories, initial, svgColors }: { mode: "create" | "edit"; categories: WizardCategory[]; initial: WizardInitial; svgColors: SvgColorSettings }) {
   const router = useRouter();
   const builtin = initial.source === "builtin";
-  const steps = builtin ? ["Categories", "Details"] : ["Categories", "SVG file", "Customize", "3D fold", "Details & publish"];
+  const steps = builtin ? ["Categories", "Details"] : ["Categories", "SVG file", "Clean up", "Customize", "3D fold", "Details & publish"];
 
   const [step, setStep] = useState(0);
   const [categoryIds, setCategoryIds] = useState<string[]>(initial.categoryIds);
@@ -113,7 +117,27 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   const bgShown = bgPreview ?? (bgRemoved ? null : initial.backgroundUrl);
 
   const parsed = useMemo<Parsed | null>(() => (text ? tryImport(text, opts) : null), [text, opts]);
-  const dieline: ImportedDieline | null = parsed?.ok ? parsed.dieline : parsed ? null : initial.dieline;
+  // The drawing as imported ("full"), then without what the admin left out in the clean-up step ("dieline", used everywhere else).
+  const [excluded, setExcluded] = useState<number[]>(initial.excluded);
+  const full: ImportedDieline | null = parsed?.ok ? parsed.dieline : parsed ? null : initial.dieline;
+  const cleaned = useMemo<{ d: ImportedDieline | null; error: string | null }>(() => {
+    if (!full) return { d: null, error: null };
+    try {
+      return { d: excludePaths(full, excluded), error: null };
+    } catch (e) {
+      return { d: full, error: e instanceof SvgImportError ? e.message : "These lines cannot be left out." };
+    }
+  }, [full, excluded]);
+  const dieline = cleaned.d;
+  const canClean = full !== null && full.paths.every((p) => p.id !== undefined);
+  const [initialFinal] = useState<ImportedDieline | null>(() => {
+    if (!initial.dieline) return null;
+    try {
+      return excludePaths(initial.dieline, initial.excluded);
+    } catch {
+      return initial.dieline;
+    }
+  });
   // The importer's guess, with the admin's colour rules (Settings > SVG Dieline Color) on top.
   const suggested = useMemo(() => (dieline ? { ...suggestRoles(dieline.styles), ...colorRoles(dieline.styles, svgColors) } : {}), [dieline, svgColors]);
   const roles = useMemo(() => {
@@ -138,7 +162,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   const [noRef, setNoRef] = useState<string[]>(() => Object.keys(initial.roles).filter((k) => initial.roles[k] === "ignore" && !initial.referenceStyles.includes(k)));
   const refStyles = useMemo(() => Object.keys(roles).filter((k) => roles[k] === "ignore" && !noRef.includes(k)), [roles, noRef]);
   const [fold, setFold] = useState<FoldSetup | null>(initial.fold);
-  const [foldKey, setFoldKey] = useState(() => (initial.dieline && initial.fold ? linesKey(toFlatDieline(initial.dieline, initial.roles)) : ""));
+  const [foldKey, setFoldKey] = useState(() => (initialFinal && initial.fold ? linesKey(toFlatDieline(initialFinal, initial.roles)) : ""));
   const foldStale = fold !== null && foldKey !== flatKey;
   const foldProblems = fold && !foldStale ? validateFoldSetup(fold) : [];
   const foldOk = !foldStale && foldProblems.length === 0;
@@ -148,13 +172,13 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   const snapshot = JSON.stringify({
     name: name.trim(), slug, description: description.trim(), status, sortOrder,
     cats: [...categoryIds].sort(), roles: sortedRoles(roles), opts, dt: defaultThickness,
-    newSvg: text !== null, bg: bgFile ? "new" : bgRemoved ? "removed" : "same", fold, refs: [...refStyles].sort(),
+    newSvg: text !== null, ex: [...excluded].sort((a, b) => a - b), bg: bgFile ? "new" : bgRemoved ? "removed" : "same", fold, refs: [...refStyles].sort(),
   });
   const [baseline] = useState(() =>
     JSON.stringify({
       name: initial.name.trim(), slug: initial.slug, description: initial.description.trim(), status: initial.status, sortOrder: initial.sortOrder,
       cats: [...initial.categoryIds].sort(), roles: sortedRoles(initial.roles), opts: initial.options, dt: initial.material?.value ?? null,
-      newSvg: false, bg: "same", fold: initial.fold, refs: [...initial.referenceStyles].sort(),
+      newSvg: false, ex: [...initial.excluded].sort((a, b) => a - b), bg: "same", fold: initial.fold, refs: [...initial.referenceStyles].sort(),
     }),
   );
   const dirty = mode === "create" || snapshot !== baseline;
@@ -162,7 +186,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   const [activeSection, setActiveSection] = useState("sec-details");
   useEffect(() => {
     if (mode !== "edit") return;
-    const ids = ["sec-details", "sec-categories", "sec-background", "sec-dieline", "sec-lines", "sec-fold", "sec-view"];
+    const ids = ["sec-details", "sec-categories", "sec-background", "sec-dieline", "sec-cleanup", "sec-lines", "sec-fold", "sec-view"];
     const els = ids.map((id) => document.getElementById(id)).filter((e): e is HTMLElement => e !== null);
     // The section crossing the upper third of the screen is the current one.
     const io = new IntersectionObserver(
@@ -186,12 +210,14 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   const canNext =
     stepName === "Categories" ? categoryIds.length > 0 :
     stepName === "SVG file" ? dieline !== null :
-    stepName === "Customize" ? dieline !== null && hasCut && hasClosedCut :
+    stepName === "Clean up" ? dieline !== null && cleaned.error === null :
+    stepName === "Customize" ? dieline !== null && cleaned.error === null && hasCut && hasClosedCut :
     stepName === "3D fold" ? foldOk :
     true;
   const blocker =
     stepName === "Categories" && categoryIds.length === 0 ? "Choose at least one category." :
     stepName === "SVG file" && dieline === null ? "Upload an SVG file to continue." :
+    stepName === "Clean up" && cleaned.error ? cleaned.error :
     stepName === "Customize" && !hasCut ? "Mark at least one line style as Cut." :
     stepName === "Customize" && !hasClosedCut ? "The Cut lines must include a closed outline." :
     stepName === "3D fold" && !foldOk ? (foldStale ? "Detect the panels again, or make the template flat only." : "Fix the problems in the 3D fold.") : null;
@@ -205,6 +231,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
     setFileName(file.name);
     setOverrides({});
     setNoRef([]);
+    setExcluded([]);
     if (!name.trim() && mode === "create") {
       const guess = file.name.replace(/\.svg$/i, "").replace(/[-_]+/g, " ").trim();
       setName(guess);
@@ -250,6 +277,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
         ...(mode === "edit" ? { originalSlug: initial.slug } : {}),
         ...(text ? { svg: text } : {}),
         unit: opts.unit, scale: opts.scale, pxPerInch: opts.pxPerInch,
+        excluded,
         roles,
         fold: foldOk ? fold : null,
         referenceStyles: refStyles,
@@ -402,6 +430,21 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
           ) : null}
         </section>
   );
+  const cleanupSection = full ? (
+    <section aria-labelledby="s-clean" className="flex flex-col gap-4">
+      <div>
+        <h2 id="s-clean" className="text-lg font-semibold">Leave out parts of the drawing</h2>
+        <p className="text-sm text-muted-foreground">
+          Files often carry more than the box: a colour key, dimension notes, a second layout. Approve our suggestions or leave anything out yourself. Skip this step if the drawing is clean.
+        </p>
+      </div>
+      {canClean ? (
+        <CleanupEditor full={full} excluded={excluded} onChange={setExcluded} error={cleaned.error} />
+      ) : (
+        <p className="rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">This template was saved before the clean-up tool existed. Upload its SVG file again (Dieline file) to leave parts out.</p>
+      )}
+    </section>
+  ) : null;
   const customizeSection = dieline ? (
         <section aria-labelledby="s-cust" className="flex flex-col gap-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -586,6 +629,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
       !nameOk ? "Name needs at least 2 characters." : null,
       !slugOk ? "Fix the slug." : null,
       categoryIds.length === 0 ? "Choose at least one category." : null,
+      !builtin && cleaned.error ? cleaned.error : null,
       !builtin && !hasCut ? "Mark at least one line style as Cut." : null,
       !builtin && hasCut && !hasClosedCut ? "The Cut lines must include a closed outline." : null,
       !builtin && foldStale ? "The lines changed: detect the 3D fold again, or make the template flat only." : null,
@@ -596,7 +640,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
       { id: "sec-details", label: "Details" },
       { id: "sec-categories", label: "Categories" },
       { id: "sec-background", label: "Background image" },
-      ...(builtin ? [] : [{ id: "sec-dieline", label: "Dieline file" }, ...(dieline ? [{ id: "sec-lines", label: "Line roles" }, { id: "sec-fold", label: "3D fold" }] : [])]),
+      ...(builtin ? [] : [{ id: "sec-dieline", label: "Dieline file" }, ...(dieline ? [{ id: "sec-cleanup", label: "Clean up" }, { id: "sec-lines", label: "Line roles" }, { id: "sec-fold", label: "3D fold" }] : [])]),
       ...(builtin || initial.fold ? [{ id: "sec-view", label: "Starting 3D view" }] : []),
     ];
     const card = "scroll-mt-24 rounded-2xl border bg-card p-5 shadow-xs";
@@ -634,6 +678,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
             <div id="sec-categories" className={card}>{categoriesSection}</div>
             <div id="sec-background" className={card}>{backgroundFieldset}</div>
             {!builtin ? <div id="sec-dieline" className={card}>{svgSection}</div> : null}
+            {!builtin && cleanupSection ? <div id="sec-cleanup" className={card}>{cleanupSection}</div> : null}
             {!builtin && customizeSection ? <div id="sec-lines" className={card}>{customizeSection}</div> : null}
             {!builtin && foldSection ? <div id="sec-fold" className={card}>{foldSection}</div> : null}
             {builtin || initial.fold ? (
@@ -686,6 +731,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
       <div className="rounded-2xl border bg-card p-5 shadow-xs sm:p-7">
       {stepName === "Categories" ? categoriesSection : null}
       {stepName === "SVG file" ? svgSection : null}
+      {stepName === "Clean up" ? cleanupSection : null}
       {stepName === "Customize" ? customizeSection : null}
       {stepName === "3D fold" ? foldSection : null}
       {stepName === "Details" || stepName === "Details & publish" ? (

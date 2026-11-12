@@ -5,9 +5,9 @@ import {
   rectShape, scaleM, translateM, lastScanEnd, scanNumber,
   type Mat,
 } from "./geometry";
-import { assignRoles } from "./roles";
+import { buildStyles } from "./styles";
 import { MAX_DEPTH, parseXml, type XmlNode } from "./xml";
-import { SvgImportError, type ImportOptions, type ImportReport, type ImportedDieline, type ImportedPath, type SvgStyle } from "./types";
+import { SvgImportError, type ImportOptions, type ImportReport, type ImportedDieline, type ImportedPath, type SvgGroup, type SvgStyle } from "./types";
 
 export const MAX_TEXT_CHARS = 3_000_000;
 const MAX_VISITS = 250_000;
@@ -58,6 +58,18 @@ interface RawPath {
   color: string;
   dashed: boolean;
   widthMm: number;
+  fromFill: boolean;
+}
+
+/** The name a designer gave a group or layer (Illustrator id/data-name, Inkscape label), or null. */
+function groupLabel(node: XmlNode): string | null {
+  const a = node.attrs;
+  const v = a["inkscape:label"] ?? a["data-name"] ?? a.id;
+  if (!v) return null;
+  const t = v.trim().slice(0, 80);
+  // tool-made ids ("g123", "Layer_1", "_x31_") say nothing to the admin
+  if (!t || /^(g|group|layer|path|svg|_x[0-9a-f]+_)[-_ ]?\d*$/i.test(t)) return null;
+  return t;
 }
 
 interface Size { value: number; unit: string }
@@ -222,6 +234,8 @@ export function importSvg(text: string, opts: ImportOptions = {}): ImportedDieli
   // ---- walk ----
   const budget = new Budget();
   const raw: RawPath[] = [];
+  const groups: SvgGroup[] = [];
+  let groupDepth = 0;
   let visits = 0;
   let shapes = 0;
   let badTransforms = 0;
@@ -235,18 +249,20 @@ export function importSvg(text: string, opts: ImportOptions = {}): ImportedDieli
     const kind = node.name;
     let color: string | null = null;
     let widthMm = 0;
+    let fromFill = false;
     if (inh.stroke !== null && inh.strokeOpacity > 0) {
       color = inh.stroke;
       widthMm = inh.strokeWidth * areaScale(m);
     } else if (kind !== "line" && inh.fill !== null && inh.fill !== "ffffff" && inh.fillOpacity > 0) {
       // some exporters fill hairline shapes instead of stroking them; keep their outline
       color = inh.fill;
+      fromFill = true;
     }
     if (color === null) return;
     const dashed = inh.dashed;
     const c = color;
     const sink = new Sink(m, budget, (pts, closed) => {
-      raw.push({ pts, closed, color: c, dashed, widthMm });
+      raw.push({ pts, closed, color: c, dashed, widthMm, fromFill });
     });
     const a = node.attrs;
     switch (kind) {
@@ -356,7 +372,14 @@ export function importSvg(text: string, opts: ImportOptions = {}): ImportedDieli
         m = mul(mul(m, scaleM(s, s)), translateM(-nvb[0]!, -nvb[1]!));
       }
     }
+    const label = mode === 1 ? null : groupLabel(node);
+    const from = raw.length;
+    if (label) groupDepth++;
     for (const child of node.children) walk(child, m, inh, depth + 1, 0);
+    if (label) {
+      groupDepth--;
+      if (raw.length > from) groups.push({ label, from, to: raw.length, depth: groupDepth });
+    }
   };
 
   walk(root, baseM, ROOT_STYLE, 1, 1);
@@ -396,42 +419,20 @@ export function importSvg(text: string, opts: ImportOptions = {}): ImportedDieli
     );
   }
 
-  // ---- group into styles ----
-  interface Acc { key: string; stroke: string; dashed: boolean; width: number; count: number; length: number }
-  const accs = new Map<string, Acc>();
+  // ---- paths and their styles ----
   const paths: ImportedPath[] = [];
   let pointCount = 0;
-  for (const p of raw) {
+  raw.forEach((p, id) => {
     const pts = p.pts;
-    let len = 0;
     for (let i = 0; i < pts.length; i += 2) {
       pts[i] = round(pts[i]! - minX, 1e6);
       pts[i + 1] = round(pts[i + 1]! - minY, 1e6);
-      if (i >= 2) len += Math.hypot(pts[i]! - pts[i - 2]!, pts[i + 1]! - pts[i - 1]!);
     }
-    if (p.closed) len += Math.hypot(pts[0]! - pts[pts.length - 2]!, pts[1]! - pts[pts.length - 1]!);
     const width = Number((Math.round(p.widthMm / 0.05) * 0.05).toFixed(2));
-    const key = `${p.color}|${p.dashed ? "d" : "s"}|${width}`;
-    let acc = accs.get(key);
-    if (!acc) {
-      acc = { key, stroke: p.color, dashed: p.dashed, width, count: 0, length: 0 };
-      accs.set(key, acc);
-    }
-    acc.count++;
-    acc.length += len;
     pointCount += pts.length / 2;
-    paths.push({ style: key, closed: p.closed, pts });
-  }
-  const list = [...accs.values()].sort((a, b) => b.count - a.count || b.length - a.length || (a.key < b.key ? -1 : 1));
-  const roles = assignRoles(list.map((a) => ({ key: a.key, color: a.stroke, dashed: a.dashed, length: a.length })));
-  const styles: SvgStyle[] = list.map((a) => ({
-    key: a.key,
-    stroke: `#${a.stroke}`,
-    dashed: a.dashed,
-    strokeWidthMm: a.width,
-    count: a.count,
-    suggestedRole: roles.get(a.key) ?? "guide",
-  }));
+    paths.push({ style: `${p.color}|${p.dashed ? "d" : "s"}|${width}`, closed: p.closed, pts, id, ...(p.fromFill ? { fill: true as const } : {}) });
+  });
+  const styles = buildStyles(paths);
 
   const ignoredOut: Record<string, number> = {};
   for (const [k, v] of Object.entries(ignored)) if (k !== "linearGradient" && k !== "radialGradient") ignoredOut[k] = v;
@@ -442,6 +443,7 @@ export function importSvg(text: string, opts: ImportOptions = {}): ImportedDieli
     heightMm,
     styles,
     paths,
+    ...(groups.length ? { groups: groups.sort((a, b) => a.from - b.from || b.to - a.to || a.depth - b.depth) } : {}),
     report: { unit, unitSource, warnings, ignored: ignoredOut, elementCount: shapes, pointCount },
   };
 }

@@ -19,6 +19,45 @@ type Drag = {
   heights: number[];
 };
 
+const MAX_STEP = 100;
+
+/**
+ * The step number as a typeable field. The row moves to its new place only when the number is
+ * committed (Enter or leaving the field), so it does not jump away while the admin is typing.
+ */
+function StepInput({ value, label, onCommit }: { value: number; label: string; onCommit: (n: number) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const n = Math.round(Number(draft));
+    setDraft(null);
+    if (draft.trim() !== "" && Number.isFinite(n)) {
+      const v = Math.min(MAX_STEP, Math.max(1, n));
+      if (v !== value) onCommit(v);
+    }
+  };
+  return (
+    <input
+      aria-label={label}
+      className="h-6 w-10 rounded border border-input bg-background text-center text-sm tabular-nums outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      type="number"
+      min={1}
+      max={MAX_STEP}
+      step={1}
+      inputMode="numeric"
+      value={draft ?? String(value)}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+        } else if (e.key === "Escape") setDraft(null);
+      }}
+    />
+  );
+}
+
 const sign = (h: FoldHingeSpec) => (h.angleDeg < 0 ? -1 : 1);
 
 /**
@@ -160,8 +199,8 @@ export function HingeList({
                 </button>
                 <span className="flex items-center gap-1 px-1">
                   <button type="button" aria-label={`Fold ${label(h.childId)} earlier`} className="grid size-6 place-items-center rounded border hover:bg-muted disabled:opacity-40" disabled={h.order <= 1} onClick={() => onSetHinge(h.id, { order: h.order - 1 })}><ChevronUp className="size-3.5" /></button>
-                  <span className="w-5 text-center tabular-nums">{h.order}</span>
-                  <button type="button" aria-label={`Fold ${label(h.childId)} later`} className="grid size-6 place-items-center rounded border hover:bg-muted" onClick={() => onSetHinge(h.id, { order: h.order + 1 })}><ChevronDown className="size-3.5" /></button>
+                  <StepInput value={h.order} label={`Step of ${label(h.parentId)} to ${label(h.childId)}`} onCommit={(n) => onSetHinge(h.id, { order: n })} />
+                  <button type="button" aria-label={`Fold ${label(h.childId)} later`} className="grid size-6 place-items-center rounded border hover:bg-muted disabled:opacity-40" disabled={h.order >= MAX_STEP} onClick={() => onSetHinge(h.id, { order: h.order + 1 })}><ChevronDown className="size-3.5" /></button>
                 </span>
                 <span className="px-1">
                   <input

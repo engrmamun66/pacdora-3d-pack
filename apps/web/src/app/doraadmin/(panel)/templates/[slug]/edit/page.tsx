@@ -21,7 +21,7 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
     db.templateCategory.findMany({ orderBy: [{ kind: "asc" }, { sortOrder: "asc" }, { name: "asc" }], select: { id: true, kind: true, name: true } }),
   ]);
   if (!t) notFound();
-  const g = t.source === "svg" ? (t.geometry as unknown as { dieline: ImportedDieline; roles: Record<string, Role>; options: { unit: "auto" | "mm" | "cm" | "in" | "pt" | "px"; scale: number; pxPerInch: number }; fold?: FoldSetup | null; referenceStyles?: string[] } | null) : null;
+  const g = t.source === "svg" ? (t.geometry as unknown as { dieline: ImportedDieline; full?: ImportedDieline; excluded?: number[]; roles: Record<string, Role>; options: { unit: "auto" | "mm" | "cm" | "in" | "pt" | "px"; scale: number; pxPerInch: number }; fold?: FoldSetup | null; referenceStyles?: string[] } | null) : null;
   // Built-in templates whose generator has a board thickness get a "Default material" field.
   const thicknessParam = t.source === "builtin" ? getGenerator(t.generatorId).params.find((q) => q.key === "thickness") : undefined;
   const material = thicknessParam && thicknessParam.kind === "number" ? { min: thicknessParam.min, max: thicknessParam.max, value: t.defaultThickness } : null;
@@ -47,7 +47,8 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
           backgroundUrl: t.backgroundKey ? `/api/templates/${encodeURIComponent(t.id)}/background?v=${encodeURIComponent(t.backgroundKey.slice("templates/".length, -4))}` : null,
           categoryIds: t.categories.map((c) => c.id),
           source: t.source === "svg" ? "svg" : "builtin",
-          dieline: g?.dieline ?? null,
+          dieline: g?.full ?? g?.dieline ?? null,
+          excluded: g?.excluded ?? [],
           roles: g?.roles ?? {},
           options: g?.options ?? { unit: "px", scale: 1, pxPerInch: 96 },
           fold: g?.fold ?? null,

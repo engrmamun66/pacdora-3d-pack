@@ -25,6 +25,19 @@ export interface ImportedPath {
   style: string;
   closed: boolean;
   pts: number[];
+  /** Position of this path in the file (document order). Stable for the same file, so exclusions can refer to it. */
+  id?: number;
+  /** True when the line is the outline of a filled shape that has no stroke. */
+  fill?: true;
+}
+
+/** A named group (layer) of the SVG: it owns the paths with ids from `from` up to, not including, `to`. */
+export interface SvgGroup {
+  label: string;
+  from: number;
+  to: number;
+  /** 0 = top level; nested groups count up. */
+  depth: number;
 }
 
 export interface ImportReport {
@@ -42,6 +55,8 @@ export interface ImportedDieline {
   heightMm: number;
   styles: SvgStyle[];
   paths: ImportedPath[];
+  /** Named groups of the file, in document order (for the clean-up step). */
+  groups?: SvgGroup[];
   report: ImportReport;
 }
 
