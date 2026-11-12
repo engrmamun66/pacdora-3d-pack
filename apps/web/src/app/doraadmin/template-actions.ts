@@ -3,10 +3,12 @@
 import { revalidatePath, updateTag } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
-import { ImportedDielineError, assertImportable, createImportedGenerator, getGenerator, importedDefaults, validateFoldSetup, type FlatDieline, type FoldSetup } from "@packaging/dieline-engine";
+import { ImportedDielineError, applyWindows, assertImportable, createImportedGenerator, getGenerator, getPreset, importedDefaults, validateFoldSetup, type FlatDieline, type FoldSetup, type GeneratorDefinition, type WindowSpec } from "@packaging/dieline-engine";
 import { SvgImportError, excludePaths, importSvg, toFlatDieline, type ImportedDieline, type Role } from "@packaging/svg-import";
 import { MAX_SVG_CHARS, thumbnailSvg } from "@/lib/template-import";
 import { isValidSlug } from "@/lib/slug";
+import { templateWindowsSchema } from "@/lib/template-windows";
+import { importedStartParams } from "@/server/imported-templates";
 import { TEMPLATE_STATUS_VALUES, isPublicStatus, isTemplateStatus, templateStatusLabel } from "@/lib/template-status";
 import { db } from "@/server/db";
 import { requireSuperAdmin } from "@/server/admin";
@@ -84,7 +86,22 @@ const saveSchema = z.object({
   referenceStyles: z.array(z.string().max(80)).max(60).default([]),
   /** Built-in templates: board thickness (mm) new projects start with. null = the template's own default. */
   defaultThickness: z.number().finite().positive().max(100).nullable().optional(),
+  /** Window holes new projects start with. Absent = keep what the template has; [] = none. */
+  windows: templateWindowsSchema.optional(),
 });
+
+/** The windows must all fit the dieline a new project starts with (the engine decides); returns the reason when one does not. */
+function windowsProblem(gen: GeneratorDefinition, params: Record<string, unknown>, windows: readonly WindowSpec[]): string | null {
+  if (windows.length === 0) return null;
+  try {
+    const r = applyWindows(gen.generate(params), windows);
+    return r.problems.length === 0 ? null : `A window hole does not fit: ${r.problems[0]!.message}`;
+  } catch {
+    return "The window holes could not be checked against this dieline.";
+  }
+}
+
+const windowsData = (w: readonly WindowSpec[] | undefined) => (w === undefined ? {} : { windows: w.length === 0 ? Prisma.DbNull : (w as unknown as Prisma.InputJsonValue) });
 
 export type SaveTemplateResult = ActionResult & { slug?: string };
 
@@ -199,7 +216,7 @@ export async function saveTemplate(input: unknown): Promise<SaveTemplateResult> 
 
   // The row being edited is found by its current address; a new address is only used when renaming.
   const current = v.mode === "edit" ? (v.originalSlug ?? v.slug) : v.slug;
-  const existing = await db.template.findUnique({ where: { id: current }, select: { source: true, generatorId: true, geometry: true, _count: { select: { projects: true } } } });
+  const existing = await db.template.findUnique({ where: { id: current }, select: { source: true, generatorId: true, geometry: true, defaultThickness: true, _count: { select: { projects: true } } } });
 
   // ---- Edit a built-in template: details, order, categories and visibility (its geometry and address come from code).
   if (v.mode === "edit" && existing?.source === "builtin") {
@@ -210,11 +227,19 @@ export async function saveTemplate(input: unknown): Promise<SaveTemplateResult> 
       if (!t || t.kind !== "number") return { ok: false, message: "This template has no board thickness to set." };
       if (v.defaultThickness < t.min || v.defaultThickness > t.max) return { ok: false, message: `Default thickness must be between ${t.min} and ${t.max} mm for this template.` };
     }
+    if (v.windows !== undefined) {
+      const preset = getPreset(current);
+      if (!preset) return { ok: false, message: "Template not found." };
+      const thickness = v.defaultThickness !== undefined ? v.defaultThickness : existing.defaultThickness;
+      const bad = windowsProblem(getGenerator(preset.generatorId), { ...preset.defaults, ...(thickness ? { thickness } : {}) }, v.windows as WindowSpec[]);
+      if (bad) return { ok: false, message: bad };
+    }
     await db.template.update({
       where: { id: current },
       data: {
         name: v.name, description: v.description, status: v.status, published: isPublicStatus(v.status), sortOrder: v.sortOrder, categories: { set: categories },
         ...(v.defaultThickness !== undefined ? { defaultThickness: v.defaultThickness } : {}),
+        ...windowsData(v.windows as WindowSpec[] | undefined),
       },
     });
     refresh(current);
@@ -291,6 +316,15 @@ export async function saveTemplate(input: unknown): Promise<SaveTemplateResult> 
   // Only styles that really are ignored can be kept as reference.
   const referenceStyles = [...new Set(v.referenceStyles)].filter((k) => roles[k] === "ignore");
 
+  // Window holes: they need the 3D fold (the panels) and must fit the dieline at its starting size.
+  let windows = v.windows as WindowSpec[] | undefined;
+  if (fold === null) windows = windows === undefined && v.mode === "create" ? undefined : [];
+  else if (windows !== undefined && windows.length > 0) {
+    const flatData = toFlatDieline(dieline, roles);
+    const bad = windowsProblem(createImportedGenerator("check", flatData as FlatDieline, fold), importedStartParams(flatData, fold), windows);
+    if (bad) return { ok: false, message: bad };
+  }
+
   const geometry: StoredGeometry = { v: 1, dieline, ...(excluded.length ? { full: base, excluded } : {}), roles, options, fold, referenceStyles };
   if (JSON.stringify(geometry).length > MAX_GEOMETRY_JSON) return { ok: false, message: "This dieline is too detailed to store. Simplify the SVG and try again." };
   const thumbnail = thumbnailSvg(dieline, roles);
@@ -301,6 +335,7 @@ export async function saveTemplate(input: unknown): Promise<SaveTemplateResult> 
     published: isPublicStatus(v.status),
     sortOrder: v.sortOrder,
     hasFold: fold !== null,
+    ...windowsData(windows),
     geometry: geometry as unknown as Prisma.InputJsonValue,
     widthMm: dieline.widthMm,
     heightMm: dieline.heightMm,

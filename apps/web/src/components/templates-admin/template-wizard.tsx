@@ -4,7 +4,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, FileUp, ImagePlus, RotateCcw, Trash2, Wand2 } from "lucide-react";
-import { validateFoldSetup, type FoldSetup } from "@packaging/dieline-engine";
+import { applyWindows, createImportedGenerator, generateDieline, getPreset, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldSetup, type WindowSpec } from "@packaging/dieline-engine";
 import { SvgImportError, excludePaths, importSvg, suggestRoles, toFlatDieline, type ImportedDieline, type Role } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { saveTemplate } from "@/app/doraadmin/template-actions";
@@ -18,6 +18,8 @@ import { RoleSampleButton } from "./role-sample";
 import { SvgPreviewButton } from "./svg-preview";
 import { FoldSetupEditor } from "./fold-setup-editor";
 import { ViewSettingsInline } from "./view-settings-dialog";
+import { TemplateWindowsField } from "./template-windows-field";
+import { importedStartParams } from "@/lib/imported-start";
 import { PageHeader } from "@/components/admin/page-header";
 import { CleanupEditor } from "./cleanup-editor";
 import { linesKey } from "@/lib/fold-edit";
@@ -56,6 +58,8 @@ export interface WizardInitial {
   material: { min: number; max: number; value: number | null } | null;
   /** The saved starting 3D view (null = standard). The fold preview starts from it and follows it when it is saved. */
   view: ViewSettings | null;
+  /** Window holes new projects start with. */
+  windows: WindowSpec[];
 }
 
 export interface WizardCategory {
@@ -84,7 +88,7 @@ const mmToIn = (mm: number) => (mm / 25.4).toFixed(2);
 export function TemplateWizard({ mode, categories, initial, svgColors }: { mode: "create" | "edit"; categories: WizardCategory[]; initial: WizardInitial; svgColors: SvgColorSettings }) {
   const router = useRouter();
   const builtin = initial.source === "builtin";
-  const steps = builtin ? ["Categories", "Details"] : ["Categories", "SVG file", "Clean up", "Customize", "3D fold", "Details & publish"];
+  const steps = builtin ? ["Categories", "Details"] : ["Categories", "SVG file", "Clean up", "Customize", "3D fold", "Window holes", "Details & publish"];
 
   const [step, setStep] = useState(0);
   const [categoryIds, setCategoryIds] = useState<string[]>(initial.categoryIds);
@@ -105,6 +109,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   const [sortOrder, setSortOrder] = useState(initial.sortOrder);
   // The starting 3D view: the fold preview below shows it, and changes to it (saved in its own section) show at once.
   const [startView, setStartView] = useState<ViewSettings | null>(initial.view);
+  const [windows, setWindows] = useState<WindowSpec[]>(() => [...initial.windows]);
   const [defaultThickness, setDefaultThickness] = useState<number | null>(initial.material?.value ?? null);
   const [bgFile, setBgFile] = useState<File | null>(null);
   const [bgRemoved, setBgRemoved] = useState(false);
@@ -167,17 +172,35 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   const foldProblems = fold && !foldStale ? validateFoldSetup(fold) : [];
   const foldOk = !foldStale && foldProblems.length === 0;
 
+  // The dieline at the size new projects start with: window holes are placed on it (they need panels, so a built-in template or a 3D fold).
+  const windowGeo = useMemo<{ geo: DielineGeometry | null; thickness: number }>(() => {
+    try {
+      if (builtin) {
+        const preset = getPreset(initial.slug);
+        if (!preset) return { geo: null, thickness: 0 };
+        const params = { ...preset.defaults, ...(defaultThickness ? { thickness: defaultThickness } : {}) } as Record<string, unknown>;
+        return { geo: generateDieline(preset.generatorId, params), thickness: typeof params.thickness === "number" ? params.thickness : 0 };
+      }
+      if (!flat || !fold || !foldOk) return { geo: null, thickness: 0 };
+      const params = importedStartParams(flat, fold);
+      return { geo: createImportedGenerator("template", flat as FlatDieline, fold).generate(params), thickness: params.thickness };
+    } catch {
+      return { geo: null, thickness: 0 };
+    }
+  }, [builtin, initial.slug, defaultThickness, flat, fold, foldOk]);
+  const windowProblems = windowGeo.geo && windows.length > 0 ? applyWindows(windowGeo.geo, windows).problems : [];
+
   // Edit mode: has anything changed since the page loaded? (Compared as plain data.)
   const sortedRoles = (r: Record<string, Role>) => Object.fromEntries(Object.entries(r).sort(([a], [b]) => a.localeCompare(b)));
   const snapshot = JSON.stringify({
     name: name.trim(), slug, description: description.trim(), status, sortOrder,
-    cats: [...categoryIds].sort(), roles: sortedRoles(roles), opts, dt: defaultThickness,
+    cats: [...categoryIds].sort(), roles: sortedRoles(roles), opts, dt: defaultThickness, win: windows,
     newSvg: text !== null, ex: [...excluded].sort((a, b) => a - b), bg: bgFile ? "new" : bgRemoved ? "removed" : "same", fold, refs: [...refStyles].sort(),
   });
   const [baseline] = useState(() =>
     JSON.stringify({
       name: initial.name.trim(), slug: initial.slug, description: initial.description.trim(), status: initial.status, sortOrder: initial.sortOrder,
-      cats: [...initial.categoryIds].sort(), roles: sortedRoles(initial.roles), opts: initial.options, dt: initial.material?.value ?? null,
+      cats: [...initial.categoryIds].sort(), roles: sortedRoles(initial.roles), opts: initial.options, dt: initial.material?.value ?? null, win: initial.windows,
       newSvg: false, ex: [...initial.excluded].sort((a, b) => a - b), bg: "same", fold: initial.fold, refs: [...initial.referenceStyles].sort(),
     }),
   );
@@ -186,7 +209,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   const [activeSection, setActiveSection] = useState("sec-details");
   useEffect(() => {
     if (mode !== "edit") return;
-    const ids = ["sec-details", "sec-categories", "sec-lines", "sec-fold", "sec-view"];
+    const ids = ["sec-details", "sec-categories", "sec-lines", "sec-fold", "sec-windows", "sec-view"];
     const els = ids.map((id) => document.getElementById(id)).filter((e): e is HTMLElement => e !== null);
     // The section crossing the upper third of the screen is the current one.
     const io = new IntersectionObserver(
@@ -213,6 +236,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
     stepName === "Clean up" ? dieline !== null && cleaned.error === null :
     stepName === "Customize" ? dieline !== null && cleaned.error === null && hasCut && hasClosedCut :
     stepName === "3D fold" ? foldOk :
+    stepName === "Window holes" ? windowProblems.length === 0 :
     true;
   const blocker =
     stepName === "Categories" && categoryIds.length === 0 ? "Choose at least one category." :
@@ -220,6 +244,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
     stepName === "Clean up" && cleaned.error ? cleaned.error :
     stepName === "Customize" && !hasCut ? "Mark at least one line style as Cut." :
     stepName === "Customize" && !hasClosedCut ? "The Cut lines must include a closed outline." :
+    stepName === "Window holes" && windowProblems.length > 0 ? "A window hole does not fit. Open the editor and fix it." :
     stepName === "3D fold" && !foldOk ? (foldStale ? "Detect the panels again, or make the template flat only." : "Fix the problems in the 3D fold.") : null;
 
   async function onFile(file: File | undefined) {
@@ -281,6 +306,8 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
         roles,
         fold: foldOk ? fold : null,
         referenceStyles: refStyles,
+        // Without a usable dieline (no 3D fold yet) there is nothing to send: the server keeps or clears them itself.
+        ...(windowGeo.geo || windows.length === 0 ? { windows } : {}),
       });
       if (r.ok) {
         const finalSlug = r.slug ?? slug;
@@ -530,6 +557,21 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
       <FoldSetupEditor flat={flat} fold={fold} stale={foldStale} startView={startView} {...(mode === "edit" ? { memoryKey: initial.slug } : {})} barBottom={mode === "edit" ? "4.75rem" : "0.75rem"} onChange={(f) => { setFold(f); setFoldKey(flatKey); }} />
     </section>
   ) : null;
+  const windowsSection = (
+    <section aria-labelledby="s-win" className="flex flex-col gap-4">
+      <div className="flex items-center gap-1.5">
+        <h2 id="s-win" className="text-lg font-semibold">Window holes</h2>
+        <InfoTip label="Window holes">Optional. Cut-outs in a panel that every new project starts with, for example a window on a food box. Customers can change them.</InfoTip>
+      </div>
+      <TemplateWindowsField
+        geo={windowGeo.geo}
+        unavailable={builtin ? "This template has no dieline to place windows on." : "Set up the 3D fold first: window holes are placed on its panels."}
+        value={windows}
+        onChange={setWindows}
+        thickness={windowGeo.thickness}
+      />
+    </section>
+  );
   const detailsFields = (
     <>
             <label className="flex flex-col gap-1 text-sm font-medium">
@@ -645,12 +687,14 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
       !builtin && hasCut && !hasClosedCut ? "The Cut lines must include a closed outline." : null,
       !builtin && foldStale ? "The lines changed: detect the 3D fold again, or make the template flat only." : null,
       !builtin && !foldStale && foldProblems.length ? "Fix the problems in the 3D fold." : null,
+      windowProblems.length > 0 ? `A window hole does not fit: ${windowProblems[0]!.message}` : null,
     ].filter((x): x is string => x !== null);
     const canSave = dirty && problems.length === 0 && !saving;
     const sections = [
       { id: "sec-details", label: "Details" },
       { id: "sec-categories", label: "Categories" },
       ...(builtin ? [] : [...(dieline ? [{ id: "sec-lines", label: "Line roles" }, { id: "sec-fold", label: "3D fold" }] : [])]),
+      { id: "sec-windows", label: "Window holes" },
       ...(builtin || initial.fold ? [{ id: "sec-view", label: "Starting 3D view" }] : []),
     ];
     const card = "scroll-mt-24 rounded-2xl border bg-card p-5 shadow-xs";
@@ -688,6 +732,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
             <div id="sec-categories" className={card}>{categoriesSection}</div>
             {!builtin && customizeSection ? <div id="sec-lines" className={card}>{customizeSection}</div> : null}
             {!builtin && foldSection ? <div id="sec-fold" className={card}>{foldSection}</div> : null}
+            <div id="sec-windows" className={card}>{windowsSection}</div>
             {builtin || initial.fold ? (
               <section id="sec-view" aria-labelledby="s-view" className={card}>
                 <div className="mb-4 flex items-center gap-1.5">
@@ -748,6 +793,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
       {stepName === "Clean up" ? cleanupSection : null}
       {stepName === "Customize" ? customizeSection : null}
       {stepName === "3D fold" ? foldSection : null}
+      {stepName === "Window holes" ? windowsSection : null}
       {stepName === "Details" || stepName === "Details & publish" ? (
         <section aria-labelledby="s-det" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="flex max-w-xl flex-col gap-4">

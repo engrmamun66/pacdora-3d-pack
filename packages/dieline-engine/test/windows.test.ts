@@ -3,6 +3,8 @@ import {
   WINDOW_GAP,
   WINDOW_MARGIN,
   WINDOW_SHAPES,
+  WINDOW_SHAPE_GROUPS,
+  WINDOW_SHAPE_LABELS,
   applyWindows,
   area,
   bounds,
@@ -27,7 +29,7 @@ describe("window shapes", () => {
       const b = bounds(p);
       expect(b.max.x - b.min.x, shape).toBeCloseTo(40, 0);
       expect(b.max.y - b.min.y, shape).toBeCloseTo(24, 0);
-      expect(area(p), shape).toBeGreaterThan(40 * 24 * 0.2);
+      expect(area(p), shape).toBeGreaterThan(40 * 24 * 0.1);
       expect(area(p), shape).toBeLessThanOrEqual(40 * 24 + 1e-6);
     }
   });
@@ -99,5 +101,74 @@ describe("applyWindows", () => {
     const r = applyWindows(geo, [win({ id: "a", cx: centre.x - 20, width: 10, height: 10 }), win({ id: "b", cx: centre.x + 20, width: 10, height: 10 })]);
     expect(r.applied).toEqual(["a", "b"]);
     expect(r.geo.foldTree.panels.find((p) => p.id === big.id)!.holes).toHaveLength(2);
+  });
+});
+
+describe("pieces and holes the drawing already has", () => {
+  const b0 = bounds(flattenOutline(geo.cutLoops[0]!));
+  const rect = (x0: number, y0: number, x1: number, y1: number) => ({ points: [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }] });
+
+  it("a second piece (its own outline, e.g. a lid beside the box) is not a hole", () => {
+    const withPiece = { ...geo, cutLoops: [...geo.cutLoops, rect(b0.max.x + 20, b0.min.y, b0.max.x + 120, b0.min.y + 80)] };
+    expect(applyWindows(withPiece, [win()]).problems).toEqual([]);
+  });
+
+  it("a window inside the second piece is judged on its own panels, not blocked by the outline", () => {
+    const withPiece = { ...geo, cutLoops: [...geo.cutLoops, rect(b0.max.x + 20, b0.min.y, b0.max.x + 120, b0.min.y + 80)] };
+    expect(applyWindows(withPiece, [win()]).applied).toEqual(["w1"]);
+  });
+
+  it("a hole inside an outline still keeps windows clear", () => {
+    const hole = rect(centre.x - 5, centre.y - 5, centre.x + 5, centre.y + 5);
+    const r = applyWindows({ ...geo, cutLoops: [...geo.cutLoops, hole] }, [win({ width: 8, height: 8 })]);
+    expect(r.problems[0]?.message).toMatch(/hole the dieline already has/);
+  });
+});
+
+describe("the shape library", () => {
+  type P = { x: number; y: number };
+  const cross = (o: P, a: P, b: P) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  /** Do the segments ab and cd cross (a touch at an end does not count)? */
+  const crosses = (a: P, b: P, c: P, d: P) => cross(a, b, c) * cross(a, b, d) < -1e-9 && cross(c, d, a) * cross(c, d, b) < -1e-9;
+  const isSimple = (pts: readonly P[]) => {
+    const n = pts.length;
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 2; j < n; j++) {
+        if (i === 0 && j === n - 1) continue; // neighbours through the closing edge
+        if (crosses(pts[i]!, pts[(i + 1) % n]!, pts[j]!, pts[(j + 1) % n]!)) return false;
+      }
+    }
+    return true;
+  };
+
+  it("has Basic Shapes and 50 More Shapes, each named once", () => {
+    expect(WINDOW_SHAPE_GROUPS.map((g) => [g.title, g.shapes.length])).toEqual([["Basic Shapes", 13], ["More Shapes", 50]]);
+    expect(WINDOW_SHAPES.length).toBe(63);
+    const labels = WINDOW_SHAPES.map((s) => WINDOW_SHAPE_LABELS[s]);
+    expect(new Set(labels).size).toBe(labels.length);
+    expect(new Set(WINDOW_SHAPES.flatMap((s) => (s.length <= 30 ? [s] : []))).size).toBe(63); // ids fit the stored form
+  });
+
+  it("every shape is one simple polygon that fills its box, wide, tall and square", () => {
+    for (const shape of WINDOW_SHAPES) {
+      for (const [w, h] of [[60, 30], [30, 60], [40, 40]] as const) {
+        const p = windowPolygon(win({ shape, cx: 0, cy: 0, width: w, height: h }));
+        const b = bounds(p);
+        expect(b.max.x - b.min.x, `${shape} width`).toBeCloseTo(w, 0);
+        expect(b.max.y - b.min.y, `${shape} height`).toBeCloseTo(h, 0);
+        expect(area(p), `${shape} area`).toBeGreaterThan(w * h * 0.08);
+        expect(isSimple(p), `${shape} ${w}x${h} crosses itself`).toBe(true);
+      }
+    }
+  });
+
+  it("every shape can be cut into a panel, and rotated", () => {
+    for (const shape of WINDOW_SHAPES) {
+      for (const rotation of [0, 35]) {
+        const r = applyWindows(geo, [win({ shape, width: 16, height: 16, rotation })]);
+        expect(r.problems, `${shape} rotated ${rotation}`).toEqual([]);
+        expect(r.applied).toEqual(["w1"]);
+      }
+    }
   });
 });

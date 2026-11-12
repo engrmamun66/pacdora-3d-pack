@@ -6,6 +6,7 @@ import { TemplateWizard } from "@/components/templates-admin/template-wizard";
 import { db } from "@/server/db";
 import { requireSuperAdmin } from "@/server/admin";
 import { readViewSettings } from "@/lib/view-settings";
+import { readTemplateWindows } from "@/lib/template-windows";
 import { templateStatus } from "@/lib/template-status";
 import { readSvgColors } from "@/server/site-settings";
 
@@ -16,7 +17,7 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
   const { slug } = await params;
   if (slug.length > 80) notFound();
   const [t, categories] = await Promise.all([
-    db.template.findUnique({ where: { id: slug }, select: { id: true, name: true, description: true, status: true, published: true, sortOrder: true, defaultThickness: true, generatorId: true, backgroundKey: true, viewSettings: true, updatedAt: true, source: true, geometry: true, categories: { select: { id: true } } } }),
+    db.template.findUnique({ where: { id: slug }, select: { id: true, name: true, description: true, status: true, published: true, sortOrder: true, defaultThickness: true, generatorId: true, backgroundKey: true, viewSettings: true, windows: true, updatedAt: true, source: true, geometry: true, categories: { select: { id: true } } } }),
     db.templateCategory.findMany({ orderBy: [{ kind: "asc" }, { sortOrder: "asc" }, { name: "asc" }], select: { id: true, kind: true, name: true } }),
   ]);
   if (!t) notFound();
@@ -53,6 +54,7 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
           referenceStyles: g?.referenceStyles ?? [],
           material,
           view: readViewSettings(t.viewSettings),
+          windows: readTemplateWindows(t.windows),
         }}
       />
     </div>

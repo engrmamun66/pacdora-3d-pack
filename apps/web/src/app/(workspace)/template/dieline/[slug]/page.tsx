@@ -9,6 +9,7 @@ import { db } from "@/server/db";
 import { importedStartParams, loadImportedSource } from "@/server/imported-templates";
 import { getSaveAsOptions } from "@/server/projects";
 import { readViewSettings } from "@/lib/view-settings";
+import { readTemplateWindows } from "@/lib/template-windows";
 
 const prefillSchema = z.record(z.string().max(60), z.union([z.number().finite(), z.string().max(100), z.boolean()]));
 
@@ -28,7 +29,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
   if (slug.length > 80) notFound();
   const row = await db.template.findUnique({
     where: { id: slug },
-    select: { id: true, name: true, description: true, source: true, published: true, viewSettings: true, defaultThickness: true, categories: { where: { active: true }, select: { name: true } } },
+    select: { id: true, name: true, description: true, source: true, published: true, viewSettings: true, defaultThickness: true, windows: true, categories: { where: { active: true }, select: { name: true } } },
   });
   if (!row || !row.published) notFound();
   // Signed in or not: the page is open to everyone. A signed-in visitor gets their profile icon in the header.
@@ -48,6 +49,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
         generatorId={IMPORTED_GENERATOR_ID}
         imported={{ templateId: imported.templateId, flat: imported.flat, fold: imported.fold }}
         initialView={readViewSettings(row.viewSettings)}
+        initialWindows={readTemplateWindows(row.windows)}
         modelId={row.id}
         title={row.name}
         description={row.description}
@@ -69,6 +71,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
       mode={{ kind: "create", presetId: preset.id }}
       generatorId={preset.generatorId}
       initialView={readViewSettings(row.viewSettings)}
+      initialWindows={readTemplateWindows(row.windows)}
       modelId={row.id}
       title={row.name}
       description={row.description}

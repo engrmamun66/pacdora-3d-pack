@@ -1,15 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Copy, Lock, LockOpen, Maximize, Minus, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
 import {
   MAX_WINDOWS,
   WINDOW_MIN_SIZE,
   WINDOW_SHAPES,
+  WINDOW_SHAPE_GROUPS,
   WINDOW_SHAPE_LABELS,
   applyWindows,
   area,
   flattenOutline,
+  shapeKeepsRatio,
+  shapeRatio,
+  shapeStartSize,
   windowPolygon,
   type DielineGeometry,
   type WatermarkSpec,
@@ -21,6 +25,7 @@ import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { svgDataUrl } from "@/lib/dieline-preview";
 import { FoldPreview } from "./side-cards";
 import { fromDisplay, toDisplay, type Unit } from "./units";
+import { boxOf, pointIn, snapMove, windowGaps, type Guide } from "@/lib/window-guides";
 
 /** Pixels per millimetre on screen, and the centre of what is shown (mm). */
 interface View {
@@ -40,7 +45,6 @@ interface Drag {
   py: number;
 }
 
-const HANDLE_PX = 5;
 const polyD = (pts: readonly { x: number; y: number }[]) => `M${pts.map((p) => `${p.x.toFixed(3)} ${p.y.toFixed(3)}`).join("L")}Z`;
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
@@ -50,23 +54,14 @@ const freshId = (list: readonly WindowSpec[]) => {
 };
 
 /** Starting box of a shape, as a share of the panel it goes on (width, height). */
-const START: Record<WindowShape, [number, number]> = {
-  rectangle: [0.5, 0.36],
-  "rounded-rectangle": [0.5, 0.36],
-  circle: [0.34, 0.34],
-  ellipse: [0.5, 0.34],
-  stadium: [0.55, 0.26],
-  arch: [0.34, 0.44],
-  diamond: [0.4, 0.4],
-  hexagon: [0.46, 0.4],
-  star: [0.4, 0.4],
-  heart: [0.4, 0.38],
-};
+const SHAPE_MIME = "application/x-dieline-window-shape";
 
 /** Small picture of a shape for the palette. */
 function ShapeIcon({ shape }: { shape: WindowShape }) {
-  const w = shape === "circle" || shape === "diamond" || shape === "star" || shape === "heart" ? 30 : 38;
-  const h = shape === "stadium" ? 22 : shape === "ellipse" ? 24 : 30;
+  // The shape at its natural proportions, as big as the picture allows.
+  const r = shapeRatio(shape);
+  const w = r >= 1.27 ? 38 : Math.round(30 * r);
+  const h = r >= 1.27 ? Math.round(38 / r) : 30;
   const pts = windowPolygon({ shape, cx: 0, cy: 0, width: w, height: h, rotation: 0 });
   return (
     <svg viewBox="-24 -20 48 40" className="h-10 w-12" aria-hidden>
@@ -110,6 +105,11 @@ export function WindowEditor({
   const [selected, setSelected] = useState<string | null>(null);
   const [lockRatio, setLockRatio] = useState<Record<string, boolean>>({});
   const [notice, setNotice] = useState<string | null>(null);
+  const [dropping, setDropping] = useState(false);
+  const [guides, setGuides] = useState<Guide[]>([]);
+  /** Right-click menu: where it opens (px inside the sheet area) and for which window. */
+  const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(1);
   const previewRef = useRef<CartonViewHandle>(null);
   const draftRef = useRef(draft);
@@ -117,9 +117,27 @@ export function WindowEditor({
     draftRef.current = draft;
   }, [draft]);
 
+  // The check is cheap and always live (red windows). Building the 3D box is the heavy part: it waits until the pointer is released.
   const result = useMemo(() => applyWindows(geo, draft), [geo, draft]);
+  const [dragging, setDragging] = useState(false);
+  const [boxDraft, setBoxDraft] = useState(draft);
+  if (!dragging && boxDraft !== draft) setBoxDraft(draft); // follows the drawing again as soon as the pointer is released
+  const slowBoxDraft = useDeferredValue(boxDraft);
+  const boxGeo = useMemo(() => applyWindows(geo, slowBoxDraft).geo, [geo, slowBoxDraft]);
   const problemOf = useMemo(() => new Map(result.problems.filter((p) => p.id).map((p) => [p.id, p.message])), [result.problems]);
   const sel = draft.find((w) => w.id === selected) ?? null;
+  const panelPolys = useMemo(() => geo.foldTree.panels.map((p) => flattenOutline({ points: p.polygon, ...(p.bulges ? { bulges: p.bulges } : {}) })), [geo]);
+  /** The smallest panel the point lies in (the top one where flaps are stacked). */
+  const panelAt = (at: { x: number; y: number }) => panelPolys.filter((q) => pointIn(at, q)).sort((a, b) => area(a) - area(b))[0] ?? null;
+  // How far the chosen window is from the left and top edge (or fold) of its panel.
+  const gaps = useMemo(() => {
+    if (!sel) return null;
+    const poly = windowPolygon(sel);
+    const b = boxOf(poly);
+    const host = panelAt({ x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 });
+    return host ? windowGaps(host, poly) : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- panelAt only reads panelPolys
+  }, [sel, panelPolys]);
 
   // ---- history ----
   const commit = useCallback((next: WindowSpec[]) => {
@@ -200,6 +218,47 @@ export function WindowEditor({
   }, [size.w, size.h, fitted]);
 
   // ---- adding ----
+  /** Size of a new window of this shape on a panel of this size (`k` shrinks it). Round shapes stay round. */
+  const sizeFor = (shape: WindowShape, pw: number, ph: number, k: number): [number, number] => {
+    let [width, height] = shapeStartSize(shape, pw, ph, k);
+    if (shapeKeepsRatio(shape)) width = height = Math.min(width, height);
+    return [Math.max(WINDOW_MIN_SIZE, round3(width)), Math.max(WINDOW_MIN_SIZE, round3(height))];
+  };
+  const isEven = shapeKeepsRatio;
+
+  /** A shape dropped from the palette: centred on the drop point, as big as fits the panel under it. */
+  const addAt = (shape: WindowShape, at: { x: number; y: number }) => {
+    if (draft.length >= MAX_WINDOWS) {
+      setNotice(`At most ${MAX_WINDOWS} windows.`);
+      return;
+    }
+    const host = geo.foldTree.panels
+      .map((p) => ({ pts: flattenOutline({ points: p.polygon, ...(p.bulges ? { bulges: p.bulges } : {}) }) }))
+      .filter((p) => pointIn(at, p.pts))
+      .sort((a, b) => area(a.pts) - area(b.pts))[0]; // the smallest one when pieces overlap (a stacked flap)
+    if (!host) {
+      setNotice("Drop the shape on a panel of the dieline.");
+      return;
+    }
+    const xs = host.pts.map((q) => q.x);
+    const ys = host.pts.map((q) => q.y);
+    const pw = Math.max(...xs) - Math.min(...xs);
+    const ph = Math.max(...ys) - Math.min(...ys);
+    const id = freshId(draft);
+    for (const k of [0.6, 0.45, 0.33, 0.24, 0.17, 0.12, 0.08, 0.05]) {
+      const [width, height] = sizeFor(shape, pw, ph, k);
+      const w: WindowSpec = { id, shape, cx: round3(at.x), cy: round3(at.y), width, height, rotation: 0 };
+      if (applyWindows(geo, [...draft, w]).problems.every((q) => q.id !== id)) {
+        commit([...draft, w]);
+        setSelected(id);
+        setNotice(null);
+        if (isEven(shape)) setLockRatio((l) => ({ ...l, [id]: true }));
+        return;
+      }
+    }
+    setNotice("It does not fit there: keep it away from folds, edges and other windows.");
+  };
+
   const add = (shape: WindowShape) => {
     if (draft.length >= MAX_WINDOWS) {
       setNotice(`At most ${MAX_WINDOWS} windows.`);
@@ -215,18 +274,13 @@ export function WindowEditor({
       })
       .sort((a, b) => Number(b.printable) - Number(a.printable) || b.a - a.a);
     const id = freshId(draft);
-    const even = shape === "circle" || shape === "diamond" || shape === "star" || shape === "heart" || shape === "hexagon";
+    const even = isEven(shape);
     // Biggest panel first; on each, the biggest size that the engine accepts, in the middle first, then around it.
     for (const p of panels) {
       const pw = p.x1 - p.x0;
       const ph = p.y1 - p.y0;
       for (const k of [1, 0.75, 0.55, 0.4, 0.28]) {
-        const [sw, sh] = START[shape];
-        let width = pw * sw * k;
-        let height = ph * sh * k;
-        if (even) width = height = Math.min(width, height);
-        width = Math.max(WINDOW_MIN_SIZE, round3(width));
-        height = Math.max(WINDOW_MIN_SIZE, round3(height));
+        const [width, height] = sizeFor(shape, pw, ph, k);
         if (Math.min(width, height) < 8) continue; // too small to be useful: try a bigger panel
         const mx = (p.x0 + p.x1) / 2;
         const my = (p.y0 + p.y1) / 2;
@@ -269,15 +323,34 @@ export function WindowEditor({
   const drag = useRef<Drag | null>(null);
   const panning = useRef<{ x: number; y: number; cx: number; cy: number } | null>(null);
   const begin = (e: React.PointerEvent, handle: Handle, w: WindowSpec) => {
+    if (e.button !== 0) return; // a right click only opens the menu
+    setMenu(null);
     e.stopPropagation();
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     const p = toMm(e);
     drag.current = { handle, id: w.id, start: w, px: p.x, py: p.y };
     setSelected(w.id);
+    setDragging(true);
     setPast((h) => [...h.slice(-60), draftRef.current]);
     setFuture([]);
   };
+  type Pointer = { clientX: number; clientY: number; shiftKey: boolean; altKey: boolean };
+  // Pointer events can come faster than the screen draws: keep the latest one and handle it once per frame.
+  const latest = useRef<Pointer | null>(null);
+  const frame = useRef(0);
+  const handler = useRef<(e: Pointer) => void>(() => undefined);
   const onMove = (e: React.PointerEvent) => {
+    if (!drag.current && !panning.current) return;
+    latest.current = { clientX: e.clientX, clientY: e.clientY, shiftKey: e.shiftKey, altKey: e.altKey };
+    if (frame.current) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0;
+      const ev = latest.current;
+      latest.current = null;
+      if (ev) handler.current(ev);
+    });
+  };
+  const moveNow = (e: Pointer) => {
     if (panning.current) {
       const pn = panning.current;
       setView((cur) => {
@@ -291,7 +364,20 @@ export function WindowEditor({
     const p = toMm(e);
     const w = d.start;
     if (d.handle.kind === "move") {
-      patch(d.id, { cx: round3(w.cx + p.x - d.px), cy: round3(w.cy + p.y - d.py) }, false);
+      let nx = w.cx + p.x - d.px;
+      let ny = w.cy + p.y - d.py;
+      if (e.altKey) setGuides([]);
+      else {
+        // Line up with the other windows and the middle of the panel (hold Alt to move freely).
+        const own = boxOf(windowPolygon({ ...w, cx: nx, cy: ny }));
+        const others = draftRef.current.filter((o) => o.id !== d.id).map((o) => boxOf(windowPolygon(o)));
+        const host = panelAt({ x: nx, y: ny });
+        const s = snapMove(own, others, host ? boxOf(host) : null, 6 / v.s);
+        nx += s.dx;
+        ny += s.dy;
+        setGuides(s.guides);
+      }
+      patch(d.id, { cx: round3(nx), cy: round3(ny) }, false);
     } else if (d.handle.kind === "rotate") {
       let deg = (Math.atan2(p.y - w.cy, p.x - w.cx) * 180) / Math.PI + 90;
       if (e.shiftKey) deg = Math.round(deg / 15) * 15;
@@ -336,7 +422,46 @@ export function WindowEditor({
       );
     }
   };
+  useEffect(() => {
+    handler.current = moveNow;
+  });
+  // The right-click menu closes on a click elsewhere, Escape, scrolling or zooming.
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const away = (e: PointerEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) close();
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        close();
+      }
+    };
+    document.addEventListener("pointerdown", away, true);
+    document.addEventListener("keydown", key, true);
+    window.addEventListener("wheel", close, { passive: true });
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("pointerdown", away, true);
+      document.removeEventListener("keydown", key, true);
+      window.removeEventListener("wheel", close);
+      window.removeEventListener("resize", close);
+    };
+  }, [menu]);
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
   const onUp = () => {
+    // The last position counts even if its frame has not been drawn yet.
+    if (frame.current) {
+      cancelAnimationFrame(frame.current);
+      frame.current = 0;
+    }
+    if (latest.current) {
+      moveNow(latest.current);
+      latest.current = null;
+    }
+    setGuides([]);
+    setDragging(false);
     drag.current = null;
     panning.current = null;
   };
@@ -370,14 +495,13 @@ export function WindowEditor({
     }
   };
 
-  const hr = HANDLE_PX / v.s;
   const bad = result.problems.length > 0;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" role="region" aria-label="Window editor" onKeyDown={onKey}>
       <div className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
         <h2 className="text-sm font-semibold">Window holes</h2>
-        <p className="hidden text-xs text-muted-foreground md:block">Pick a shape, then drag it onto a panel. Each window must stay inside one panel, away from folds and edges.</p>
+        <p className="hidden text-xs text-muted-foreground md:block">Click a shape to add it, or drag it onto a panel. Each window must stay inside one panel, away from folds and edges.</p>
         <div className="ml-auto flex items-center gap-2">
           {bad ? <span role="status" className="hidden text-xs text-destructive sm:block">{result.problems.length} {result.problems.length === 1 ? "window does" : "windows do"} not fit</span> : null}
           <button type="button" onClick={onCancel} className="inline-flex h-8 items-center rounded-lg border bg-background px-3 text-[13px] font-medium hover:bg-muted">Cancel</button>
@@ -396,34 +520,57 @@ export function WindowEditor({
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[17rem_minmax(0,1fr)_19rem]">
         {/* Shapes */}
         <aside className="flex flex-col gap-3 overflow-y-auto border-b p-3 lg:border-r lg:border-b-0" aria-label="Window shapes">
-          <h3 className="text-xs font-medium text-muted-foreground">Shapes</h3>
-          <div className="grid grid-cols-3 gap-2 lg:grid-cols-2">
-            {WINDOW_SHAPES.map((shape) => (
-              <button
-                key={shape}
-                type="button"
-                onClick={() => add(shape)}
-                title={`Add a ${WINDOW_SHAPE_LABELS[shape].toLowerCase()}`}
-                className="flex flex-col items-center gap-1 rounded-xl border bg-background p-2 text-xs text-foreground/80 transition-colors hover:border-primary hover:bg-muted"
-              >
-                <ShapeIcon shape={shape} />
-                {WINDOW_SHAPE_LABELS[shape]}
-              </button>
-            ))}
-          </div>
           {notice ? <p role="status" className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{notice}</p> : null}
-          <p className="text-xs text-muted-foreground">{draft.length} of {MAX_WINDOWS} windows. Delete removes the chosen one; the arrow keys nudge it (Shift = 5 mm).</p>
+          {WINDOW_SHAPE_GROUPS.map((group) => (
+            <section key={group.id} aria-label={group.title} className="flex flex-col gap-2">
+              <h3 className="text-xs font-semibold text-foreground/80">{group.title}</h3>
+              <div className="grid grid-cols-3 gap-2 lg:grid-cols-2">
+                {group.shapes.map((shape) => (
+                  <button
+                    key={shape}
+                    type="button"
+                    onClick={() => add(shape)}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(SHAPE_MIME, shape);
+                      e.dataTransfer.effectAllowed = "copy";
+                    }}
+                    title={`Click to add: ${WINDOW_SHAPE_LABELS[shape].toLowerCase()}. Or drag it onto a panel`}
+                    className="flex flex-col items-center gap-1 rounded-xl border bg-background p-2 text-center text-xs text-foreground/80 transition-colors hover:border-primary hover:bg-muted"
+                  >
+                    <ShapeIcon shape={shape} />
+                    {WINDOW_SHAPE_LABELS[shape]}
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
+          <p className="text-xs text-muted-foreground">{draft.length} of {MAX_WINDOWS} windows. Drag a shape onto a panel to place it where you drop it. Delete removes the chosen one; the arrow keys nudge it (Shift = 5 mm). Moving snaps to other windows and the panel middle; hold Alt to move freely.</p>
         </aside>
 
         {/* The sheet */}
         <div className="relative min-h-[50vh] min-w-0 bg-muted/30 lg:min-h-0">
           <div
             ref={host}
-            className="absolute inset-0 touch-none overflow-hidden"
+            className={`absolute inset-0 touch-none overflow-hidden ${dropping ? "ring-2 ring-inset ring-primary/60" : ""}`}
             tabIndex={0}
             onPointerMove={onMove}
             onPointerUp={onUp}
             onPointerCancel={onUp}
+            onDragOver={(e) => {
+              if (!e.dataTransfer.types.includes(SHAPE_MIME)) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+              if (!dropping) setDropping(true);
+            }}
+            onDragLeave={() => setDropping(false)}
+            onDrop={(e) => {
+              setDropping(false);
+              const shape = e.dataTransfer.getData(SHAPE_MIME);
+              if (!(WINDOW_SHAPES as readonly string[]).includes(shape)) return;
+              e.preventDefault();
+              addAt(shape as WindowShape, toMm(e));
+            }}
             onPointerDown={(e) => {
               if (e.target !== e.currentTarget && (e.target as Element).tagName !== "svg" && (e.target as Element).tagName !== "image") return;
               setSelected(null);
@@ -439,7 +586,17 @@ export function WindowEditor({
                 const problem = problemOf.get(w.id);
                 const local = windowPolygon({ ...w, cx: 0, cy: 0, rotation: 0 });
                 return (
-                  <g key={w.id} transform={`translate(${w.cx} ${w.cy}) rotate(${w.rotation})`}>
+                  <g
+                    key={w.id}
+                    transform={`translate(${w.cx} ${w.cy}) rotate(${w.rotation})`}
+                    onContextMenu={(e) => {
+                      // Right click anywhere on the window or its grips.
+                      e.preventDefault();
+                      const r = host.current!.getBoundingClientRect();
+                      setSelected(w.id);
+                      setMenu({ x: e.clientX - r.left, y: e.clientY - r.top, id: w.id });
+                    }}
+                  >
                     <path
                       d={polyD(local)}
                       fill={problem ? "#dc2626" : "#2563eb"}
@@ -451,32 +608,104 @@ export function WindowEditor({
                       onPointerDown={(e) => begin(e, { kind: "move" }, w)}
                     />
                     {on ? (
-                      <g>
-                        <rect x={-w.width / 2} y={-w.height / 2} width={w.width} height={w.height} fill="none" stroke="#2563eb" strokeWidth={1 / v.s} strokeDasharray={`${4 / v.s} ${3 / v.s}`} pointerEvents="none" />
-                        <line x1={0} y1={-w.height / 2} x2={0} y2={-w.height / 2 - 20 / v.s} stroke="#2563eb" strokeWidth={1 / v.s} pointerEvents="none" />
-                        <circle cx={0} cy={-w.height / 2 - 20 / v.s} r={hr * 1.2} fill="#fff" stroke="#2563eb" strokeWidth={1.5 / v.s} className="cursor-grab" onPointerDown={(e) => begin(e, { kind: "rotate" }, w)} />
-                        {([[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]] as const).map(([sx, sy]) => (
-                          <rect
-                            key={`${sx}${sy}`}
-                            x={(sx * w.width) / 2 - hr}
-                            y={(sy * w.height) / 2 - hr}
-                            width={hr * 2}
-                            height={hr * 2}
-                            rx={hr * 0.3}
-                            fill="#fff"
-                            stroke="#2563eb"
-                            strokeWidth={1.5 / v.s}
-                            className={sx !== 0 && sy !== 0 ? (sx === sy ? "cursor-nwse-resize" : "cursor-nesw-resize") : sx !== 0 ? "cursor-ew-resize" : "cursor-ns-resize"}
-                            onPointerDown={(e) => begin(e, { kind: "size", sx, sy }, w)}
-                          />
-                        ))}
+                      <g pointerEvents="all">
+                        {/* The frame of the window, then the grips: round on the corners, a pill on each side. */}
+                        <rect x={-w.width / 2} y={-w.height / 2} width={w.width} height={w.height} fill="none" stroke="#3b82f6" strokeWidth={2.2 / v.s} pointerEvents="none" />
+                        <line x1={0} y1={-w.height / 2} x2={0} y2={-w.height / 2 - 20 / v.s} stroke="#3b82f6" strokeWidth={1.2 / v.s} pointerEvents="none" />
+                        <circle cx={0} cy={-w.height / 2 - 20 / v.s} r={8 / v.s} fill="rgba(99,102,241,0.18)" pointerEvents="none" />
+                        <circle cx={0} cy={-w.height / 2 - 20 / v.s} r={6.5 / v.s} fill="#fff" stroke="#e4e1ff" strokeWidth={1 / v.s} className="cursor-grab" onPointerDown={(e) => begin(e, { kind: "rotate" }, w)} />
+                        {([[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]] as const).map(([sx, sy]) => {
+                          const corner = sx !== 0 && sy !== 0;
+                          const cx = (sx * w.width) / 2;
+                          const cy = (sy * w.height) / 2;
+                          // Pill: long along the side it moves (top and bottom grips are wide, left and right ones tall).
+                          const pw = (sy !== 0 ? 22 : 9) / v.s;
+                          const ph = (sx !== 0 ? 22 : 9) / v.s;
+                          const cursor = corner ? (sx === sy ? "cursor-nwse-resize" : "cursor-nesw-resize") : sx !== 0 ? "cursor-ew-resize" : "cursor-ns-resize";
+                          return (
+                            <g key={`${sx}${sy}`} className={cursor} onPointerDown={(e) => begin(e, { kind: "size", sx, sy }, w)}>
+                              {corner ? (
+                                <>
+                                  <circle cx={cx} cy={cy} r={11 / v.s} fill="rgba(99,102,241,0.18)" />
+                                  <circle cx={cx} cy={cy} r={8.5 / v.s} fill="#fff" stroke="#e4e1ff" strokeWidth={1 / v.s} />
+                                </>
+                              ) : (
+                                <>
+                                  <rect x={cx - pw / 2 - 1.5 / v.s} y={cy - ph / 2 - 1.5 / v.s} width={pw + 3 / v.s} height={ph + 3 / v.s} rx={(Math.min(pw, ph) + 3 / v.s) / 2} fill="rgba(99,102,241,0.18)" />
+                                  <rect x={cx - pw / 2} y={cy - ph / 2} width={pw} height={ph} rx={Math.min(pw, ph) / 2} fill="#fff" stroke="#e4e1ff" strokeWidth={1 / v.s} />
+                                </>
+                              )}
+                            </g>
+                          );
+                        })}
                       </g>
                     ) : null}
                   </g>
                 );
               })}
+              {/* Distances of the chosen window to the left and top edge of its panel */}
+              {gaps ? (
+                <g pointerEvents="none" fill="#2563eb" stroke="#2563eb" strokeWidth={1.2 / v.s} fontSize={11 / v.s} textAnchor="middle" aria-label="Distances to the panel edges">
+                  {gaps.left && gaps.left.to - gaps.left.from > 0.05 ? (
+                    <g>
+                      <line x1={gaps.left.from} y1={gaps.left.y} x2={gaps.left.to} y2={gaps.left.y} />
+                      <line x1={gaps.left.from} y1={gaps.left.y - 4 / v.s} x2={gaps.left.from} y2={gaps.left.y + 4 / v.s} />
+                      <line x1={gaps.left.to} y1={gaps.left.y - 4 / v.s} x2={gaps.left.to} y2={gaps.left.y + 4 / v.s} />
+                      <text x={(gaps.left.from + gaps.left.to) / 2} y={gaps.left.y - 5 / v.s} stroke="#fff" strokeWidth={3.5 / v.s} paintOrder="stroke" strokeLinejoin="round">{toDisplay(String(gaps.left.to - gaps.left.from), unit)}</text>
+                    </g>
+                  ) : null}
+                  {gaps.top && gaps.top.to - gaps.top.from > 0.05 ? (
+                    <g>
+                      <line x1={gaps.top.x} y1={gaps.top.from} x2={gaps.top.x} y2={gaps.top.to} />
+                      <line x1={gaps.top.x - 4 / v.s} y1={gaps.top.from} x2={gaps.top.x + 4 / v.s} y2={gaps.top.from} />
+                      <line x1={gaps.top.x - 4 / v.s} y1={gaps.top.to} x2={gaps.top.x + 4 / v.s} y2={gaps.top.to} />
+                      <text x={gaps.top.x + 5 / v.s} y={(gaps.top.from + gaps.top.to) / 2 + 4 / v.s} textAnchor="start" stroke="#fff" strokeWidth={3.5 / v.s} paintOrder="stroke" strokeLinejoin="round">{toDisplay(String(gaps.top.to - gaps.top.from), unit)}</text>
+                    </g>
+                  ) : null}
+                </g>
+              ) : null}
+              {/* Alignment guides while a window is moved */}
+              {guides.length > 0 ? (
+                <g pointerEvents="none" stroke="#f97316" strokeWidth={1.2 / v.s} strokeDasharray={`${5 / v.s} ${3 / v.s}`}>
+                  {guides.map((g, i) => <line key={i} x1={g.x1} y1={g.y1} x2={g.x2} y2={g.y2} />)}
+                </g>
+              ) : null}
             </svg>
           </div>
+          {menu ? (
+            <div
+              ref={menuRef}
+              role="menu"
+              aria-label="Window actions"
+              className="absolute z-30 w-44 rounded-xl border bg-background p-1 text-sm shadow-lg"
+              style={{ left: Math.min(menu.x, Math.max(0, size.w - 184)), top: Math.min(menu.y, Math.max(0, size.h - 92)) }}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                autoFocus
+                disabled={draft.length >= MAX_WINDOWS}
+                onClick={() => {
+                  duplicate(menu.id);
+                  setMenu(null);
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-40"
+              >
+                <Copy className="size-4" aria-hidden /> Duplicate
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  remove(menu.id);
+                  setMenu(null);
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-destructive hover:bg-destructive/10 focus-visible:bg-destructive/10 focus-visible:outline-none"
+              >
+                <Trash2 className="size-4" aria-hidden /> Delete
+              </button>
+            </div>
+          ) : null}
           <div role="toolbar" aria-label="Window tools" className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-xl border bg-background p-1 shadow-md">
             <button type="button" aria-label="Undo" title="Undo" disabled={past.length === 0} onClick={undo} className="flex size-8 items-center justify-center rounded-md hover:bg-muted disabled:opacity-40"><Undo2 className="size-4" /></button>
             <button type="button" aria-label="Redo" title="Redo" disabled={future.length === 0} onClick={redo} className="flex size-8 items-center justify-center rounded-md hover:bg-muted disabled:opacity-40"><Redo2 className="size-4" /></button>
@@ -491,7 +720,7 @@ export function WindowEditor({
         {/* Numbers, problems and the box */}
         <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto border-t p-3 lg:border-t-0 lg:border-l" aria-label="Window details">
           <FoldPreview
-            geo={result.geo}
+            geo={boxGeo}
             progress={progress}
             onProgress={setProgress}
             color={boardColor}

@@ -138,6 +138,8 @@ model Template {
   defaultThickness  Float?
   /// Camera and fold amount the 3D preview starts with (set by an admin). Null = standard view.
   viewSettings      Json?     @db.JsonB
+  /// Window holes new projects start with (array of WindowDoc, sheet frame in mm at the template's default size). Null = none. Set by an admin.
+  windows           Json?     @db.JsonB
   /// Imported templates only: true when an admin has set up the 3D fold (stored in geometry.fold).
   hasFold           Boolean   @default(false)
   sortOrder         Int       @default(0)
