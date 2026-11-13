@@ -3,9 +3,11 @@
 import { useEffect, useState, type RefObject } from "react";
 import { Grid3x3, Lock, LockOpen } from "lucide-react";
 import type { CartonViewHandle } from "./carton-view";
+import { CameraViewTool } from "./camera-view-menu";
 
 /**
- * Icon button in the top left corner of a 3D view: shows or hides a floor grid behind the carton.
+ * Icon button in the top left corner of a 3D view: shows or hides a floor grid behind the carton. The tools under it:
+ * keep the view, and the camera views.
  * The parent must be `relative`. On from the start; pass `defaultOn={false}` to start with the grid hidden.
  */
 export function GridToggle({ viewRef, defaultOn = true }: { viewRef: RefObject<CartonViewHandle | null>; defaultOn?: boolean }) {
@@ -39,6 +41,7 @@ export function GridToggle({ viewRef, defaultOn = true }: { viewRef: RefObject<C
       <Grid3x3 className="size-4" aria-hidden />
     </button>
     <KeepViewToggle viewRef={viewRef} />
+    <CameraViewTool viewRef={viewRef} />
     </>
   );
 }
