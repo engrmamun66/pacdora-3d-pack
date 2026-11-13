@@ -56,6 +56,8 @@ export function SheetCanvas<T extends Record<string, boolean>>({
   watermarkClip,
   onWindows,
   windowCount = 0,
+  onHoverMm,
+  highlight = null,
 }: {
   /** Size (mm) of the picture `src` shows, margins included. */
   bounds: { width: number; height: number; minX?: number; minY?: number };
@@ -74,6 +76,10 @@ export function SheetCanvas<T extends Record<string, boolean>>({
   onWindows?: () => void;
   /** How many windows there are, shown on that button. */
   windowCount?: number;
+  /** Called with the sheet point (mm) under the mouse, and null when it leaves or a drag starts; absent = not tracked. */
+  onHoverMm?: (p: { x: number; y: number } | null) => void;
+  /** A panel outline (sheet mm) drawn softly over the sheet, e.g. the panel that blinks on the 3D box. */
+  highlight?: readonly { x: number; y: number }[] | null;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View | null>(null);
@@ -184,14 +190,20 @@ export function SheetCanvas<T extends Record<string, boolean>>({
           if (e.button !== 0 || !view) return;
           e.currentTarget.setPointerCapture(e.pointerId);
           drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
+          onHoverMm?.(null);
         }}
         onPointerMove={(e) => {
           const d = drag.current;
+          if (!d && onHoverMm && view) {
+            const r = e.currentTarget.getBoundingClientRect();
+            onHoverMm({ x: (e.clientX - r.left - view.x) / view.k + (vb.minX ?? 0), y: (e.clientY - r.top - view.y) / view.k + (vb.minY ?? 0) });
+          }
           if (!d || d.id !== e.pointerId) return;
           setView((v) => (v ? { ...v, x: d.vx + e.clientX - d.x, y: d.vy + e.clientY - d.y } : v));
         }}
         onPointerUp={() => (drag.current = null)}
         onPointerCancel={() => (drag.current = null)}
+        onPointerLeave={() => onHoverMm?.(null)}
         className="absolute inset-0 cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
       >
         {view ? (
@@ -202,6 +214,11 @@ export function SheetCanvas<T extends Record<string, boolean>>({
             {/* eslint-disable-next-line @next/next/no-img-element -- generated SVG data URL */}
             <img src={src} alt="Flat dieline" draggable={false} className="absolute inset-0 size-full max-w-none" />
             {/* Above the picture: its SVG paints an opaque white sheet, which would hide a watermark under it. */}
+            {highlight && highlight.length >= 3 ? (
+              <svg aria-hidden className="absolute inset-0 size-full" viewBox={`${vb.minX ?? 0} ${vb.minY ?? 0} ${vb.width} ${vb.height}`}>
+                <polygon points={highlight.map((q) => `${q.x},${q.y}`).join(" ")} fill="#2f6bff" fillOpacity={0.2} stroke="#2f6bff" strokeWidth={2 / (view?.k || 1)} strokeLinejoin="round" className="hover-pulse" />
+              </svg>
+            ) : null}
             <SheetWatermark bounds={vb} text={watermark} {...(watermarkStyle ? { style: watermarkStyle } : {})} {...(watermarkClip ? { clip: watermarkClip } : {})} />
           </div>
         ) : null}

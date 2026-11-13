@@ -5,6 +5,7 @@ import { AppWindow, ListOrdered, Play, RotateCcw, Wand2, X } from "lucide-react"
 import { applyWindows, createImportedGenerator, detectFoldSetup, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldHingeSpec, type FoldSetup, type PanelRole, type WindowSpec, partFits } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
+import { BlinkToggle } from "@/components/viewer3d/blink-toggle";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { applyFoldSequence, compactOrders, depthOf, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootAt, rootsOf, setGround, sortedHinges, stepsOf, updateHinge, updatePanel } from "@/lib/fold-edit";
 import { ConstructionEditor, PieceLinksEditor } from "./construction-editor";
@@ -89,6 +90,9 @@ export function FoldSetupEditor({
   memoryKey?: string;
 }) {
   const [sel, setSel] = useState<Sel>(null);
+  /** "Blink mode": hovering a panel on the flat sheet makes the same panel blink softly on the 3D box. */
+  const [blinkMode, setBlinkMode] = useState(false);
+  const [hoverId, setHoverId] = useState<string | null>(null);
   // Which piece's fold list is shown (one tab per piece). Selecting something in the picture switches to its piece.
   const [tab, setTab] = useState(() => (memoryKey ? (openTabs.get(memoryKey) ?? 0) : 0));
   useEffect(() => {
@@ -170,6 +174,11 @@ export function FoldSetupEditor({
   const [windowUnit, setWindowUnit] = useState<Unit>("mm");
   const windowResult = useMemo(() => (geo.geo && windows.length > 0 ? applyWindows(geo.geo, windows) : null), [geo.geo, windows]);
   const shownGeo = windowResult ? windowResult.geo : geo.geo;
+  // Blink Mode: the panel under the mouse on the flat sheet blinks on the 3D box (the box keeps it across rebuilds).
+  const blinkTarget = blinkMode ? hoverId : null;
+  useEffect(() => {
+    view.current?.highlightPanel(blinkTarget);
+  }, [blinkTarget, shownGeo]);
   const fits = useMemo(() => (geo.geo ? partFits(geo.geo.foldTree) : []), [geo.geo]);
 
   const bounds = useMemo(() => {
@@ -274,6 +283,7 @@ export function FoldSetupEditor({
               {fold.panels.map((p) => {
                 const d = depth.get(p.id) ?? 0;
                 const on = sel?.kind === "panel" && sel.id === p.id;
+                const hot = blinkMode && hoverId === p.id && !on;
                 const [cx, cy] = centroid(p.polygon);
                 // Names are 1.5x the old size (half of the earlier 3x, which was too big), never wider than their panel: a narrow panel turns its name or shrinks it.
                 const xs = p.polygon.filter((_, i) => i % 2 === 0);
@@ -292,9 +302,11 @@ export function FoldSetupEditor({
                       d={pathData(p.polygon, true)}
                       fill={DEPTH_COLORS[d % DEPTH_COLORS.length]}
                       fillOpacity={on ? 0.95 : 0.6}
-                      stroke={on ? "#2563eb" : "#ffffff"}
-                      strokeWidth={size / (on ? 120 : 400)}
+                      stroke={on || hot ? "#2563eb" : "#ffffff"}
+                      strokeWidth={size / (on ? 120 : hot ? 220 : 400)}
                       className="cursor-pointer"
+                      onPointerEnter={() => setHoverId(p.id)}
+                      onPointerLeave={() => setHoverId((cur) => (cur === p.id ? null : cur))}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (quick) {
@@ -344,6 +356,7 @@ export function FoldSetupEditor({
 
         {/* 3D preview */}
         <div className="flex min-w-0 flex-col gap-2">
+          <BlinkToggle checked={blinkMode} onChange={(on) => { setBlinkMode(on); if (!on) setHoverId(null); }} />
           <div className="relative overflow-hidden rounded-xl border bg-muted/40">
             {geo.geo ? (
               <CartonView ref={view} className="h-[min(420px,50vh)] w-full" geo={shownGeo ?? geo.geo} texture={null} textureRect={null} progress={progress} outsideColor="#ffffff" insideColor="#c8a97e" initialView={startView} />

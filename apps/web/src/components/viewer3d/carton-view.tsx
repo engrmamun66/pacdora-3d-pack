@@ -168,6 +168,8 @@ export interface CartonViewHandle {
   /** Show or hide a floor grid (10 mm-style cells) behind the carton. */
   setGridVisible(on: boolean): void;
   isGridVisible(): boolean;
+  /** Blink one panel softly (by its panel id) so it can be found on the box; null stops it. Kept when the box is rebuilt. */
+  highlightPanel(id: string | null): void;
   /**
    * Keep the camera (turn, tilt, roll, zoom, pan) when the model is rebuilt for new geometry, instead of framing
    * the new box from the standard position. Only the 3D object changes. The view is kept relative to the box size.
@@ -214,6 +216,10 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     onReadyRef.current = onReady;
     progressRef.current = progress;
   });
+  /** The panel that blinks (id), the blink overlays now on the model, and their shared materials. */
+  const blinkId = useRef<string | null>(null);
+  const blinkMeshes = useRef<THREE.Mesh[]>([]);
+  const blinkMats = useRef<{ front: THREE.MeshBasicMaterial; through: THREE.MeshBasicMaterial } | null>(null);
   const gridObj = useRef<THREE.GridHelper | null>(null);
   const gridOn = useRef(false);
   const keepView = useRef(false);
@@ -365,7 +371,47 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     notifyRotation();
   };
 
+  /** Put the blink overlays on the panel named in `blinkId` (after the model changed, or the choice did). */
+  const applyBlink = () => {
+    for (const m of blinkMeshes.current) m.parent?.remove(m);
+    blinkMeshes.current = [];
+    const t = three.current;
+    const id = blinkId.current;
+    if (!t?.model || !id) return;
+    const group = t.model.object.getObjectByName(id);
+    const face = group?.children.find((c): c is THREE.Mesh => c instanceof THREE.Mesh);
+    if (!group || !face) return;
+    if (!blinkMats.current) {
+      const base = { color: 0x2f6bff, transparent: true, side: THREE.DoubleSide, depthWrite: false } as const;
+      blinkMats.current = {
+        // On the faces of the panel (polygon offset keeps it from flickering against the face).
+        front: new THREE.MeshBasicMaterial({ ...base, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+        // A faint pass that ignores depth: a panel hidden inside the closed box still shows where it is.
+        through: new THREE.MeshBasicMaterial({ ...base, depthTest: false }),
+      };
+    }
+    const { front, through } = blinkMats.current;
+    const board = thickness > 0 ? thickness : 0;
+    // The printed face lies one board thickness outside the dieline face (z = 0 .. -board); sit just off both.
+    const lift = 0.06;
+    const add = (z: number, mat: THREE.MeshBasicMaterial, order: number) => {
+      const m = new THREE.Mesh(face.geometry, mat);
+      m.position.z = z;
+      m.renderOrder = order;
+      m.raycast = () => {};
+      group.add(m);
+      blinkMeshes.current.push(m);
+    };
+    add(lift, front, 5);
+    add(-board - lift, front, 5);
+    add(-board / 2, through, 6);
+  };
+
   useImperativeHandle(ref, () => ({
+    highlightPanel: (id) => {
+      blinkId.current = id;
+      applyBlink();
+    },
     setProgress: (p, hingeProgress) => rebuild.current(p, hingeProgress),
     getModelObject: () => three.current?.model?.object ?? null,
     resetView: frame,
@@ -540,14 +586,25 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     const ro = new ResizeObserver(resize);
     ro.observe(el);
     resize();
-    renderer.setAnimationLoop(() => {
+    renderer.setAnimationLoop((now: number) => {
       controls.update();
+      const mats = blinkMats.current;
+      if (mats && blinkMeshes.current.length > 0) {
+        // Soft blink: a slow breathing glow, not a flash.
+        const k = 0.5 + 0.5 * Math.sin(now / 240);
+        mats.front.opacity = 0.14 + 0.4 * k;
+        mats.through.opacity = 0.05 + 0.13 * k;
+      }
       renderer.render(scene, camera);
     });
     return () => {
       ro.disconnect();
       controls.removeEventListener("change", onChange);
       renderer.setAnimationLoop(null);
+      blinkMats.current?.front.dispose();
+      blinkMats.current?.through.dispose();
+      blinkMats.current = null;
+      blinkMeshes.current = [];
       const t = three.current;
       if (gridObj.current) {
         gridObj.current.geometry.dispose();
@@ -626,6 +683,8 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     const build = (p: number, hingeProgress?: Readonly<Record<string, number>>) => {
       lastBuild.current = { p, ...(hingeProgress ? { hp: hingeProgress } : {}) };
       if (t.model) {
+        for (const m of blinkMeshes.current) m.parent?.remove(m); // shared geometry and materials stay alive
+        blinkMeshes.current = [];
         t.scene.remove(t.model.object);
         disposeCartonModel(t.model);
       }
@@ -642,6 +701,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       });
       t.model.object.position.y = t.model.size.y / 2 + 0.5;
       t.scene.add(t.model.object);
+      applyBlink();
     };
     build(progress);
     rebuild.current = build;
