@@ -178,6 +178,14 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   // Split: sheet and 3D box side by side, both sidebars hidden. Blink Mode: the panel under the mouse on the sheet blinks on the box.
   const [blinkMode, setBlinkMode] = useState(false);
   const [hoverPanel, setHoverPanel] = useState<string | null>(null);
+  /** Split: share (%) of the width the sheet takes; the divider between the two halves is dragged with the mouse. */
+  const [splitPct, setSplitPct] = useState(50);
+  const splitBox = useRef<HTMLDivElement>(null);
+  const splitDrag = useRef<number | null>(null);
+  const setSplitFrom = (clientX: number) => {
+    const r = splitBox.current?.getBoundingClientRect();
+    if (r && r.width > 0) setSplitPct(Math.min(80, Math.max(20, ((clientX - r.left) / r.width) * 100)));
+  };
   const shapes = useMemo(() => (shown ? panelShapes(shown) : []), [shown]);
   const hoverAt = (pt: { x: number; y: number } | null) => {
     const id = pt ? (panelAt(shapes, pt)?.id ?? null) : null;
@@ -515,11 +523,47 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
           {/* Small screens: the tabs stay here; from lg up they are in the middle of the header. */}
           {shown && foldable ? <div className="absolute top-3 right-4 z-20 lg:hidden">{viewTabs}</div> : null}
           {shown && foldable && centre === "split" ? (
-            <div className="flex min-h-0 flex-1 flex-col max-lg:pt-14 lg:flex-row">
-              <div className="relative flex min-h-[40vh] min-w-0 flex-1 basis-0 flex-col lg:min-h-0 lg:border-r">
+            <div ref={splitBox} style={{ "--split": `${splitPct}%` } as React.CSSProperties} className="flex min-h-0 flex-1 flex-col max-lg:pt-14 lg:flex-row">
+              <div className="relative flex min-h-[40vh] min-w-0 flex-1 basis-0 flex-col lg:min-h-0 lg:flex-none lg:basis-(--split)">
                 {src ? (
                   <SheetCanvas onWindows={openWindows} windowCount={windows.length} {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} {...(blinkMode ? { onHoverMm: hoverAt, highlight: shapes.find((q) => q.id === blinkId)?.poly ?? null } : {})} />
                 ) : null}
+              </div>
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Drag to resize the dieline and the 3D view (double click to reset)"
+                aria-valuemin={20}
+                aria-valuemax={80}
+                aria-valuenow={Math.round(splitPct)}
+                tabIndex={0}
+                title="Drag to resize (double click: 50/50)"
+                className="group relative z-10 hidden w-0 shrink-0 cursor-col-resize touch-none outline-none lg:block"
+                onPointerDown={(e) => {
+                  if (e.button !== 0) return;
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                  splitDrag.current = e.pointerId;
+                  e.preventDefault();
+                }}
+                onPointerMove={(e) => {
+                  if (splitDrag.current === e.pointerId) setSplitFrom(e.clientX);
+                }}
+                onPointerUp={() => (splitDrag.current = null)}
+                onPointerCancel={() => (splitDrag.current = null)}
+                onDoubleClick={() => setSplitPct(50)}
+                onKeyDown={(e) => {
+                  const step = e.shiftKey ? 10 : 2;
+                  if (e.key === "ArrowLeft") setSplitPct((v) => Math.max(20, v - step));
+                  else if (e.key === "ArrowRight") setSplitPct((v) => Math.min(80, v + step));
+                  else if (e.key === "Home") setSplitPct(50);
+                  else return;
+                  e.preventDefault();
+                }}
+              >
+                {/* A wide invisible grab area around a thin line; the line turns blue on hover, focus and while dragging. */}
+                <span aria-hidden className="absolute inset-y-0 -left-2 w-4" />
+                <span aria-hidden className="absolute inset-y-0 left-[-1px] w-0.5 bg-border transition-colors group-hover:bg-primary group-focus-visible:bg-primary group-active:bg-primary" />
+                <span aria-hidden className="absolute top-1/2 left-0 h-10 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full border bg-background shadow-sm group-hover:border-primary" />
               </div>
               <div className="flex min-h-[40vh] min-w-0 flex-1 basis-0 flex-col gap-2 p-4 lg:min-h-0">
                 <BlinkToggle checked={blinkMode} onChange={(on) => { setBlinkMode(on); if (!on) setHoverPanel(null); }} />
