@@ -251,13 +251,13 @@ export function FoldSetupEditor({
                 const d = depth.get(p.id) ?? 0;
                 const on = sel?.kind === "panel" && sel.id === p.id;
                 const [cx, cy] = centroid(p.polygon);
-                // Names are 3x the old size, but never wider than their panel: a narrow panel turns its name or shrinks it.
+                // Names are 1.5x the old size (half of the earlier 3x, which was too big), never wider than their panel: a narrow panel turns its name or shrinks it.
                 const xs = p.polygon.filter((_, i) => i % 2 === 0);
                 const ys = p.polygon.filter((_, i) => i % 2 === 1);
                 const pw = Math.max(...xs) - Math.min(...xs);
                 const ph = Math.max(...ys) - Math.min(...ys);
                 const nameLen = Math.max(1, p.label.length) * 0.56;
-                const fsMax = (size / 40) * 3;
+                const fsMax = (size / 40) * 1.5;
                 const flatFs = Math.min(fsMax, (pw * 0.92) / nameLen, ph * 0.5);
                 const turnedFs = Math.min(fsMax, (ph * 0.92) / nameLen, pw * 0.8);
                 const turn = turnedFs > flatFs * 1.15;
