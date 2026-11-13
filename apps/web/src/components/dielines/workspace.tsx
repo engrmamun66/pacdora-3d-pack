@@ -16,6 +16,8 @@ import { DielineInfo } from "./dieline-info";
 import { boxSizes, dielineStats } from "./info-math";
 import { DielineTopBar } from "./dieline-top-bar";
 import { WindowEditor } from "./window-editor";
+import { ViewSkeleton, useViewSwitch } from "./view-switch";
+import { MiniSheet } from "./mini-sheet";
 import type { SaveAsOptions } from "@/server/projects";
 import { TemplatePicker } from "./template-picker";
 import { MaterialInfoButton } from "./material-info";
@@ -121,7 +123,25 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   const base = result.geo ?? lastGood;
   // Window holes the customer placed (see the window editor): cut into the box, so the sheet, the 3D box and the downloads show them.
   const [windows, setWindows] = useState<WindowSpec[]>(() => [...initialWindows]);
-  const [editingWindows, setEditingWindows] = useState(false);
+  // The window editor slides over the page and slides away again: "open" and "closing" are the two animated moments.
+  const [windowsView, setWindowsView] = useState<"closed" | "open" | "closing">("closed");
+  const [bodyHidden, setBodyHidden] = useState(false); // the page behind it is only hidden once the editor has settled
+  const editingWindows = windowsView === "open";
+  const openWindows = () => setWindowsView("open");
+  const closeWindows = () => {
+    setBodyHidden(false);
+    setWindowsView("closing");
+  };
+  useEffect(() => {
+    if (windowsView === "open") {
+      const t = window.setTimeout(() => setBodyHidden(true), 420);
+      return () => window.clearTimeout(t);
+    }
+    if (windowsView === "closing") {
+      const t = window.setTimeout(() => setWindowsView("closed"), 320);
+      return () => window.clearTimeout(t);
+    }
+  }, [windowsView]);
   const windowResult = useMemo(() => (base ? applyWindows(base, windows) : null), [base, windows]);
   const shown = windowResult?.geo ?? base;
 
@@ -150,7 +170,9 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
     [shown, unit, toggles, imported],
   );
 
-  const [centre, setCentre] = useState<"dieline" | "3d">("dieline");
+  // Dieline | 3D. The tab changes at once; the slow view is built behind a placeholder, and the tabs wait until it is drawn.
+  const sw = useViewSwitch<"dieline" | "3d">("dieline");
+  const centre = sw.mounted;
   const action = mode.kind === "create" ? createProject : updateProject;
   const [state, formAction, pending] = useActionState<DesignState, FormData>(action, IDLE);
 
@@ -301,15 +323,16 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   ];
   // Dieline | 3D: what the centre shows. In the header's middle on wide screens, over the canvas on small ones.
   const viewTabs = (
-    <div role="tablist" aria-label="What to show" className="flex rounded-lg border bg-background/90 p-0.5 text-xs shadow-xs backdrop-blur">
+    <div role="tablist" aria-label="What to show" aria-busy={sw.switching} className="flex rounded-lg border bg-background/90 p-0.5 text-xs shadow-xs backdrop-blur">
       {([["dieline", "Dieline"], ["3d", "3D"]] as const).map(([id, text]) => (
         <button
           key={id}
           type="button"
           role="tab"
-          aria-selected={centre === id}
-          onClick={() => setCentre(id)}
-          className={`rounded-md px-3 py-1 font-medium transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${centre === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+          aria-selected={sw.tab === id}
+          disabled={sw.switching}
+          onClick={() => sw.select(id)}
+          className={`rounded-md px-3 py-1 font-medium focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${sw.tab === id ? "bg-primary text-primary-foreground disabled:text-primary-foreground" : "text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:text-muted-foreground"} ${sw.switching ? "cursor-wait" : ""}`}
         >
           {text}
         </button>
@@ -369,24 +392,8 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
         </div>
       ) : null}
 
-      {editingWindows && base ? (
-        <WindowEditor
-          geo={base}
-          value={windows}
-          unit={unit}
-          onUnit={setUnit}
-          onCancel={() => setEditingWindows(false)}
-          onDone={(next) => {
-            setWindows(next);
-            setEditingWindows(false);
-          }}
-          materialId={materialType?.id}
-          boardColor={boardColor}
-          thickness={bt ?? 0}
-          watermark={watermark ?? null}
-        />
-      ) : (
-      <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[372px_minmax(0,1fr)_340px]">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div inert={windowsView === "open"} className={`flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[372px_minmax(0,1fr)_340px] ${bodyHidden ? "hidden" : ""}`}>
         {/* Left: vertical menu (Dielines, Basic, Info, More) and the panel of the chosen one */}
         <aside className="flex min-h-0 flex-col border-b lg:flex-row lg:border-r lg:border-b-0">
           <div role="tablist" aria-label="Settings sections" aria-orientation="vertical" className="flex shrink-0 gap-1 overflow-x-auto border-b p-2 lg:w-[76px] lg:flex-col lg:overflow-visible lg:border-r lg:border-b-0">
@@ -495,19 +502,26 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
           {shown && foldable ? <div className="absolute top-3 right-4 z-20 lg:hidden">{viewTabs}</div> : null}
           {shown && foldable && centre === "3d" ? (
             <div className="flex min-h-0 flex-1 flex-col p-4 max-lg:pt-16">
-              <FoldPreview large materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
+              <FoldPreview large onReady={sw.markReady} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
             </div>
           ) : shown && src ? (
-            <SheetCanvas onWindows={() => setEditingWindows(true)} windowCount={windows.length} {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} />
+            <SheetCanvas onWindows={openWindows} windowCount={windows.length} {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} />
           ) : (
             <p className="p-6 text-sm text-muted-foreground">Enter valid dimensions to see the dieline.</p>
           )}
           {!result.geo && shown ? <p role="status" className="border-t px-4 py-1.5 text-xs text-destructive">Showing the last valid shape.</p> : null}
+          {sw.switching ? <ViewSkeleton kind={sw.tab === "3d" ? "box" : "sheet"} label={sw.tab === "3d" ? "Loading the 3D view" : "Loading the dieline"} /> : null}
         </main>
 
         {/* Right: 3D + file formats */}
         <aside className="flex min-h-0 flex-col gap-4 overflow-y-auto border-t p-4 lg:border-t-0 lg:border-l">
-          {shown && foldable && centre !== "3d" ? <FoldPreview materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} /> : null}
+          {shown && foldable ? (
+            // Dieline tab: the small 3D card. 3D tab: the dieline takes its place here (a click brings it back to the centre).
+            <div className="relative shrink-0 rounded-2xl">
+              {centre !== "3d" ? <FoldPreview onReady={sw.markReady} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} /> : src ? <MiniSheet box={dielineViewBox(shown, 22)} src={src} onOpen={() => sw.select("dieline")} /> : <div className="h-80" aria-hidden />}
+              {sw.switching && sw.tab === "dieline" ? <ViewSkeleton kind="box" label="Loading the 3D preview" /> : null}
+            </div>
+          ) : null}
           {shown && !foldable ? (
             <section aria-label="Imported dieline" className="shrink-0 rounded-2xl border p-4 text-sm">
               <h2 className="font-semibold">Imported dieline</h2>
@@ -529,7 +543,26 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
           />
         </aside>
       </div>
-      )}
+      {windowsView !== "closed" && base ? (
+        <div className={`absolute inset-0 z-30 flex flex-col bg-background ${windowsView === "closing" ? "wh-exit" : "wh-enter"}`}>
+          <WindowEditor
+            geo={base}
+            value={windows}
+            unit={unit}
+            onUnit={setUnit}
+            onCancel={closeWindows}
+            onDone={(next) => {
+              setWindows(next);
+              closeWindows();
+            }}
+            materialId={materialType?.id}
+            boardColor={boardColor}
+            thickness={bt ?? 0}
+            watermark={watermark ?? null}
+          />
+        </div>
+      ) : null}
+      </div>
     </div>
   );
 }

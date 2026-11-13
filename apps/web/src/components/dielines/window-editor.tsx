@@ -24,6 +24,8 @@ import { dielineViewBox, renderDielineSvg } from "@packaging/render-svg";
 import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { svgDataUrl } from "@/lib/dieline-preview";
 import { FoldPreview } from "./side-cards";
+import { ViewSkeleton, useViewSwitch } from "./view-switch";
+import { MiniSheet, polyD } from "./mini-sheet";
 import { fromDisplay, toDisplay, type Unit } from "./units";
 import { boxOf, pointIn, snapMove, windowGaps, type Guide } from "@/lib/window-guides";
 
@@ -45,7 +47,6 @@ interface Drag {
   py: number;
 }
 
-const polyD = (pts: readonly { x: number; y: number }[]) => `M${pts.map((p) => `${p.x.toFixed(3)} ${p.y.toFixed(3)}`).join("L")}Z`;
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 /** A fresh id that no window in the list uses. */
@@ -106,6 +107,14 @@ export function WindowEditor({
   const [lockRatio, setLockRatio] = useState<Record<string, boolean>>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [dropping, setDropping] = useState(false);
+  // Dieline | 3D: the tab changes at once; the 3D box is built behind a placeholder and the tabs wait until it is drawn.
+  const sw = useViewSwitch<"dieline" | "3d">("dieline");
+  // The 3D box is built after the slide-in has finished, so the animation itself never stutters.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setSettled(true), 440);
+    return () => window.clearTimeout(t);
+  }, []);
   const [guides, setGuides] = useState<Guide[]>([]);
   /** Right-click menu: where it opens (px inside the sheet area) and for which window. */
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
@@ -499,9 +508,26 @@ export function WindowEditor({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" role="region" aria-label="Window editor" onKeyDown={onKey}>
-      <div className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
+      <div className="relative flex h-12 shrink-0 items-center gap-3 border-b px-4">
         <h2 className="text-sm font-semibold">Window holes</h2>
-        <p className="hidden text-xs text-muted-foreground md:block">Click a shape to add it, or drag it onto a panel. Each window must stay inside one panel, away from folds and edges.</p>
+        <p className="hidden text-xs text-muted-foreground 2xl:block">Click a shape to add it, or drag it onto a panel. Each window must stay inside one panel, away from folds and edges.</p>
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center">
+          <div role="tablist" aria-label="What to show" aria-busy={sw.switching} className="pointer-events-auto flex rounded-lg border bg-background/90 p-0.5 text-xs shadow-xs">
+            {([["dieline", "Dieline"], ["3d", "3D"]] as const).map(([id, text]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={sw.tab === id}
+                disabled={sw.switching}
+                onClick={() => sw.select(id)}
+                className={`rounded-md px-3 py-1 font-medium focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${sw.tab === id ? "bg-primary text-primary-foreground disabled:text-primary-foreground" : "text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:text-muted-foreground"} ${sw.switching ? "cursor-wait" : ""}`}
+              >
+                {text}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="ml-auto flex items-center gap-2">
           {bad ? <span role="status" className="hidden text-xs text-destructive sm:block">{result.problems.length} {result.problems.length === 1 ? "window does" : "windows do"} not fit</span> : null}
           <button type="button" onClick={onCancel} className="inline-flex h-8 items-center rounded-lg border bg-background px-3 text-[13px] font-medium hover:bg-muted">Cancel</button>
@@ -521,8 +547,9 @@ export function WindowEditor({
         {/* Shapes */}
         <aside className="flex flex-col gap-3 overflow-y-auto border-b p-3 lg:border-r lg:border-b-0" aria-label="Window shapes">
           {notice ? <p role="status" className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{notice}</p> : null}
+          {sw.tab === "3d" ? <p role="status" className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">Shapes are added in the Dieline view.</p> : null}
           {WINDOW_SHAPE_GROUPS.map((group) => (
-            <section key={group.id} aria-label={group.title} className="flex flex-col gap-2">
+            <section key={group.id} aria-label={group.title} className={`flex flex-col gap-2 transition-opacity ${sw.tab === "3d" ? "opacity-50" : ""}`}>
               <h3 className="text-xs font-semibold text-foreground/80">{group.title}</h3>
               <div className="grid grid-cols-3 gap-2 lg:grid-cols-2">
                 {group.shapes.map((shape) => (
@@ -530,13 +557,14 @@ export function WindowEditor({
                     key={shape}
                     type="button"
                     onClick={() => add(shape)}
-                    draggable
+                    disabled={sw.tab === "3d"}
+                    draggable={sw.tab !== "3d"}
                     onDragStart={(e) => {
                       e.dataTransfer.setData(SHAPE_MIME, shape);
                       e.dataTransfer.effectAllowed = "copy";
                     }}
                     title={`Click to add: ${WINDOW_SHAPE_LABELS[shape].toLowerCase()}. Or drag it onto a panel`}
-                    className="flex flex-col items-center gap-1 rounded-xl border bg-background p-2 text-center text-xs text-foreground/80 transition-colors hover:border-primary hover:bg-muted"
+                    className="flex flex-col items-center gap-1 rounded-xl border bg-background p-2 text-center text-xs text-foreground/80 transition-colors enabled:hover:border-primary enabled:hover:bg-muted disabled:cursor-not-allowed"
                   >
                     <ShapeIcon shape={shape} />
                     {WINDOW_SHAPE_LABELS[shape]}
@@ -550,6 +578,8 @@ export function WindowEditor({
 
         {/* The sheet */}
         <div className="relative min-h-[50vh] min-w-0 bg-muted/30 lg:min-h-0">
+          {/* The sheet stays mounted (its zoom and position are kept) and is only hidden while the 3D box has the space. */}
+          <div className={sw.mounted === "3d" ? "hidden" : "contents"}>
           <div
             ref={host}
             className={`absolute inset-0 touch-none overflow-hidden ${dropping ? "ring-2 ring-inset ring-primary/60" : ""}`}
@@ -715,20 +745,25 @@ export function WindowEditor({
             <button type="button" aria-label="Zoom in" onClick={() => zoom(1.25)} className="flex size-8 items-center justify-center rounded-md hover:bg-muted"><Plus className="size-4" /></button>
             <button type="button" aria-label="Fit sheet to screen" onClick={fit} className="flex size-8 items-center justify-center rounded-md hover:bg-muted"><Maximize className="size-4" /></button>
           </div>
+          </div>
+          {sw.mounted === "3d" ? (
+            <div className="absolute inset-0 flex flex-col p-4">
+              <FoldPreview large onReady={sw.markReady} geo={boxGeo} progress={progress} onProgress={setProgress} color={boardColor} thickness={thickness} watermark={watermark} viewRef={previewRef} {...(materialId ? { materialId } : {})} />
+            </div>
+          ) : null}
+          {sw.switching && sw.tab === "3d" ? <ViewSkeleton kind="box" label="Loading the 3D view" /> : null}
         </div>
 
         {/* Numbers, problems and the box */}
         <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto border-t p-3 lg:border-t-0 lg:border-l" aria-label="Window details">
-          <FoldPreview
-            geo={boxGeo}
-            progress={progress}
-            onProgress={setProgress}
-            color={boardColor}
-            thickness={thickness}
-            watermark={watermark}
-            viewRef={previewRef}
-            {...(materialId ? { materialId } : {})}
-          />
+          <div className="relative shrink-0 rounded-2xl">
+            {sw.mounted === "dieline" && !settled ? <div className="h-72" aria-hidden /> : sw.mounted === "dieline" ? (
+              <FoldPreview onReady={sw.markReady} geo={boxGeo} progress={progress} onProgress={setProgress} color={boardColor} thickness={thickness} watermark={watermark} viewRef={previewRef} {...(materialId ? { materialId } : {})} />
+            ) : (
+              <MiniSheet box={box} src={src} windows={draft} problemOf={problemOf} selected={selected} onSelect={setSelected} />
+            )}
+            {(sw.switching && sw.tab === "dieline") || (sw.mounted === "dieline" && !settled) ? <ViewSkeleton kind="box" label="Loading the 3D preview" /> : null}
+          </div>
           <section aria-label="Size and place" className="rounded-xl border p-3">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold">Size and place</h3>

@@ -142,6 +142,8 @@ export interface CartonViewProps {
   initialView?: ViewSettings | null;
   /** Called (at most once per frame) while the camera moves, with the current view. */
   onViewChange?: (v: ViewSettings) => void;
+  /** Called once, on the frame after the box is first built and drawn (so a loading placeholder can go away). */
+  onReady?: () => void;
 }
 
 /** Camera angles in degrees. */
@@ -193,7 +195,7 @@ export interface CartonViewHandle {
 
 /** Interactive 3D carton built from the engine's fold tree (three.js, no React renderer). */
 export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function CartonView(
-  { geo, texture, textureRect, progress, outsideColor, insideColor, thickness = 0, watermark = null, boardGrain = 0, boardEdge, className, autoRotate = false, transparent = false, shadows = true, frameMm, rotateOnly = false, initialView = null, onViewChange },
+  { geo, texture, textureRect, progress, outsideColor, insideColor, thickness = 0, watermark = null, boardGrain = 0, boardEdge, className, autoRotate = false, transparent = false, shadows = true, frameMm, rotateOnly = false, initialView = null, onViewChange, onReady },
   ref,
 ) {
   const host = useRef<HTMLDivElement>(null);
@@ -203,10 +205,13 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   const rotateOnlyAtStart = useRef(rotateOnly);
   const initialViewRef = useRef(initialView);
   const onViewChangeRef = useRef(onViewChange);
+  const onReadyRef = useRef(onReady);
+  const readyFired = useRef(false);
   const progressRef = useRef(progress);
   useEffect(() => {
     initialViewRef.current = initialView;
     onViewChangeRef.current = onViewChange;
+    onReadyRef.current = onReady;
     progressRef.current = progress;
   });
   const gridObj = useRef<THREE.GridHelper | null>(null);
@@ -640,6 +645,10 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     };
     build(progress);
     rebuild.current = build;
+    if (!readyFired.current) {
+      readyFired.current = true;
+      requestAnimationFrame(() => requestAnimationFrame(() => onReadyRef.current?.())); // after the first frame is drawn
+    }
     if (lastGeo.current !== geo) {
       lastGeo.current = geo;
       frame();
