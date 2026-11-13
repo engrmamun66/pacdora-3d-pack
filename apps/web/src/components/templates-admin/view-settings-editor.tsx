@@ -2,8 +2,9 @@
 
 import { InfoTip } from "./help-tip";
 import { useMemo, useRef, useState } from "react";
-import { Camera, ImageDown, RotateCcw, Save, Trash2 } from "lucide-react";
-import { createImportedGenerator, generateDieline, importedDefaults, type DielineGeometry, type FlatDieline } from "@packaging/dieline-engine";
+import { ArrowDownLeft, ArrowUpRight, Camera, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ImageDown, Minus, Plus, RotateCcw, RotateCw, Save, Trash2 } from "lucide-react";
+import { applyWindows, createImportedGenerator, generateDieline, type DielineGeometry, type FlatDieline, type WindowSpec } from "@packaging/dieline-engine";
+import { importedStartParams } from "@/lib/imported-start";
 import { saveTemplateView, type TemplateViewData } from "@/app/doraadmin/template-view-actions";
 import { Button } from "@/components/ui/button";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
@@ -12,10 +13,15 @@ import { notify } from "@/lib/notify";
 import { STANDARD_VIEW, type ViewSettings } from "@/lib/view-settings";
 
 /** Dieline geometry of a template at its default size (what customers see first). */
-export function geometryForViewData(data: TemplateViewData): DielineGeometry {
-  if (data.kind === "builtin") return generateDieline(data.generatorId, data.params);
-  const flat = data.flat as FlatDieline;
-  return createImportedGenerator(data.templateId, flat, data.fold).generate(importedDefaults(flat));
+export function geometryForViewData(data: TemplateViewData, windows: readonly WindowSpec[] = data.windows): DielineGeometry {
+  let geo: DielineGeometry;
+  if (data.kind === "builtin") geo = generateDieline(data.generatorId, data.params);
+  else {
+    const flat = data.flat as FlatDieline;
+    geo = createImportedGenerator(data.templateId, flat, data.fold).generate(importedStartParams(data.flat, data.fold));
+  }
+  // The template's window holes are cut into the box too, as customers will see it (and as the product image is taken).
+  return windows.length > 0 ? applyWindows(geo, windows).geo : geo;
 }
 
 /** Size of the picture saved for the template list: portrait, because it fills the narrow right side of a card. */
@@ -24,42 +30,42 @@ const PRODUCT_IMAGE = { width: 900, height: 1200 } as const;
 const same = (a: ViewSettings | null, b: ViewSettings | null) =>
   a === b || (a !== null && b !== null && (Object.keys(a) as (keyof ViewSettings)[]).every((k) => Math.abs(Number(a[k]) - Number(b[k])) < 0.011));
 
-function Num({ label, value, suffix, step, min, max, onCommit }: { label: string; value: number; suffix: string; step: number; min: number; max: number; onCommit: (v: number) => void }) {
-  const [text, setText] = useState<string | null>(null);
-  const shown = text ?? String(Math.round(value * 100) / 100);
-  const commit = () => {
-    if (text === null) return;
-    const n = Number(text);
-    setText(null);
-    if (text.trim() !== "" && Number.isFinite(n)) onCommit(Math.min(max, Math.max(min, n)));
-  };
+/** What one click changes: degrees, box sizes (pan) and the zoom factor. */
+const STEP = { angle: 15, move: 0.1, zoom: 1.15 } as const;
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+const wrap = (deg: number) => ((((deg + 180) % 360) + 360) % 360) - 180;
+
+/** One round arrow-style button of the camera pad. */
+function PadButton({ label, onClick, children, className = "" }: { label: string; onClick: () => void; children: React.ReactNode; className?: string }) {
   return (
-    <label className="grid grid-cols-[110px_1fr] items-center gap-2 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="flex items-center gap-1">
-        <input
-          className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm tabular-nums outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          type="number"
-          step={step}
-          min={min}
-          max={max}
-          value={shown}
-          onChange={(e) => setText(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
-        />
-        <span className="w-6 text-xs text-muted-foreground">{suffix}</span>
-      </span>
-    </label>
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      className={`inline-flex size-9 items-center justify-center rounded-lg border border-input bg-background text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 active:bg-muted ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** A titled group of pad buttons. */
+function PadGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-3">
+      <span className="text-xs font-medium text-muted-foreground">{title}</span>
+      {children}
+    </div>
   );
 }
 
 /**
  * Set the view a template's 3D preview starts with. Turn, zoom and pan the box as a
- * customer would; the numbers follow the camera (or type them), and "Save view"
+ * customer would; or use the buttons, and "Save view"
  * stores exactly what is on screen, including how far the box is folded.
  */
-export function ViewSettingsEditor({ slug, data, onSaved, onDone }: { slug: string; data: TemplateViewData; onSaved?: (v: ViewSettings | null) => void; /** Called after an action button (save / remove) succeeded, so the host can close the editor. */ onDone?: () => void }) {
+export function ViewSettingsEditor({ slug, data, windows, onSaved, onDone }: { slug: string; data: TemplateViewData; /** Window holes to show instead of the saved ones (the admin page may have unsaved changes). */ windows?: readonly WindowSpec[]; onSaved?: (v: ViewSettings | null) => void; /** Called after an action button (save / remove) succeeded, so the host can close the editor. */ onDone?: () => void }) {
   const ref = useRef<CartonViewHandle>(null);
   const [saved, setSaved] = useState<ViewSettings | null>(data.view);
   const [live, setLive] = useState<ViewSettings>(data.view ?? STANDARD_VIEW);
@@ -68,11 +74,11 @@ export function ViewSettingsEditor({ slug, data, onSaved, onDone }: { slug: stri
   const [productImage, setProductImage] = useState<string | null>(data.productImage);
   const built = useMemo(() => {
     try {
-      return { geo: geometryForViewData(data), error: null };
+      return { geo: geometryForViewData(data, windows ?? data.windows), error: null };
     } catch (e) {
       return { geo: null, error: e instanceof Error ? e.message : "This template could not be built." };
     }
-  }, [data]);
+  }, [data, windows]);
   const [startView] = useState(data.view); // the view the 3D starts with; later moves come from the camera itself
 
   const current: ViewSettings = { ...live, progress };
@@ -185,7 +191,7 @@ export function ViewSettingsEditor({ slug, data, onSaved, onDone }: { slug: stri
         </div>
         <p className="flex items-center gap-1 text-xs text-muted-foreground">
           Camera
-          <InfoTip label="Camera">Drag to turn the box, scroll to zoom, right-drag or two fingers to move it. The numbers follow the camera. Between the dashed lines is what the template list shows of the product image.</InfoTip>
+          <InfoTip label="Camera">Drag to turn the box, scroll to zoom, right-drag or two fingers to move it, or use the buttons for small steps. Between the dashed lines is what the template list shows of the product image.</InfoTip>
         </p>
       </div>
 
@@ -199,12 +205,42 @@ export function ViewSettingsEditor({ slug, data, onSaved, onDone }: { slug: stri
               <StatusPill tone="grey">{dirty ? "Not saved" : "Standard view"}</StatusPill>
             )}
           </div>
-          <Num label="Turn (left/right)" value={current.azimuthDeg} suffix="°" step={1} min={-180} max={180} onCommit={(v) => move({ azimuthDeg: v })} />
-          <Num label="Tilt (up/down)" value={current.elevationDeg} suffix="°" step={1} min={-89} max={89} onCommit={(v) => move({ elevationDeg: v })} />
-          <Num label="Roll (sideways)" value={current.rollDeg} suffix="°" step={1} min={-180} max={180} onCommit={(v) => move({ rollDeg: v })} />
-          <Num label="Zoom" value={current.zoom} suffix="×" step={0.05} min={0.2} max={10} onCommit={(v) => move({ zoom: v })} />
-          <Num label="Move X" value={current.panX * 100} suffix="%" step={1} min={-300} max={300} onCommit={(v) => move({ panX: v / 100 })} />
-          <Num label="Move Y" value={current.panY * 100} suffix="%" step={1} min={-300} max={300} onCommit={(v) => move({ panY: v / 100 })} />
+          <div className="grid grid-cols-2 gap-2">
+            <PadGroup title="Rotate">
+              <div className="grid grid-cols-3 gap-1">
+                <span />
+                <PadButton label="Tilt up" onClick={() => move({ elevationDeg: clamp(current.elevationDeg + STEP.angle, -89, 89) })}><ChevronUp className="size-4" aria-hidden /></PadButton>
+                <span />
+                <PadButton label="Turn left" onClick={() => move({ azimuthDeg: wrap(current.azimuthDeg - STEP.angle) })}><ChevronLeft className="size-4" aria-hidden /></PadButton>
+                <PadButton label="Roll left" onClick={() => move({ rollDeg: wrap(current.rollDeg - STEP.angle) })}><RotateCcw className="size-4" aria-hidden /></PadButton>
+                <PadButton label="Turn right" onClick={() => move({ azimuthDeg: wrap(current.azimuthDeg + STEP.angle) })}><ChevronRight className="size-4" aria-hidden /></PadButton>
+                <span />
+                <PadButton label="Tilt down" onClick={() => move({ elevationDeg: clamp(current.elevationDeg - STEP.angle, -89, 89) })}><ChevronDown className="size-4" aria-hidden /></PadButton>
+                <PadButton label="Roll right" onClick={() => move({ rollDeg: wrap(current.rollDeg + STEP.angle) })}><RotateCw className="size-4" aria-hidden /></PadButton>
+              </div>
+            </PadGroup>
+            <PadGroup title="Move">
+              <div className="grid grid-cols-3 gap-1">
+                <span />
+                <PadButton label="Move up" onClick={() => move({ panY: clamp(current.panY + STEP.move, -3, 3) })}><ChevronUp className="size-4" aria-hidden /></PadButton>
+                <PadButton label="Move closer" onClick={() => move({ panZ: clamp(current.panZ + STEP.move, -3, 3) })}><ArrowUpRight className="size-4" aria-hidden /></PadButton>
+                <PadButton label="Move left" onClick={() => move({ panX: clamp(current.panX - STEP.move, -3, 3) })}><ChevronLeft className="size-4" aria-hidden /></PadButton>
+                <span />
+                <PadButton label="Move right" onClick={() => move({ panX: clamp(current.panX + STEP.move, -3, 3) })}><ChevronRight className="size-4" aria-hidden /></PadButton>
+                <PadButton label="Move away" onClick={() => move({ panZ: clamp(current.panZ - STEP.move, -3, 3) })}><ArrowDownLeft className="size-4" aria-hidden /></PadButton>
+                <PadButton label="Move down" onClick={() => move({ panY: clamp(current.panY - STEP.move, -3, 3) })}><ChevronDown className="size-4" aria-hidden /></PadButton>
+                <span />
+              </div>
+            </PadGroup>
+          </div>
+          <div className="flex items-center justify-between gap-2 rounded-xl bg-muted/50 p-3">
+            <span className="text-xs font-medium text-muted-foreground">Zoom</span>
+            <span className="flex items-center gap-2">
+              <PadButton label="Zoom out" onClick={() => move({ zoom: clamp(current.zoom / STEP.zoom, 0.2, 10) })}><Minus className="size-4" aria-hidden /></PadButton>
+              <span className="w-12 text-center text-sm tabular-nums">{current.zoom.toFixed(2)}×</span>
+              <PadButton label="Zoom in" onClick={() => move({ zoom: clamp(current.zoom * STEP.zoom, 0.2, 10) })}><Plus className="size-4" aria-hidden /></PadButton>
+            </span>
+          </div>
           <label className="grid grid-cols-[110px_1fr] items-center gap-2 text-sm">
             <span className="text-muted-foreground">Folded</span>
             <span className="flex items-center gap-2">

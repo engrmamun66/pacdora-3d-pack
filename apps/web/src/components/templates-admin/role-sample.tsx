@@ -5,6 +5,7 @@ import { HelpCircle, X } from "lucide-react";
 import type { Role } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { ROLE_COLOR, ROLE_HINTS, ROLE_LABELS, ROLE_ORDER } from "@/lib/template-import";
+import { EMPTY_SVG_COLORS, type SvgColorSettings } from "@/lib/svg-colors";
 
 /** What each role looks like, in plain words. */
 const EXPLAIN: Record<Role, string> = {
@@ -17,20 +18,27 @@ const EXPLAIN: Record<Role, string> = {
 
 const ARROW = "#3f3f46";
 
+/**
+ * The colour a role is drawn in: the first colour the admin assigned to it in Settings > SVG Dieline Color, or the
+ * standard preview colour when none is assigned.
+ */
+type Colors = (role: Role) => string;
+const colorsOf = (settings: SvgColorSettings): Colors => (role) => settings[role][0] ?? ROLE_COLOR[role];
+
 /** A label chip with an arrow pointing at the part of the drawing it names. */
-function Callout({ role, x, y, w = 72, from, to }: { role: Role; x: number; y: number; w?: number; from: [number, number]; to: [number, number] }) {
+function Callout({ role, color, x, y, w = 72, from, to }: { role: Role; color: string; x: number; y: number; w?: number; from: [number, number]; to: [number, number] }) {
   return (
     <g>
       <line x1={from[0]} y1={from[1]} x2={to[0]} y2={to[1]} stroke={ARROW} strokeWidth="1.6" markerEnd="url(#arrow)" />
-      <rect x={x} y={y} width={w} height="28" rx="14" fill="#fff" stroke={ROLE_COLOR[role]} strokeWidth="2.5" />
+      <rect x={x} y={y} width={w} height="28" rx="14" fill="#fff" stroke={color} strokeWidth="2.5" />
       <text x={x + w / 2} y={y + 19} textAnchor="middle" fontSize="14" fontWeight="600" fill="#18181b">{ROLE_LABELS[role]}</text>
     </g>
   );
 }
 
 /** A tiny made-up carton dieline (not a real template) with one example of every role. */
-function SampleDrawing() {
-  const dash = (r: Role, d: string) => ({ stroke: ROLE_COLOR[r], strokeDasharray: d });
+function SampleDrawing({ color }: { color: Colors }) {
+  const dash = (r: Role, d: string) => ({ stroke: color(r), strokeDasharray: d });
   return (
     <svg viewBox="0 0 680 400" role="img" aria-label="Sample flat carton with its cut, fold, bleed, guide and ignored lines labelled" className="w-full rounded-lg border bg-white">
       <defs>
@@ -46,7 +54,7 @@ function SampleDrawing() {
       <rect x="318" y="148" width="64" height="94" fill="none" strokeWidth="1.8" {...dash("guide", "2 4")} />
 
       {/* Crease: fold lines */}
-      <g fill="none" strokeWidth="1.8" strokeDasharray="8 5" stroke={ROLE_COLOR.crease}>
+      <g fill="none" strokeWidth="1.8" strokeDasharray="8 5" stroke={color("crease")}>
         <path d="M230 140V250M310 140V250M390 140V250M150 155V235M230 140H310M230 250H310" />
       </g>
 
@@ -55,32 +63,34 @@ function SampleDrawing() {
         d="M150 140H230V105L240 100H300L310 105V140H470V250H310V285L300 290H240L230 285V250H150V235L130 228V162L150 155Z"
         fill="#fdf2f8"
         fillOpacity="0.6"
-        stroke={ROLE_COLOR.cut}
+        stroke={color("cut")}
         strokeWidth="2.6"
         strokeLinejoin="round"
       />
       {/* re-draw creases over the fill so they stay visible */}
-      <g fill="none" strokeWidth="1.8" strokeDasharray="8 5" stroke={ROLE_COLOR.crease}>
+      <g fill="none" strokeWidth="1.8" strokeDasharray="8 5" stroke={color("crease")}>
         <path d="M230 140V250M310 140V250M390 140V250M150 155V235M230 140H310M230 250H310" />
       </g>
 
       {/* Ignore: a registration mark that is not part of the box */}
-      <g fill="none" stroke={ROLE_COLOR.ignore} strokeWidth="2">
+      <g fill="none" stroke={color("ignore")} strokeWidth="2">
         <circle cx="580" cy="100" r="12" />
         <path d="M558 100H602M580 78V122" />
       </g>
 
-      <Callout role="bleed" x={20} y={26} from={[56, 54]} to={[113, 83]} />
-      <Callout role="guide" x={500} y={26} from={[536, 54]} to={[384, 150]} />
-      <Callout role="ignore" x={544} y={160} from={[580, 160]} to={[580, 125]} />
-      <Callout role="crease" x={520} y={262} w={80} from={[520, 276]} to={[392, 216]} />
-      <Callout role="cut" x={56} y={346} w={64} from={[120, 350]} to={[258, 292]} />
+      <Callout role="bleed" color={color("bleed")} x={20} y={26} from={[56, 54]} to={[113, 83]} />
+      <Callout role="guide" color={color("guide")} x={500} y={26} from={[536, 54]} to={[384, 150]} />
+      <Callout role="ignore" color={color("ignore")} x={544} y={160} from={[580, 160]} to={[580, 125]} />
+      <Callout role="crease" color={color("crease")} x={520} y={262} w={80} from={[520, 276]} to={[392, 216]} />
+      <Callout role="cut" color={color("cut")} x={56} y={346} w={64} from={[120, 350]} to={[258, 292]} />
     </svg>
   );
 }
 
 /** "Sample" button that opens a picture explaining Cut, Fold, Bleed, Guide and Ignore. */
-export function RoleSampleButton() {
+export function RoleSampleButton({ svgColors = EMPTY_SVG_COLORS }: { svgColors?: SvgColorSettings }) {
+  const color = colorsOf(svgColors);
+  const custom = ROLE_ORDER.some((r) => svgColors[r].length > 0);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDialogElement | null>(null);
   return (
@@ -109,19 +119,21 @@ export function RoleSampleButton() {
             <p className="text-sm text-muted-foreground">
               A dieline file is just lines. Each kind of line (colour and dash) in your file gets one role. Here is a made-up carton laid flat, with every role marked:
             </p>
-            <SampleDrawing />
+            <SampleDrawing color={color} />
             <dl className="grid gap-2 text-sm sm:grid-cols-[auto_1fr] sm:gap-x-4">
               {ROLE_ORDER.map((r) => (
                 <div key={r} className="contents">
                   <dt className="flex items-center gap-2 font-medium">
-                    <span className="inline-block h-1 w-6 rounded" style={{ background: ROLE_COLOR[r] }} aria-hidden />
+                    <span className="flex items-center gap-1" aria-hidden>
+                      {(svgColors[r].length ? svgColors[r].slice(0, 4) : [ROLE_COLOR[r]]).map((c) => <span key={c} className="inline-block h-1.5 w-5 rounded" style={{ background: c }} />)}
+                    </span>
                     {ROLE_LABELS[r]}
                   </dt>
                   <dd className="text-muted-foreground"><span className="text-foreground">{ROLE_HINTS[r]}.</span> {EXPLAIN[r]}</dd>
                 </div>
               ))}
             </dl>
-            <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">Tip: the colours here are the ones used in the preview. If a style is guessed wrong, change its role from the list on the left and watch the preview update.</p>
+            <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">{custom ? "The colours here are the ones set in Settings > SVG Dieline Color (a role with several colours is drawn in its first). Roles with no colour set use the standard preview colour. " : "No colours are set in Settings > SVG Dieline Color, so the standard preview colours are shown. "}If a style is guessed wrong, change its role from the list on the left and watch the preview update.</p>
           </div>
         </dialog>
       ) : null}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Copy, Lock, LockOpen, Maximize, Minus, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
+import { Copy, Lock, LockOpen, Maximize, Minus, Plus, Redo2, Search, Trash2, Undo2, X } from "lucide-react";
 import {
   MAX_WINDOWS,
   WINDOW_MIN_SIZE,
@@ -116,6 +116,8 @@ export function WindowEditor({
     return () => window.clearTimeout(t);
   }, []);
   const [guides, setGuides] = useState<Guide[]>([]);
+  // Shape search: matches the name (or the id) of a shape; a group whose title matches shows all its shapes.
+  const [query, setQuery] = useState("");
   /** Right-click menu: where it opens (px inside the sheet area) and for which window. */
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -505,6 +507,11 @@ export function WindowEditor({
   };
 
   const bad = result.problems.length > 0;
+  const needle = query.trim().toLowerCase();
+  const shown = WINDOW_SHAPE_GROUPS.map((g) => ({
+    ...g,
+    shapes: !needle || g.title.toLowerCase().includes(needle) ? g.shapes : g.shapes.filter((s) => WINDOW_SHAPE_LABELS[s].toLowerCase().includes(needle) || s.includes(needle)),
+  })).filter((g) => g.shapes.length > 0);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" role="region" aria-label="Window editor" onKeyDown={onKey}>
@@ -548,9 +555,36 @@ export function WindowEditor({
         <aside className="flex flex-col gap-3 overflow-y-auto border-b p-3 lg:border-r lg:border-b-0" aria-label="Window shapes">
           {notice ? <p role="status" className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{notice}</p> : null}
           {sw.tab === "3d" ? <p role="status" className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">Shapes are added in the Dieline view.</p> : null}
-          {WINDOW_SHAPE_GROUPS.map((group) => (
+          <div className="sticky -top-3 z-10 -mx-3 -mt-3 bg-background px-3 pt-3 pb-2">
+            <label className="relative block">
+              <span className="sr-only">Search shapes</span>
+              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <input
+                type="search"
+                value={query}
+                disabled={sw.tab === "3d"}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape" && query) {
+                    e.stopPropagation();
+                    setQuery("");
+                  } else if (e.key === "Enter" && shown.length === 1 && shown[0]!.shapes.length === 1) add(shown[0]!.shapes[0]!);
+                }}
+                placeholder="Search shapes"
+                autoComplete="off"
+                className="h-9 w-full rounded-lg border border-input bg-background pr-8 pl-8 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 [&::-webkit-search-cancel-button]:hidden"
+              />
+              {query ? (
+                <button type="button" aria-label="Clear the search" onClick={() => setQuery("")} className="absolute top-1/2 right-1.5 grid size-6 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
+                  <X className="size-3.5" aria-hidden />
+                </button>
+              ) : null}
+            </label>
+          </div>
+          {shown.length === 0 ? <p role="status" className="rounded-xl border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">No shape matches &ldquo;{query.trim()}&rdquo;.</p> : null}
+          {shown.map((group) => (
             <section key={group.id} aria-label={group.title} className={`flex flex-col gap-2 transition-opacity ${sw.tab === "3d" ? "opacity-50" : ""}`}>
-              <h3 className="text-xs font-semibold text-foreground/80">{group.title}</h3>
+              <h3 className="rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-foreground">{group.title}</h3>
               <div className="grid grid-cols-3 gap-2 lg:grid-cols-2">
                 {group.shapes.map((shape) => (
                   <button
@@ -641,27 +675,27 @@ export function WindowEditor({
                       <g pointerEvents="all">
                         {/* The frame of the window, then the grips: round on the corners, a pill on each side. */}
                         <rect x={-w.width / 2} y={-w.height / 2} width={w.width} height={w.height} fill="none" stroke="#3b82f6" strokeWidth={2.2 / v.s} pointerEvents="none" />
-                        <line x1={0} y1={-w.height / 2} x2={0} y2={-w.height / 2 - 20 / v.s} stroke="#3b82f6" strokeWidth={1.2 / v.s} pointerEvents="none" />
-                        <circle cx={0} cy={-w.height / 2 - 20 / v.s} r={8 / v.s} fill="rgba(99,102,241,0.18)" pointerEvents="none" />
-                        <circle cx={0} cy={-w.height / 2 - 20 / v.s} r={6.5 / v.s} fill="#fff" stroke="#e4e1ff" strokeWidth={1 / v.s} className="cursor-grab" onPointerDown={(e) => begin(e, { kind: "rotate" }, w)} />
+                        <line x1={0} y1={-w.height / 2} x2={0} y2={-w.height / 2 - 16 / v.s} stroke="#3b82f6" strokeWidth={1.2 / v.s} pointerEvents="none" />
+                        <circle cx={0} cy={-w.height / 2 - 16 / v.s} r={6 / v.s} fill="rgba(99,102,241,0.18)" pointerEvents="none" />
+                        <circle cx={0} cy={-w.height / 2 - 16 / v.s} r={4.5 / v.s} fill="#fff" stroke="#e4e1ff" strokeWidth={1 / v.s} className="cursor-grab" onPointerDown={(e) => begin(e, { kind: "rotate" }, w)} />
                         {([[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]] as const).map(([sx, sy]) => {
                           const corner = sx !== 0 && sy !== 0;
                           const cx = (sx * w.width) / 2;
                           const cy = (sy * w.height) / 2;
                           // Pill: long along the side it moves (top and bottom grips are wide, left and right ones tall).
-                          const pw = (sy !== 0 ? 22 : 9) / v.s;
-                          const ph = (sx !== 0 ? 22 : 9) / v.s;
+                          const pw = (sy !== 0 ? 15 : 6) / v.s;
+                          const ph = (sx !== 0 ? 15 : 6) / v.s;
                           const cursor = corner ? (sx === sy ? "cursor-nwse-resize" : "cursor-nesw-resize") : sx !== 0 ? "cursor-ew-resize" : "cursor-ns-resize";
                           return (
                             <g key={`${sx}${sy}`} className={cursor} onPointerDown={(e) => begin(e, { kind: "size", sx, sy }, w)}>
                               {corner ? (
                                 <>
-                                  <circle cx={cx} cy={cy} r={11 / v.s} fill="rgba(99,102,241,0.18)" />
-                                  <circle cx={cx} cy={cy} r={8.5 / v.s} fill="#fff" stroke="#e4e1ff" strokeWidth={1 / v.s} />
+                                  <circle cx={cx} cy={cy} r={8 / v.s} fill="rgba(99,102,241,0.18)" />
+                                  <circle cx={cx} cy={cy} r={6 / v.s} fill="#fff" stroke="#e4e1ff" strokeWidth={1 / v.s} />
                                 </>
                               ) : (
                                 <>
-                                  <rect x={cx - pw / 2 - 1.5 / v.s} y={cy - ph / 2 - 1.5 / v.s} width={pw + 3 / v.s} height={ph + 3 / v.s} rx={(Math.min(pw, ph) + 3 / v.s) / 2} fill="rgba(99,102,241,0.18)" />
+                                  <rect x={cx - pw / 2 - 1.2 / v.s} y={cy - ph / 2 - 1.2 / v.s} width={pw + 2.4 / v.s} height={ph + 2.4 / v.s} rx={(Math.min(pw, ph) + 2.4 / v.s) / 2} fill="rgba(99,102,241,0.18)" />
                                   <rect x={cx - pw / 2} y={cy - ph / 2} width={pw} height={ph} rx={Math.min(pw, ph) / 2} fill="#fff" stroke="#e4e1ff" strokeWidth={1 / v.s} />
                                 </>
                               )}

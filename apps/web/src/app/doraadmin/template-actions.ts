@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath, updateTag } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
@@ -55,6 +56,81 @@ export async function deleteTemplate(slug: string): Promise<ActionResult> {
   if (t.productImageKey) await storage.delete(t.productImageKey).catch(() => undefined);
   refresh(s.data);
   return { ok: true, message: "Template deleted." };
+}
+
+/** A copy of a stored picture under a new key (the copy owns its file, so deleting one template never breaks the other). */
+async function copyPicture(key: string | null): Promise<string | null> {
+  if (!key) return null;
+  try {
+    const bytes = await storage.get(key);
+    if (!bytes) return null;
+    const next = `templates/${randomUUID()}.${key.endsWith(".jpg") ? "jpg" : "png"}`;
+    await storage.put(next, bytes);
+    return next;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Copy an imported (SVG) template: same drawing, roles, 3D fold, window holes, starting 3D view, categories and pictures.
+ * The copy gets a free address ("<slug>-copy", "-copy-2", ...) and starts as a Draft, so customers do not see it until
+ * an admin publishes it. Customer projects are not copied. Built-in templates come from code and cannot be copied.
+ */
+export async function cloneTemplate(slug: string): Promise<SaveTemplateResult> {
+  await requireSuperAdmin();
+  const s = slugParam.safeParse(slug);
+  if (!s.success) return { ok: false, message: "Invalid request." };
+  const t = await db.template.findUnique({ where: { id: s.data }, include: { categories: { select: { id: true } } } });
+  if (!t) return { ok: false, message: "Template not found." };
+  if (t.source !== "svg") return { ok: false, message: "Built-in templates come from code and cannot be copied." };
+
+  // First free address: <slug>-copy, <slug>-copy-2, ... (kept within 80 characters).
+  const base = t.id.replace(/-copy(-\d+)?$/, "").slice(0, 68).replace(/-+$/, "");
+  const taken = new Set((await db.template.findMany({ where: { id: { startsWith: base } }, select: { id: true } })).map((r) => r.id));
+  let id = `${base}-copy`;
+  for (let n = 2; taken.has(id) && n < 1000; n++) id = `${base}-copy-${n}`;
+  if (taken.has(id)) return { ok: false, message: "Could not find a free address for the copy." };
+
+  const name = `${t.name.replace(/ \(copy( \d+)?\)$/, "").slice(0, 105)} (copy${id.endsWith("-copy") ? "" : ` ${id.slice(id.lastIndexOf("-") + 1)}`})`;
+  const backgroundKey = await copyPicture(t.backgroundKey);
+  const productImageKey = await copyPicture(t.productImageKey);
+  try {
+    await db.template.create({
+      data: {
+        id,
+        generatorId: t.generatorId,
+        name,
+        category: t.category,
+        description: t.description,
+        schemaVersion: t.schemaVersion,
+        defaultParameters: t.defaultParameters as Prisma.InputJsonValue,
+        status: "draft",
+        published: false,
+        source: t.source,
+        geometry: t.geometry === null ? Prisma.DbNull : (t.geometry as Prisma.InputJsonValue),
+        widthMm: t.widthMm,
+        heightMm: t.heightMm,
+        thumbnail: t.thumbnail,
+        backgroundKey,
+        backgroundMime: backgroundKey ? t.backgroundMime : null,
+        productImageKey,
+        defaultThickness: t.defaultThickness,
+        viewSettings: t.viewSettings === null ? Prisma.DbNull : (t.viewSettings as Prisma.InputJsonValue),
+        windows: t.windows === null ? Prisma.DbNull : (t.windows as Prisma.InputJsonValue),
+        hasFold: t.hasFold,
+        sortOrder: t.sortOrder,
+        categories: { connect: t.categories },
+      },
+    });
+  } catch (e) {
+    if (backgroundKey) await storage.delete(backgroundKey).catch(() => undefined);
+    if (productImageKey) await storage.delete(productImageKey).catch(() => undefined);
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return { ok: false, message: "A template with that address already exists. Try again." };
+    throw e;
+  }
+  refresh(id);
+  return { ok: true, message: `Copied as "${name}" (Draft).`, slug: id };
 }
 
 // ---------------------------------------------------------------- create / edit

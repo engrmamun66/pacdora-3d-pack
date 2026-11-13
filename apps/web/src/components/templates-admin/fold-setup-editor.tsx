@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ListOrdered, Play, RotateCcw, Wand2, X } from "lucide-react";
-import { createImportedGenerator, detectFoldSetup, importedDefaults, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldHingeSpec, type FoldSetup, type PanelRole, partFits } from "@packaging/dieline-engine";
+import { AppWindow, ListOrdered, Play, RotateCcw, Wand2, X } from "lucide-react";
+import { applyWindows, createImportedGenerator, detectFoldSetup, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldHingeSpec, type FoldSetup, type PanelRole, type WindowSpec, partFits } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
@@ -17,6 +17,9 @@ import type { ViewSettings } from "@/lib/view-settings";
 import { GridToggle } from "@/components/viewer3d/grid-toggle";
 import { RotationControls } from "@/components/viewer3d/rotation-controls";
 import { pathData } from "@/lib/template-import";
+import { importedStartParams } from "@/lib/imported-start";
+import type { Unit } from "@/components/dielines/units";
+import { WindowEditorModal } from "./window-editor-modal";
 
 const ROLE_OPTIONS: { value: PanelRole; label: string; hint: string }[] = [
   { value: "body", label: "Wall / main panel", hint: "A side of the box or the front of a card." },
@@ -66,7 +69,13 @@ export function FoldSetupEditor({
   barBottom = "0.75rem",
   startView = null,
   memoryKey,
+  windows = [],
+  onWindows,
 }: {
+  /** Window holes new projects start with. They are cut into the 3D preview here. */
+  windows?: readonly WindowSpec[];
+  /** Given, the "Window holes" button opens the window editor and reports the result. */
+  onWindows?: (w: WindowSpec[]) => void;
   flat: FlatDielineData;
   fold: FoldSetup | null;
   onChange: (f: FoldSetup | null) => void;
@@ -126,11 +135,12 @@ export function FoldSetupEditor({
   };
 
   const problems = useMemo(() => (fold ? validateFoldSetup(fold) : []), [fold]);
-  const geo = useMemo<{ geo: DielineGeometry | null; error: string | null }>(() => {
+  const geo = useMemo<{ geo: DielineGeometry | null; error: string | null; thickness?: number }>(() => {
     if (!fold || problems.length || stale) return { geo: null, error: null };
     try {
       const f = flat as FlatDieline;
-      return { geo: createImportedGenerator("preview", f, fold).generate(importedDefaults(f)), error: null };
+      const params = importedStartParams(flat, fold);
+      return { geo: createImportedGenerator("preview", f, fold).generate(params), error: null, thickness: params.thickness };
     } catch (e) {
       return { geo: null, error: e instanceof Error ? e.message : "The 3D preview could not be built." };
     }
@@ -155,6 +165,11 @@ export function FoldSetupEditor({
     } else if (!panelOpen && d.open) d.close();
   }, [panelOpen]);
 
+  // Window holes: cut into the preview (the ones that do not fit the dieline any more are left out here and flagged on the page).
+  const [windowsOpen, setWindowsOpen] = useState(false);
+  const [windowUnit, setWindowUnit] = useState<Unit>("mm");
+  const windowResult = useMemo(() => (geo.geo && windows.length > 0 ? applyWindows(geo.geo, windows) : null), [geo.geo, windows]);
+  const shownGeo = windowResult ? windowResult.geo : geo.geo;
   const fits = useMemo(() => (geo.geo ? partFits(geo.geo.foldTree) : []), [geo.geo]);
 
   const bounds = useMemo(() => {
@@ -226,11 +241,20 @@ export function FoldSetupEditor({
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant={quick ? "default" : "outline"} size="sm" aria-pressed={quick} onClick={() => (quick ? stopQuick() : (setQuick(true), setSel(null)))}><ListOrdered className="size-4" aria-hidden /> Quick sort</Button>
           <Button type="button" variant="outline" size="sm" onClick={detect}><Wand2 className="size-4" aria-hidden /> Detect again</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => { if (window.confirm("Remove the 3D fold? The template becomes flat only.")) { onChange(null); setSel(null); setWarnings([]); } }}>Make flat only</Button>
+          {onWindows ? (
+            <Button type="button" variant="outline" size="sm" className="ml-auto" disabled={!geo.geo} title={geo.geo ? "Cut window holes that new projects start with" : "Set up the 3D fold first"} onClick={() => setWindowsOpen(true)}>
+              <AppWindow className="size-4" aria-hidden /> Window holes{windows.length > 0 ? <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[10px] leading-4 font-semibold text-primary-foreground">{windows.length}</span> : null}
+            </Button>
+          ) : null}
         </div>
       </div>
 
-      {stale ? <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">The lines changed after the fold was set up. Detect the panels again (or make the template flat only) before saving.</p> : null}
+      {windowResult && windowResult.problems.length > 0 ? (
+        <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {windowResult.problems.length === 1 ? "A window hole does not fit" : `${windowResult.problems.length} window holes do not fit`} the dieline: {windowResult.problems[0]!.message} Open Window holes and move or delete {windowResult.problems.length === 1 ? "it" : "them"}; saving is blocked until then.
+        </p>
+      ) : null}
+      {stale ? <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">The lines changed after the fold was set up. Detect the panels again before saving.</p> : null}
       {problems.length ? <ul role="alert" className="list-disc rounded-lg border border-destructive/30 bg-destructive/10 py-2 pl-7 pr-3 text-sm text-destructive">{problems.map((p) => <li key={p}>{p}</li>)}</ul> : null}
       {warnings.length ? (
         <details className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
@@ -322,7 +346,7 @@ export function FoldSetupEditor({
         <div className="flex min-w-0 flex-col gap-2">
           <div className="relative overflow-hidden rounded-xl border bg-muted/40">
             {geo.geo ? (
-              <CartonView ref={view} className="h-[min(420px,50vh)] w-full" geo={geo.geo} texture={null} textureRect={null} progress={progress} outsideColor="#ffffff" insideColor="#c8a97e" initialView={startView} />
+              <CartonView ref={view} className="h-[min(420px,50vh)] w-full" geo={shownGeo ?? geo.geo} texture={null} textureRect={null} progress={progress} outsideColor="#ffffff" insideColor="#c8a97e" initialView={startView} />
             ) : (
               <p className="grid h-48 place-items-center px-4 text-center text-sm text-muted-foreground">{geo.error ?? "Fix the problems above to see the 3D preview."}</p>
             )}
@@ -483,6 +507,21 @@ export function FoldSetupEditor({
           onClear={() => setQueue([])}
           onCancel={stopQuick}
           onApply={() => { onChange(applyFoldSequence(fold, liveQueue)); stopQuick(); }}
+        />
+      ) : null}
+      {onWindows && geo.geo ? (
+        <WindowEditorModal
+          open={windowsOpen}
+          geo={geo.geo}
+          value={windows}
+          unit={windowUnit}
+          onUnit={setWindowUnit}
+          onCancel={() => setWindowsOpen(false)}
+          onDone={(next) => {
+            onWindows(next);
+            setWindowsOpen(false);
+          }}
+          thickness={geo.thickness ?? 0}
         />
       ) : null}
     </div>

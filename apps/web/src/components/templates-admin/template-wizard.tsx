@@ -88,7 +88,7 @@ const mmToIn = (mm: number) => (mm / 25.4).toFixed(2);
 export function TemplateWizard({ mode, categories, initial, svgColors }: { mode: "create" | "edit"; categories: WizardCategory[]; initial: WizardInitial; svgColors: SvgColorSettings }) {
   const router = useRouter();
   const builtin = initial.source === "builtin";
-  const steps = builtin ? ["Categories", "Details"] : ["Categories", "SVG file", "Clean up", "Customize", "3D fold", "Window holes", "Details & publish"];
+  const steps = builtin ? ["Categories", "Details"] : ["Categories", "SVG file", "Clean up", "Customize", "3D fold", "Details & publish"];
 
   const [step, setStep] = useState(0);
   const [categoryIds, setCategoryIds] = useState<string[]>(initial.categoryIds);
@@ -114,6 +114,8 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   const [bgFile, setBgFile] = useState<File | null>(null);
   const [bgRemoved, setBgRemoved] = useState(false);
   const [saving, setSaving] = useState(false);
+  /** Bumped after each successful save so the always-open Starting 3D view editor reloads the saved template (new lines, fold, holes). */
+  const [savedCount, setSavedCount] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const bgInput = useRef<HTMLInputElement>(null);
   // Preview of a newly chosen picture; revoked when replaced or on unmount.
@@ -235,8 +237,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
     stepName === "SVG file" ? dieline !== null :
     stepName === "Clean up" ? dieline !== null && cleaned.error === null :
     stepName === "Customize" ? dieline !== null && cleaned.error === null && hasCut && hasClosedCut :
-    stepName === "3D fold" ? foldOk :
-    stepName === "Window holes" ? windowProblems.length === 0 :
+    stepName === "3D fold" ? foldOk && windowProblems.length === 0 :
     true;
   const blocker =
     stepName === "Categories" && categoryIds.length === 0 ? "Choose at least one category." :
@@ -244,7 +245,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
     stepName === "Clean up" && cleaned.error ? cleaned.error :
     stepName === "Customize" && !hasCut ? "Mark at least one line style as Cut." :
     stepName === "Customize" && !hasClosedCut ? "The Cut lines must include a closed outline." :
-    stepName === "Window holes" && windowProblems.length > 0 ? "A window hole does not fit. Open the editor and fix it." :
+    stepName === "3D fold" && windowProblems.length > 0 ? "A window hole does not fit the dieline. Open Window holes and fix it." :
     stepName === "3D fold" && !foldOk ? (foldStale ? "Detect the panels again, or make the template flat only." : "Fix the problems in the 3D fold.") : null;
 
   async function onFile(file: File | undefined) {
@@ -319,6 +320,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
         } else if (finalSlug !== initial.slug) {
           router.replace(`/doraadmin/templates/${finalSlug}/edit`); // renamed: the page address changes
         }
+        setSavedCount((n) => n + 1);
         router.refresh(); // edit stays here; the page remounts with the saved data
       } else notify.error(r.message);
     } catch {
@@ -492,7 +494,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
             </div>
             <div className="flex flex-wrap gap-2">
               <SvgPreviewButton rawSvg={text} dieline={dieline} roles={roles} onRole={(key, role) => setOverrides((o) => ({ ...o, [key]: role }))} />
-              <RoleSampleButton />
+              <RoleSampleButton svgColors={svgColors} />
             </div>
           </div>
           <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
@@ -554,7 +556,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   ) : null;
   const foldSection = flat ? (
     <section aria-label="3D fold" className="flex flex-col gap-4">
-      <FoldSetupEditor flat={flat} fold={fold} stale={foldStale} startView={startView} {...(mode === "edit" ? { memoryKey: initial.slug } : {})} barBottom={mode === "edit" ? "4.75rem" : "0.75rem"} onChange={(f) => { setFold(f); setFoldKey(flatKey); }} />
+      <FoldSetupEditor flat={flat} fold={fold} stale={foldStale} startView={startView} windows={windows} onWindows={setWindows} {...(mode === "edit" ? { memoryKey: initial.slug } : {})} barBottom={mode === "edit" ? "4.75rem" : "0.75rem"} onChange={(f) => { setFold(f); setFoldKey(flatKey); }} />
     </section>
   ) : null;
   const windowsSection = (
@@ -694,7 +696,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
       { id: "sec-details", label: "Details" },
       { id: "sec-categories", label: "Categories" },
       ...(builtin ? [] : [...(dieline ? [{ id: "sec-lines", label: "Line roles" }, { id: "sec-fold", label: "3D fold" }] : [])]),
-      { id: "sec-windows", label: "Window holes" },
+      ...(builtin ? [{ id: "sec-windows", label: "Window holes" }] : []), // other templates set them from the 3D fold editor
       ...(builtin || initial.fold ? [{ id: "sec-view", label: "Starting 3D view" }] : []),
     ];
     const card = "scroll-mt-24 rounded-2xl border bg-card p-5 shadow-xs";
@@ -732,14 +734,14 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
             <div id="sec-categories" className={card}>{categoriesSection}</div>
             {!builtin && customizeSection ? <div id="sec-lines" className={card}>{customizeSection}</div> : null}
             {!builtin && foldSection ? <div id="sec-fold" className={card}>{foldSection}</div> : null}
-            <div id="sec-windows" className={card}>{windowsSection}</div>
+            {builtin ? <div id="sec-windows" className={card}>{windowsSection}</div> : null}
             {builtin || initial.fold ? (
               <section id="sec-view" aria-labelledby="s-view" className={card}>
                 <div className="mb-4 flex items-center gap-1.5">
                   <h2 id="s-view" className="text-lg font-semibold">Starting 3D view</h2>
                   <InfoTip label="Starting 3D view">Set how the 3D preview looks when a customer opens this template. It is saved on its own, not with the Save button below.{!builtin && !foldOk ? " Save the 3D fold first." : ""}</InfoTip>
                 </div>
-                <ViewSettingsInline slug={initial.slug} onSaved={setStartView} />
+                <ViewSettingsInline slug={initial.slug} windows={windows} reloadKey={savedCount} onSaved={setStartView} />
               </section>
             ) : null}
           </div>
@@ -793,7 +795,6 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
       {stepName === "Clean up" ? cleanupSection : null}
       {stepName === "Customize" ? customizeSection : null}
       {stepName === "3D fold" ? foldSection : null}
-      {stepName === "Window holes" ? windowsSection : null}
       {stepName === "Details" || stepName === "Details & publish" ? (
         <section aria-labelledby="s-det" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="flex max-w-xl flex-col gap-4">

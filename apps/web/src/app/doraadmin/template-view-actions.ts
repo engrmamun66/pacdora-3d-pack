@@ -3,10 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
-import type { FoldSetup } from "@packaging/dieline-engine";
+import type { FoldSetup, WindowSpec } from "@packaging/dieline-engine";
 import { getPreset } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { readViewSettings, viewSettingsSchema, type ViewSettings } from "@/lib/view-settings";
+import { readTemplateWindows } from "@/lib/template-windows";
 import { db } from "@/server/db";
 import { requireSuperAdmin } from "@/server/admin";
 import { loadImportedSource } from "@/server/imported-templates";
@@ -36,24 +37,24 @@ export async function saveTemplateView(slug: string, view: unknown): Promise<Act
 }
 
 export type TemplateViewData =
-  | { kind: "builtin"; generatorId: string; params: Record<string, unknown>; view: ViewSettings | null; productImage: string | null }
-  | { kind: "imported"; templateId: string; flat: FlatDielineData; fold: FoldSetup; view: ViewSettings | null; productImage: string | null };
+  | { kind: "builtin"; generatorId: string; params: Record<string, unknown>; view: ViewSettings | null; productImage: string | null; windows: WindowSpec[] }
+  | { kind: "imported"; templateId: string; flat: FlatDielineData; fold: FoldSetup; view: ViewSettings | null; productImage: string | null; windows: WindowSpec[] };
 
 /** What the 3D view editor needs for one template (loaded when the editor opens). */
 export async function loadTemplateViewData(slug: string): Promise<{ ok: true; data: TemplateViewData } | { ok: false; message: string }> {
   await requireSuperAdmin();
   const s = slugParam.safeParse(slug);
   if (!s.success) return { ok: false, message: "Invalid request." };
-  const row = await db.template.findUnique({ where: { id: s.data }, select: { source: true, viewSettings: true, productImageKey: true, defaultThickness: true } });
+  const row = await db.template.findUnique({ where: { id: s.data }, select: { source: true, viewSettings: true, productImageKey: true, defaultThickness: true, windows: true } });
   if (!row) return { ok: false, message: "Template not found." };
   const productImage = row.productImageKey ? `/api/templates/${s.data}/product-image?v=${row.productImageKey.slice("templates/".length, -4)}` : null;
   if (row.source === "svg") {
     const src = await loadImportedSource(s.data);
     if (!src) return { ok: false, message: "Template not found." };
     if (!src.fold) return { ok: false, message: "This template has no 3D fold yet. Set it up first." };
-    return { ok: true, data: { kind: "imported", templateId: src.templateId, flat: src.flat, fold: src.fold, view: readViewSettings(row.viewSettings), productImage } };
+    return { ok: true, data: { kind: "imported", templateId: src.templateId, flat: src.flat, fold: src.fold, view: readViewSettings(row.viewSettings), productImage, windows: readTemplateWindows(row.windows) } };
   }
   const preset = getPreset(s.data);
   if (!preset) return { ok: false, message: "Template not found." };
-  return { ok: true, data: { kind: "builtin", generatorId: preset.generatorId, params: { ...preset.defaults, ...(row.defaultThickness ? { thickness: row.defaultThickness } : {}) }, view: readViewSettings(row.viewSettings), productImage } };
+  return { ok: true, data: { kind: "builtin", generatorId: preset.generatorId, params: { ...preset.defaults, ...(row.defaultThickness ? { thickness: row.defaultThickness } : {}) }, view: readViewSettings(row.viewSettings), productImage, windows: readTemplateWindows(row.windows) } };
 }

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, X } from "lucide-react";
 import { loadTemplateViewData, type TemplateViewData } from "@/app/doraadmin/template-view-actions";
+import type { WindowSpec } from "@packaging/dieline-engine";
 import type { ViewSettings } from "@/lib/view-settings";
 import { ViewSettingsEditor } from "./view-settings-editor";
 
@@ -59,23 +60,27 @@ export function ViewSettingsButton({ slug, name, className }: { slug: string; na
   );
 }
 
-/** The same editor inside a page section: it loads the saved template when the admin asks for it. */
-export function ViewSettingsInline({ slug, onSaved }: { slug: string; onSaved?: (v: ViewSettings | null) => void }) {
-  const [state, setState] = useState<State | null>(null);
-  const load = () => {
-    setState({ status: "loading" });
+/** The same editor inside a page section. It is always open: the saved template loads as soon as the section shows. */
+export function ViewSettingsInline({ slug, windows, reloadKey = 0, onSaved }: { slug: string; windows?: readonly WindowSpec[]; /** Change it to load the saved template again (after the page saved it); the editor stays open meanwhile. */ reloadKey?: number; onSaved?: (v: ViewSettings | null) => void }) {
+  const [state, setState] = useState<State>({ status: "loading" });
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let live = true;
     loadTemplateViewData(slug)
-      .then((r) => setState(r.ok ? { status: "ready", data: r.data } : { status: "error", message: r.message }))
-      .catch(() => setState({ status: "error", message: "Could not load the template. Please try again." }));
-  };
-  if (!state) {
+      .then((r) => { if (live) setState(r.ok ? { status: "ready", data: r.data } : { status: "error", message: r.message }); })
+      .catch(() => { if (live) setState({ status: "error", message: "Could not load the template. Please try again." }); });
+    return () => { live = false; };
+  }, [slug, attempt, reloadKey]);
+  if (state.status === "loading") return <p className="py-10 text-center text-sm text-muted-foreground">Loading…</p>;
+  if (state.status === "error") {
     return (
-      <button type="button" onClick={load} className="inline-flex h-10 items-center gap-2 rounded-lg border px-4 text-sm font-medium hover:bg-muted">
-        <Camera className="size-4" aria-hidden /> Open the 3D view editor
-      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <p role="alert" className="text-sm text-destructive">{state.message}</p>
+        <button type="button" onClick={() => { setState({ status: "loading" }); setAttempt((n) => n + 1); }} className="inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-medium hover:bg-muted">
+          <Camera className="size-4" aria-hidden /> Try again
+        </button>
+      </div>
     );
   }
-  if (state.status === "loading") return <p className="py-10 text-center text-sm text-muted-foreground">Loading…</p>;
-  if (state.status === "error") return <p role="alert" className="text-sm text-destructive">{state.message}</p>;
-  return <ViewSettingsEditor slug={slug} data={state.data} onDone={() => setState(null)} {...(onSaved ? { onSaved } : {})} />;
+  return <ViewSettingsEditor slug={slug} data={state.data} {...(windows ? { windows } : {})} {...(onSaved ? { onSaved } : {})} />;
 }

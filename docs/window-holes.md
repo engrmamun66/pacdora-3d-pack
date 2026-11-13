@@ -10,13 +10,13 @@ reference image the owner sent was only an idea of the feature, nothing of its l
 - A window that breaks a rule is LEFT OUT of the geometry (the dieline stays valid) and reported with a reason.
   Saving is refused while any window is invalid (server checks again).
 - Stored with the customer's project (`ProjectDoc.windows`), copied by "Save as".
-- An admin can also give a template **default windows** (`Template.windows`, JSON, nullable). New projects from the template start with them (`initialWindows` on the template page); customers can move, resize, delete them or add more. Admin edit page: section "Window holes" (`sec-windows`); create wizard: step "Window holes" after "3D fold" (SVG templates only). They are saved with the main Save and re-checked on the server against the dieline at its starting size (`windowsProblem` in `doraadmin/template-actions.ts`). They need panels: a built-in template, or an SVG template with a 3D fold (without a fold they are cleared). UI: `components/templates-admin/template-windows-field.tsx` (list, picture, full-screen `WindowEditor`).
+- An admin can also give a template **default windows** (`Template.windows`, JSON, nullable). New projects from the template start with them (`initialWindows` on the template page); customers can move, resize, delete them or add more. SVG templates: the "Window holes" button in the 3D fold editor (edit page and create wizard); built-in templates have no fold editor, so they keep the "Window holes" section (`sec-windows`) on the edit page. They are saved with the main Save and re-checked on the server against the dieline at its starting size (`windowsProblem` in `doraadmin/template-actions.ts`). They need panels: a built-in template, or an SVG template with a 3D fold (without a fold they are cleared). UI: `components/templates-admin/template-windows-field.tsx` (list, picture, full-screen `WindowEditor`). The 3D fold editor also has a "Window holes" button (rightmost of the fold editor's buttons) that opens the same editor; the holes are cut into its 3D preview. Both open the editor through `window-editor-modal.tsx` (slide-up / slide-down, same motion as the customer page). The fold editor builds its preview with `importedStartParams`, the same starting size the windows are placed and checked on.
 
 ## Where it lives
 | Concern | File |
 |---|---|
 | Rules, `applyWindows` | `packages/dieline-engine/src/windows.ts` (tests: `test/windows.test.ts`) |
-| Shape library (63 shapes) | `packages/dieline-engine/src/window-shapes.ts`: one table `SHAPE_DEFS`, groups "Basic Shapes" (13) and "More Shapes" (50) |
+| Shape library (66 shapes) | `packages/dieline-engine/src/window-shapes.ts`: one table `SHAPE_DEFS`, groups "Basic Shapes" (16) and "More Shapes" (50) |
 | Result in the geometry | extra closed cut loops in `geo.cutLoops` (so SVG, PDF, DXF, thumbnails draw them as cut lines) + `Panel.holes` |
 | 3D | `packages/model3d`: `THREE.Shape.holes` per panel + edge walls around each hole (test in `model3d.test.ts`) |
 | Stored form | `packages/schema/src/index.ts` `windowSchema`, `ProjectDoc.windows` (optional, no migration) |
@@ -30,6 +30,12 @@ Shapes palette (click adds at the first spot the engine accepts, biggest panel f
 right side: live 3D preview with the holes, Width / Height / X / Y / Turn in mm or in, Duplicate, Delete, the engine's
 reason when a window does not fit. Cancel discards, Done keeps (disabled while a window is red); the project is saved with
 the normal Save.
+
+## Where the template's holes show
+Besides the customer page, the 3D fold editor preview and the editor itself, the admin "Starting 3D view" editor (edit page section and the camera icon on the template list) cuts the template's window holes into its box, so the camera and the saved product image are taken with the holes. `loadTemplateViewData` sends the saved `windows`; the edit page passes its live (maybe unsaved) holes to override them. That editor builds the box with `importedStartParams`, the same starting size the holes are placed on.
+
+## Shape palette
+Each group title ("Basic Shapes", "More Shapes") is a bar with the same background (`bg-muted`) and radius (`rounded-lg`); the shapes under it have no card around them. A search box sits above all of them and stays at the top while the palette scrolls: it matches shape names and ids (and a group title shows the whole group), hides empty groups, shows "No shape matches", Enter adds the only match, Escape clears. It is disabled in the 3D tab with the rest of the palette. The palette is the same in the dieline page editor and the admin modal.
 
 ## Shape library
 Each shape is a function that draws ONE simple polygon in a `w` x `h` box (most are drawn in a unit frame and stretched to the box with `fit`; rounded corners, notches and waves use `w` and `h`). To add a shape: add an entry to `SHAPE_DEFS` (`label`, `group`, `ratio`, `lock` for round / regular shapes, optional `start`, `build`); the palette, the 3D hole, the exports and the checks follow. The test `the shape library` checks every shape is simple (no crossing edges), fills its box wide, tall and square, and can be cut and rotated. Ids are stored in projects: never rename one.

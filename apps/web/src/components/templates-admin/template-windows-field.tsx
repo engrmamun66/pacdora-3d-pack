@@ -4,10 +4,10 @@ import { useMemo, useState } from "react";
 import { AppWindow, Pencil, Trash2 } from "lucide-react";
 import { WINDOW_SHAPE_LABELS, applyWindows, type DielineGeometry, type WindowShape, type WindowSpec } from "@packaging/dieline-engine";
 import { renderDielineSvg } from "@packaging/render-svg";
-import { WindowEditor } from "@/components/dielines/window-editor";
 import { toDisplay, type Unit } from "@/components/dielines/units";
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "./help-tip";
+import { WindowEditorModal } from "./window-editor-modal";
 
 const label = (w: WindowSpec) => WINDOW_SHAPE_LABELS[w.shape as WindowShape] ?? w.shape;
 
@@ -86,26 +86,7 @@ export function TemplateWindowsField({
         ) : <p className="p-6 text-center text-xs text-muted-foreground">No preview.</p>}
       </div>
 
-      {editing ? (
-        // The editor is a whole-screen view (same as on the customer's page): it covers the admin page until Done or Cancel.
-        <div className="fixed inset-0 z-50 flex flex-col bg-background">
-          <WindowEditor
-            geo={geo}
-            value={value}
-            unit={unit}
-            onUnit={setUnit}
-            onCancel={() => setEditing(false)}
-            onDone={(next) => {
-              onChange(next);
-              setEditing(false);
-            }}
-            materialId={undefined}
-            boardColor={boardColor}
-            thickness={thickness}
-            watermark={null}
-          />
-        </div>
-      ) : null}
+      <WindowEditorModal open={editing} geo={geo} value={value} unit={unit} onUnit={setUnit} onCancel={() => setEditing(false)} onDone={(next) => { onChange(next); setEditing(false); }} thickness={thickness} boardColor={boardColor} />
     </div>
   );
 }

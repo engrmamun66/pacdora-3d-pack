@@ -9,6 +9,7 @@ import { z } from "zod";
  *   rollDeg       roll (0 = upright; + turns the picture clockwise, like tilting your head)
  *   zoom          1 = the standard distance; 2 = twice as close
  *   panX, panY    sideways / up-down shift of the view, in box sizes
+ *   panZ          depth shift, in box sizes (+ = the box comes toward you, - = it moves away)
  *   progress      fold amount (0 = flat, 1 = closed)
  */
 export const viewSettingsSchema = z.object({
@@ -20,12 +21,14 @@ export const viewSettingsSchema = z.object({
   zoom: z.number().finite().min(0.2).max(10),
   panX: z.number().finite().min(-3).max(3),
   panY: z.number().finite().min(-3).max(3),
+  /** Older saved views have no depth shift: they read as 0. */
+  panZ: z.number().finite().min(-3).max(3).default(0),
   progress: z.number().finite().min(0).max(1),
 });
 export type ViewSettings = z.infer<typeof viewSettingsSchema>;
 
 /** The standard view (close to the one the viewer always used). */
-export const STANDARD_VIEW: ViewSettings = { v: 1, azimuthDeg: 36, elevationDeg: 25, rollDeg: 0, zoom: 1, panX: 0, panY: 0, progress: 1 };
+export const STANDARD_VIEW: ViewSettings = { v: 1, azimuthDeg: 36, elevationDeg: 25, rollDeg: 0, zoom: 1, panX: 0, panY: 0, panZ: 0, progress: 1 };
 
 /** Camera distance (in box sizes) at zoom 1. */
 const BASE_DISTANCE = 3;
@@ -69,9 +72,9 @@ function axes(azimuthDeg: number, elevationDeg: number, rollDeg = 0) {
 export function viewToCamera(view: ViewSettings, base: V3, size: number): { position: V3; target: V3 } {
   const { d, right, up } = axes(view.azimuthDeg, view.elevationDeg, view.rollDeg);
   const target: V3 = [
-    base[0] + (right[0] * view.panX + up[0] * view.panY) * size,
-    base[1] + (right[1] * view.panX + up[1] * view.panY) * size,
-    base[2] + (right[2] * view.panX + up[2] * view.panY) * size,
+    base[0] + (right[0] * view.panX + up[0] * view.panY - d[0] * view.panZ) * size,
+    base[1] + (right[1] * view.panX + up[1] * view.panY - d[1] * view.panZ) * size,
+    base[2] + (right[2] * view.panX + up[2] * view.panY - d[2] * view.panZ) * size,
   ];
   const dist = (BASE_DISTANCE * size) / view.zoom;
   return { position: [target[0] + d[0] * dist, target[1] + d[1] * dist, target[2] + d[2] * dist], target };
@@ -83,7 +86,7 @@ export function cameraToView(position: V3, target: V3, base: V3, size: number, p
   const dist = Math.hypot(...off) || 1e-9;
   const elevationDeg = deg(Math.asin(Math.max(-1, Math.min(1, off[1] / dist))));
   const azimuthDeg = Math.abs(off[0]) + Math.abs(off[2]) < 1e-9 ? 0 : deg(Math.atan2(off[0], off[2]));
-  const { right, up } = axes(azimuthDeg, elevationDeg, rollDeg);
+  const { d, right, up } = axes(azimuthDeg, elevationDeg, rollDeg);
   const delta: V3 = [target[0] - base[0], target[1] - base[1], target[2] - base[2]];
   const round = (v: number, n: number) => Math.round(v * 10 ** n) / 10 ** n;
   return {
@@ -94,6 +97,7 @@ export function cameraToView(position: V3, target: V3, base: V3, size: number, p
     zoom: round(Math.max(0.2, Math.min(10, (BASE_DISTANCE * size) / dist)), 3),
     panX: round(dot(delta, right) / size, 4),
     panY: round(dot(delta, up) / size, 4),
+    panZ: round(-dot(delta, d) / size, 4),
     progress: round(Math.max(0, Math.min(1, progress)), 3),
   };
 }

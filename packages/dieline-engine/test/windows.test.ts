@@ -142,11 +142,11 @@ describe("the shape library", () => {
   };
 
   it("has Basic Shapes and 50 More Shapes, each named once", () => {
-    expect(WINDOW_SHAPE_GROUPS.map((g) => [g.title, g.shapes.length])).toEqual([["Basic Shapes", 13], ["More Shapes", 50]]);
-    expect(WINDOW_SHAPES.length).toBe(63);
+    expect(WINDOW_SHAPE_GROUPS.map((g) => [g.title, g.shapes.length])).toEqual([["Basic Shapes", 16], ["More Shapes", 50]]);
+    expect(WINDOW_SHAPES.length).toBe(66);
     const labels = WINDOW_SHAPES.map((s) => WINDOW_SHAPE_LABELS[s]);
     expect(new Set(labels).size).toBe(labels.length);
-    expect(new Set(WINDOW_SHAPES.flatMap((s) => (s.length <= 30 ? [s] : []))).size).toBe(63); // ids fit the stored form
+    expect(new Set(WINDOW_SHAPES.flatMap((s) => (s.length <= 30 ? [s] : []))).size).toBe(66); // ids fit the stored form
   });
 
   it("every shape is one simple polygon that fills its box, wide, tall and square", () => {

@@ -88,6 +88,23 @@ function blob(parts: readonly Part[], floor?: number, steps = 144): Vec2[] {
   });
 }
 
+/**
+ * A heart made of two round lobes (centres at x = +-`d`, y = `c`, radius `r`) and a straight run down to a point at
+ * (0, `tip`). With `d` equal to `r` the lobes only touch (a deep cleft); with `d` smaller they overlap (a shallow one).
+ */
+function lobedHeart(d: number, r: number, c: number, tip: number): Vec2[] {
+  const s = Math.sqrt(Math.max(0, r * r - d * d)); // the notch lies s above the lobe centres
+  const toTip = Math.atan2(tip - c, -d);
+  const alpha = Math.acos(r / Math.hypot(d, tip - c));
+  // The tangent from the tip touches the lobe on its outer (right) side.
+  const aT = [toTip + alpha, toTip - alpha].reduce((best, a) => (Math.cos(a) > Math.cos(best) ? a : best));
+  const aN = Math.atan2(-s, -d);
+  let end = aT;
+  while (end < aN) end += TAU;
+  const right = arc(d, c, r, r, aN, end, 30);
+  return [...right, vec(0, tip), ...mirrorX(right).slice(0, -1)];
+}
+
 export interface ShapeDef {
   readonly label: string;
   readonly group: "basic" | "more";
@@ -159,6 +176,9 @@ export const SHAPE_DEFS = {
       }),
     ),
   }),
+  "round-heart": def({ label: "Round heart", group: "basic", ratio: 1.05, lock: true, build: drawn(() => lobedHeart(0.5, 0.56, -0.3, 1)) }),
+  "slim-heart": def({ label: "Slim heart", group: "basic", ratio: 0.78, build: drawn(() => lobedHeart(0.4, 0.44, -0.45, 1)) }),
+  "cleft-heart": def({ label: "Cleft heart", group: "basic", ratio: 1.1, lock: true, build: drawn(() => lobedHeart(0.5, 0.5, -0.3, 1)) }),
   flower: def({
     label: "Flower",
     group: "basic",
