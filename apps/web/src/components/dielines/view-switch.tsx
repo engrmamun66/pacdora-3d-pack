@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 /**
  * Switching between two views (Dieline | 3D) where one of them is slow to build.
@@ -10,8 +10,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * - `switching` is true from the click until the new view says it is drawn (`markReady`). The tabs stay disabled meanwhile.
  * A safety timer ends `switching` even if a view never reports.
  * `extraDelay(from, to)` (ms) holds the mount back a little longer, e.g. while a sidebar animation plays on a free main thread.
+ * `instant(from, to)` marks a switch that builds nothing slow (the views are only moved): no waiting for `markReady`, no placeholder.
  */
-export function useViewSwitch<T extends string>(initial: T, extraDelay?: (from: T, to: T) => number) {
+export function useViewSwitch<T extends string>(initial: T, extraDelay?: (from: T, to: T) => number, instant?: (from: T, to: T) => boolean) {
   const [tab, setTab] = useState<T>(initial);
   const [mounted, setMounted] = useState<T>(initial);
   const [ready, setReady] = useState(true);
@@ -21,10 +22,14 @@ export function useViewSwitch<T extends string>(initial: T, extraDelay?: (from: 
     latest.current = { tab, mounted };
   });
 
+  const instantRef = useRef(instant);
+  useEffect(() => {
+    instantRef.current = instant;
+  });
   const select = (next: T) => {
     if (switching || next === tab) return;
     setTab(next);
-    setReady(false);
+    if (!instantRef.current?.(tab, next)) setReady(false);
   };
 
   const delayRef = useRef(extraDelay);
@@ -79,6 +84,74 @@ export function ViewSkeleton({ kind, label }: { kind: "sheet" | "box"; label: st
           <div className={`h-3 w-2/3 ${block}`} />
         </div>
       )}
+    </div>
+  );
+}
+
+/** How long the Dieline <-> 3D exchange takes (ms), and its easing. */
+export const SWAP_MS = 520;
+export const SWAP_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+
+/**
+ * Wraps a view that has just taken a new place: it starts where `getFrom()` says the other view was (moved and scaled
+ * there) and glides to its own place. Read once, when it mounts; no rectangle = no motion (first load, other switches).
+ */
+export function SwapIn({ getFrom, className, children }: { getFrom: () => DOMRect | null | undefined; className?: string; children: ReactNode }) {
+  const el = useRef<HTMLDivElement>(null);
+  const from = useRef(getFrom);
+  useLayoutEffect(() => {
+    const node = el.current;
+    const start = from.current();
+    if (!node || !start || typeof node.animate !== "function") return;
+    const end = node.getBoundingClientRect();
+    if (end.width < 1 || end.height < 1 || start.width < 1 || start.height < 1) return;
+    const dx = start.left - end.left;
+    const dy = start.top - end.top;
+    const sx = start.width / end.width;
+    const sy = start.height / end.height;
+    const run = node.animate(
+      [
+        { transformOrigin: "0 0", transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`, opacity: 0.4 },
+        { transformOrigin: "0 0", transform: "none", opacity: 1 },
+      ],
+      { duration: SWAP_MS, easing: SWAP_EASE },
+    );
+    return () => run.cancel();
+  }, []);
+  return (
+    <div ref={el} className={className}>
+      {children}
+    </div>
+  );
+}
+
+/** A grid of soft cells that pulse in a diagonal wave (the Split placeholder's look). */
+function GridWave({ label }: { label: string }) {
+  const cols = 6;
+  const rows = 7;
+  return (
+    <div role="status" aria-live="polite" className="absolute inset-0 z-10 overflow-hidden bg-background p-5">
+      <span className="sr-only">{label}</span>
+      <div aria-hidden className="grid size-full gap-2.5" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}>
+        {Array.from({ length: cols * rows }, (_, i) => (
+          <div key={i} className="animate-pulse rounded-lg bg-muted-foreground/15" style={{ animationDelay: `${((i % cols) + Math.floor(i / cols)) * 110}ms`, animationDuration: "1.6s" }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Placeholder for the Split view: two grids of pulsing cells side by side (sheet on the left, 3D box on the right), at the width the split will have. */
+export function SplitSkeleton({ pct, label }: { pct: number; label: string }) {
+  return (
+    <div role="status" aria-live="polite" style={{ "--split": `${pct}%` } as React.CSSProperties} className="absolute inset-0 z-10 flex flex-col bg-background lg:flex-row">
+      <span className="sr-only">{label}</span>
+      <div className="relative min-h-0 flex-1 lg:flex-none lg:basis-(--split) lg:border-r">
+        <GridWave label="Loading the dieline" />
+      </div>
+      <div className="relative min-h-0 flex-1">
+        <GridWave label="Loading the 3D view" />
+      </div>
     </div>
   );
 }

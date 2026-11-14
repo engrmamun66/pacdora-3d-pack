@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useActionState, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Box, CircleAlert, CircleEllipsis, Ruler, type LucideIcon } from "lucide-react";
 import { ParamValidationError, applyWindows, type WatermarkSpec, type WindowSpec, createImportedGenerator, creaseSizesOf, scaleImportedPaths, getGenerator, type DielineGeometry, type FlatDieline, type FoldSetup, type ParamDescriptor, type ParamGroup } from "@packaging/dieline-engine";
@@ -13,11 +13,12 @@ import { pathData } from "@/lib/template-import";
 import { createProject, createProjectDraft, saveProjectAs, updateProject, type DesignState } from "@/app/(app)/projects/actions";
 import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { panelAt, panelShapes } from "@/lib/panel-hit";
+import { withViewTab, type ViewTab } from "@/lib/view-tab";
 import { DielineInfo } from "./dieline-info";
 import { boxSizes, dielineStats } from "./info-math";
 import { DielineTopBar } from "./dieline-top-bar";
 import { WindowEditor } from "./window-editor";
-import { ViewSkeleton, useViewSwitch } from "./view-switch";
+import { SWAP_EASE, SWAP_MS, SplitSkeleton, SwapIn, ViewSkeleton, useViewSwitch } from "./view-switch";
 import { MiniSheet } from "./mini-sheet";
 import type { SaveAsOptions } from "@/server/projects";
 import { TemplatePicker } from "./template-picker";
@@ -37,6 +38,8 @@ interface Props {
   imported?: { templateId: string; flat: FlatDielineData; fold?: FoldSetup | null };
   /** Camera and fold amount the 3D preview starts with (set per template by an admin). */
   initialView?: ViewSettings | null;
+  /** The tab to open (from the `?view=` query, so a reload keeps it). */
+  initialTab?: ViewTab;
   title: string;
   description: string;
   initialName: string;
@@ -87,7 +90,7 @@ function saveBlob(blob: Blob, filename: string) {
 /** How long the sidebars take to close or open (Split tab); the slow views are built after it, so the motion is not interrupted. Matches `duration-500` on the grid. */
 const SIDEBAR_MS = 520;
 
-export function DielineWorkspace({ mode, generatorId, imported, initialView = null, title, description, initialName, initialParams, modelId, watermark, viewer = null, saveOptions = null, initialWindows = [] }: Props) {
+export function DielineWorkspace({ mode, generatorId, imported, initialView = null, initialTab = "dieline", title, description, initialName, initialParams, modelId, watermark, viewer = null, saveOptions = null, initialWindows = [] }: Props) {
   const router = useRouter();
   const gen = useMemo(() => (imported ? createImportedGenerator(imported.templateId, imported.flat as FlatDieline, imported.fold ?? null) : getGenerator(generatorId)), [generatorId, imported]);
   const [values, setValues] = useState<Values>(() =>
@@ -148,6 +151,8 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   }, [windowsView]);
   const windowResult = useMemo(() => (base ? applyWindows(base, windows) : null), [base, windows]);
   const shown = windowResult?.geo ?? base;
+  /** Dielines with a 3D fold have the Dieline | 3D | Split tabs; others only show the sheet (a `?view=` for them is ignored). */
+  const foldable = (shown?.foldTree.hinges.length ?? 0) > 0;
 
   const hasReference = Boolean(imported?.flat.reference?.length);
   const src = useMemo(
@@ -175,10 +180,10 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   );
 
   // Dieline | 3D. The tab changes at once; the slow view is built behind a placeholder, and the tabs wait until it is drawn.
-  const sw = useViewSwitch<"dieline" | "3d" | "split">("dieline", (from, to) => (from === "split" || to === "split" ? SIDEBAR_MS : 0));
-  const centre = sw.mounted;
+  const sw = useViewSwitch<ViewTab>(initialTab, (from, to) => (from === "split" || to === "split" ? SIDEBAR_MS : 0), (from, to) => from !== "split" && to !== "split");
+  const centre = foldable ? sw.mounted : "dieline";
   /** The Split tab is chosen (at once, before its views are built): the sidebars start to close. */
-  const splitTab = sw.tab === "split";
+  const splitTab = foldable && sw.tab === "split";
   // Split: sheet and 3D box side by side, both sidebars hidden. Blinking is always on, in every tab: the panel under the mouse on the sheet (or on the small dieline in the 3D tab) blinks on the 3D box.
   const [hoverPanel, setHoverPanel] = useState<string | null>(null);
   /** Split: share (%) of the width the sheet takes; the divider between the two halves is dragged with the mouse. */
@@ -196,7 +201,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   };
   const blinkId = hoverPanel;
   useEffect(() => {
-    viewRef.current?.highlightPanel(blinkId);
+    viewRef.current?.focusPanel(blinkId);
   }, [blinkId, centre, shown]);
   const action = mode.kind === "create" ? createProject : updateProject;
   const [state, formAction, pending] = useActionState<DesignState, FormData>(action, IDLE);
@@ -307,7 +312,6 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   };
 
   // Imported dielines are flat: no glue areas or panels to show, and no 3D.
-  const foldable = (shown?.foldTree.hinges.length ?? 0) > 0;
   const toggleDefs = imported
     ? [...DIELINE_TOGGLES.filter((t) => t.key === "partSizes" || t.key === "dimensions" || t.key === "bleed" || (t.key === "safe" && (shown?.safeAreas.length ?? 0) > 0)), ...(hasReference ? [{ key: "reference" as const, label: "Reference" }] : [])]
     : DIELINE_TOGGLES;
@@ -346,6 +350,90 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
     { group: "Print", title: "Print", open: true },
     { group: "Flaps (advanced)", title: "Flaps (advanced)", open: false },
   ];
+
+  // Dieline <-> 3D swap. One 3D box ("stage") stays mounted and glides between its two places: the small card in the right
+  // sidebar (Dieline tab) and the centre (3D tab). The dieline is the other way round: it shrinks into the card / grows into the centre.
+  const stageHost = useRef<HTMLDivElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  const asideTarget = useRef<HTMLDivElement>(null);
+  const centreTarget = useRef<HTMLDivElement>(null);
+  const asideSlot = useRef<HTMLDivElement>(null);
+  const mainBox = useRef<HTMLElement>(null);
+  const swapFrom = useRef<{ aside: DOMRect | null; centre: DOMRect | null } | null>(null);
+  const swapNext = useRef(false);
+  const stageUntil = useRef(0);
+  const stageOn = Boolean(shown && foldable && centre !== "split");
+  const placeStage = useCallback(
+    (animate: boolean) => {
+      const el = stage.current;
+      const host = stageHost.current;
+      if (!el || !host) return;
+      const now = performance.now();
+      if (!animate && now < stageUntil.current) return; // a swap is moving it right now
+      const target = (centre === "3d" ? centreTarget : asideTarget).current;
+      const r = target?.getBoundingClientRect();
+      if (!r || r.width < 1 || r.height < 1 || bodyHidden) {
+        el.style.visibility = "hidden";
+        return;
+      }
+      const h = host.getBoundingClientRect();
+      const move = animate && el.dataset.placed === "1";
+      el.style.transition = move ? ["left", "top", "width", "height"].map((k) => `${k} ${SWAP_MS}ms ${SWAP_EASE}`).join(", ") : "none";
+      if (move) stageUntil.current = now + SWAP_MS + 60;
+      el.style.left = `${r.left - h.left}px`;
+      el.style.top = `${r.top - h.top}px`;
+      el.style.width = `${r.width}px`;
+      el.style.height = `${r.height}px`;
+      el.style.visibility = "visible";
+      el.dataset.placed = "1";
+    },
+    [centre, bodyHidden],
+  );
+  useLayoutEffect(() => {
+    if (!stageOn) return;
+    const animate = swapNext.current;
+    swapNext.current = false;
+    placeStage(animate);
+  }, [stageOn, centre, placeStage]);
+  useEffect(() => {
+    if (!stageOn) return;
+    const host = stageHost.current;
+    if (!host) return;
+    const again = () => placeStage(false);
+    const ro = new ResizeObserver(again);
+    ro.observe(host);
+    const target = (centre === "3d" ? centreTarget : asideTarget).current;
+    if (target) ro.observe(target);
+    window.addEventListener("resize", again);
+    host.addEventListener("scroll", again, true);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", again);
+      host.removeEventListener("scroll", again, true);
+    };
+  }, [stageOn, centre, placeStage]);
+  // While the sidebars slide (Split), the stage's card slides with them.
+  useEffect(() => {
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = () => {
+      placeStage(false);
+      if (performance.now() - t0 < SIDEBAR_MS + 120) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [splitTab, placeStage]);
+  /** Choose a tab. Between Dieline and 3D the old places are noted first, so the views can glide from them. */
+  const pickTab = (id: "dieline" | "3d" | "split") => {
+    setHoverPanel(null);
+    if (id !== sw.tab && id !== "split" && sw.tab !== "split" && !sw.switching) {
+      swapFrom.current = { aside: asideSlot.current?.getBoundingClientRect() ?? null, centre: mainBox.current?.getBoundingClientRect() ?? null };
+      swapNext.current = true;
+    } else swapFrom.current = null;
+    if (id !== sw.tab && !sw.switching) window.history.replaceState(window.history.state, "", withViewTab(window.location.href, id)); // a reload opens the same tab
+    sw.select(id);
+  };
+  const quickPair = sw.tab !== "split" && sw.mounted !== "split";
   // Dieline | 3D | Split: what the centre shows. In the header's middle on wide screens, over the canvas on small ones.
   const viewTabs = (
     <div role="tablist" aria-label="What to show" aria-busy={sw.switching} className="flex rounded-lg border bg-background/90 p-0.5 text-xs shadow-xs backdrop-blur">
@@ -356,7 +444,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
           role="tab"
           aria-selected={sw.tab === id}
           disabled={sw.switching}
-          onClick={() => { setHoverPanel(null); sw.select(id); }}
+          onClick={() => pickTab(id)}
           className={`rounded-md px-3 py-1 font-medium focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${sw.tab === id ? "bg-primary text-primary-foreground disabled:text-primary-foreground" : "text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:text-muted-foreground"} ${sw.switching ? "cursor-wait" : ""}`}
         >
           {text}
@@ -417,7 +505,12 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
         </div>
       ) : null}
 
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div ref={stageHost} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      {stageOn && shown ? (
+        <div ref={stage} style={{ position: "absolute", visibility: "hidden", left: 0, top: 0, width: 0, height: 0 }} className="z-20 flex flex-col" inert={windowsView === "open"}>
+          <FoldPreview large onReady={sw.markReady} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
+        </div>
+      ) : null}
       <div
         inert={windowsView === "open"}
         // Wide screens: the side columns shrink to nothing when "Split" is chosen and grow back when it is left (the sidebars stay mounted, clipped).
@@ -530,7 +623,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
         </aside>
 
         {/* Centre: the sheet, or the 3D box filling the same space. The tabs sit in the top right corner. */}
-        <main className="relative flex min-h-[55vh] min-w-0 flex-col lg:min-h-0">
+        <main ref={mainBox} className="relative flex min-h-[55vh] min-w-0 flex-col lg:min-h-0">
           {/* Small screens: the tabs stay here; from lg up they are in the middle of the header. */}
           {shown && foldable ? <div className="absolute top-3 right-4 z-20 lg:hidden">{viewTabs}</div> : null}
           {shown && foldable && centre === "split" ? (
@@ -582,15 +675,19 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
             </div>
           ) : shown && foldable && centre === "3d" ? (
             <div className="flex min-h-0 flex-1 flex-col p-4 max-lg:pt-16">
-              <FoldPreview large onReady={sw.markReady} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
+              <div ref={centreTarget} className="min-h-0 flex-1" />
             </div>
           ) : shown && src ? (
-            <SheetCanvas onWindows={openWindows} windowCount={windows.length} {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} onHoverMm={hoverAt} highlight={shapes.find((q) => q.id === blinkId)?.poly ?? null} />
+            <SwapIn className="flex min-h-0 flex-1 flex-col" getFrom={() => swapFrom.current?.aside}>
+              <SheetCanvas onWindows={openWindows} windowCount={windows.length} {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} onHoverMm={hoverAt} highlight={shapes.find((q) => q.id === blinkId)?.poly ?? null} />
+            </SwapIn>
           ) : (
             <p className="p-6 text-sm text-muted-foreground">Enter valid dimensions to see the dieline.</p>
           )}
           {!result.geo && shown ? <p role="status" className="border-t px-4 py-1.5 text-xs text-destructive">Showing the last valid shape.</p> : null}
-          {sw.switching ? <ViewSkeleton kind={sw.tab === "dieline" ? "sheet" : "box"} label={sw.tab === "3d" ? "Loading the 3D view" : sw.tab === "split" ? "Loading the split view" : "Loading the dieline"} /> : null}
+          {sw.switching && !quickPair ? (
+            sw.tab === "split" ? <SplitSkeleton pct={splitPct} label="Loading the split view" /> : <ViewSkeleton kind={sw.tab === "dieline" ? "sheet" : "box"} label={sw.tab === "3d" ? "Loading the 3D view" : "Loading the dieline"} />
+          ) : null}
         </main>
 
         {/* Right: 3D + file formats */}
@@ -599,9 +696,13 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
           <div className={`flex h-full min-h-0 flex-col gap-4 overflow-y-auto border-t p-4 transition-opacity duration-300 lg:w-[340px] lg:border-t-0 lg:border-l ${splitTab ? "opacity-0" : ""}`}>
           {shown && foldable ? (
             // Dieline tab: the small 3D card. 3D tab: the dieline takes its place here (a click brings it back to the centre).
-            <div className="relative shrink-0 rounded-2xl">
-              {centre === "dieline" ? <FoldPreview onReady={sw.markReady} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} /> : src ? <MiniSheet box={dielineViewBox(shown, 22)} src={src} onOpen={() => { setHoverPanel(null); sw.select("dieline"); }} onHoverMm={hoverAt} highlight={shapes.find((q) => q.id === blinkId)?.poly ?? null} /> : <div className="h-80" aria-hidden />}
-              {sw.switching && sw.tab === "dieline" ? <ViewSkeleton kind="box" label="Loading the 3D preview" /> : null}
+            <div ref={asideSlot} className="relative shrink-0 rounded-2xl">
+              {centre === "dieline" ? <div ref={asideTarget} className="h-[17rem]" /> : src ? (
+                <SwapIn getFrom={() => swapFrom.current?.centre}>
+                  <MiniSheet box={dielineViewBox(shown, 22)} src={src} onOpen={() => pickTab("dieline")} onHoverMm={hoverAt} highlight={shapes.find((q) => q.id === blinkId)?.poly ?? null} />
+                </SwapIn>
+              ) : <div className="h-80" aria-hidden />}
+              {sw.switching && !quickPair && sw.tab === "dieline" ? <ViewSkeleton kind="box" label="Loading the 3D preview" /> : null}
             </div>
           ) : null}
           {shown && !foldable ? (

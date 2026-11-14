@@ -7,9 +7,11 @@ import { getWatermark } from "@/server/site-settings";
 import { IMPORTED_GENERATOR_ID, type WindowSpec } from "@packaging/dieline-engine";
 import { loadImportedSource } from "@/server/imported-templates";
 import { readViewSettings } from "@/lib/view-settings";
+import { readViewTab } from "@/lib/view-tab";
 
-async function ProjectView({ params }: { params: PageProps<"/projects/[id]">["params"] }) {
+async function ProjectView({ params, searchParams }: { params: PageProps<"/projects/[id]">["params"]; searchParams: PageProps<"/projects/[id]">["searchParams"] }) {
   const { id } = await params;
+  const initialTab = readViewTab((await searchParams).view);
   const user = await requireUser();
   const project = await getProject(user.id, id);
   const watermark = await getWatermark(user);
@@ -33,6 +35,7 @@ async function ProjectView({ params }: { params: PageProps<"/projects/[id]">["pa
       initialName={project.name}
       initialParams={project.doc.template.params}
       initialWindows={(project.doc.windows ?? []) as WindowSpec[]}
+      initialTab={initialTab}
       watermark={watermark}
       viewer={{ name: user.name, email: user.email, image: user.image ?? null }}
       saveOptions={await getSaveAsOptions(user.id, project.id)}
@@ -40,10 +43,10 @@ async function ProjectView({ params }: { params: PageProps<"/projects/[id]">["pa
   );
 }
 
-export default function ProjectPage({ params }: PageProps<"/projects/[id]">) {
+export default function ProjectPage({ params, searchParams }: PageProps<"/projects/[id]">) {
   return (
     <Suspense fallback={<div className="h-dvh animate-pulse bg-muted" />}>
-      <ProjectView params={params} />
+      <ProjectView params={params} searchParams={searchParams} />
     </Suspense>
   );
 }

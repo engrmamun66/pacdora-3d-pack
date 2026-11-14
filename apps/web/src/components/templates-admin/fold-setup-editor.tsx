@@ -177,7 +177,7 @@ export function FoldSetupEditor({
   // Blink Mode: the panel under the mouse on the flat sheet blinks on the 3D box (the box keeps it across rebuilds).
   const blinkTarget = blinkMode ? hoverId : null;
   useEffect(() => {
-    view.current?.highlightPanel(blinkTarget);
+    view.current?.focusPanel(blinkTarget);
   }, [blinkTarget, shownGeo]);
   const fits = useMemo(() => (geo.geo ? partFits(geo.geo.foldTree) : []), [geo.geo]);
 

@@ -171,6 +171,12 @@ export interface CartonViewHandle {
   /** Blink one panel softly (by its panel id) so it can be found on the box; null stops it. Kept when the box is rebuilt. */
   highlightPanel(id: string | null): void;
   /**
+   * Make a panel findable (null = stop). It blinks; if only its thickness side (or nothing) can be seen from the camera, then
+   * with the view kept ("locked") an arrow points at where the panel is, otherwise the camera turns smoothly until its face is
+   * seen, and returns when the panel is let go.
+   */
+  focusPanel(id: string | null): void;
+  /**
    * Keep the camera (turn, tilt, roll, zoom, pan) when the model is rebuilt for new geometry, instead of framing
    * the new box from the standard position. Only the 3D object changes. The view is kept relative to the box size.
    */
@@ -220,6 +226,8 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   const blinkId = useRef<string | null>(null);
   const blinkMeshes = useRef<THREE.Mesh[]>([]);
   const blinkMats = useRef<{ front: THREE.MeshBasicMaterial; through: THREE.MeshBasicMaterial } | null>(null);
+  /** Called every frame by the animation loop (moves the arrow that points at a hidden panel). */
+  const arrowTick = useRef<() => void>(() => {});
   const gridObj = useRef<THREE.GridHelper | null>(null);
   const gridOn = useRef(false);
   const keepView = useRef(false);
@@ -407,7 +415,179 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     add(-board / 2, through, 6);
   };
 
+  // ---- Finding a panel: is it seen, where is it on screen, which way must the camera look to see it ----
+  const savedView = useRef<ViewSettings | null>(null);
+  const moveAnim = useRef<number | null>(null);
+  const arrowFor = useRef<string | null>(null);
+  const arrowEl = useRef<HTMLDivElement | null>(null);
+  const caster = useRef(new THREE.Raycaster());
+
+  /** The two big faces of a panel (outside and inside), as the model builds them first in its group. */
+  const panelFaces = (id: string) => {
+    const t = three.current;
+    const group = t?.model?.object.getObjectByName(id);
+    if (!t || !group) return null;
+    const faces = group.children.filter((c): c is THREE.Mesh => c instanceof THREE.Mesh).slice(0, 2);
+    return faces.length > 0 ? { group, faces } : null;
+  };
+
+  const panelInfo = (id: string): { visible: boolean; x: number; y: number; w: number; h: number; front: boolean } | null => {
+    const t = three.current;
+    const found = panelFaces(id);
+    if (!t || !found) return null;
+    const { group, faces } = found;
+    t.model!.object.updateMatrixWorld(true);
+    const geom = faces[0]!.geometry;
+    geom.computeBoundingBox();
+    const bb = geom.boundingBox;
+    if (!bb) return null;
+    const bw = bb.max.x - bb.min.x;
+    const bh = bb.max.y - bb.min.y;
+    const board = thickness > 0 ? thickness : 0;
+    const at = (ox: number, oy: number) => group.localToWorld(new THREE.Vector3((bb.min.x + bb.max.x) / 2 + ox * bw, (bb.min.y + bb.max.y) / 2 + oy * bh, -board / 2));
+    const centre = at(0, 0);
+    const cam = t.camera.position;
+    // Seen = the camera looks at a big face (not just the edge) and a ray to the panel reaches one of its faces first.
+    const normal = new THREE.Vector3(0, 0, 1).transformDirection(group.matrixWorld).normalize();
+    const toCam = cam.clone().sub(centre).normalize();
+    let visible = false;
+    if (Math.abs(normal.dot(toCam)) > 0.2) {
+      for (const [ox, oy] of [[0, 0], [-0.28, 0], [0.28, 0], [0, -0.28], [0, 0.28]] as const) {
+        const p = at(ox, oy);
+        const dir = p.clone().sub(cam);
+        const dist = dir.length();
+        caster.current.set(cam, dir.normalize());
+        caster.current.far = dist + board + 1;
+        const hit = caster.current.intersectObject(t.model!.object, true)[0];
+        if (hit && faces.includes(hit.object as THREE.Mesh)) {
+          visible = true;
+          break;
+        }
+      }
+    }
+    const w = t.renderer.domElement.clientWidth;
+    const h = t.renderer.domElement.clientHeight;
+    const ndc = centre.clone().project(t.camera);
+    const behind = ndc.z > 1;
+    return { visible, x: (ndc.x * 0.5 + 0.5) * w * (behind ? -1 : 1), y: (1 - (ndc.y * 0.5 + 0.5)) * h * (behind ? -1 : 1), w, h, front: !behind };
+  };
+
+  /** The camera angles (turn, tilt) from which the panel's face is seen unobstructed; null if the panel is unknown. */
+  const faceAngles = (id: string): { azimuthDeg: number; elevationDeg: number } | null => {
+    const t = three.current;
+    const found = panelFaces(id);
+    if (!t || !found) return null;
+    const { group, faces } = found;
+    t.model!.object.updateMatrixWorld(true);
+    const board = thickness > 0 ? thickness : 0;
+    const centre = group.localToWorld(new THREE.Vector3(0, 0, -board / 2));
+    const geom = faces[0]!.geometry;
+    geom.computeBoundingBox();
+    if (geom.boundingBox) group.localToWorld(geom.boundingBox.getCenter(centre).setZ(-board / 2));
+    const normal = new THREE.Vector3(0, 0, 1).transformDirection(group.matrixWorld).normalize();
+    const reach = Math.max(t.model!.size.x, t.model!.size.y, t.model!.size.z) * 4 + 200;
+    const seesFrom = (d: THREE.Vector3) => {
+      caster.current.set(centre.clone().addScaledVector(d, reach), d.clone().negate());
+      caster.current.far = reach + board + 1;
+      const hit = caster.current.intersectObject(t.model!.object, true)[0];
+      return Boolean(hit && faces.includes(hit.object as THREE.Mesh));
+    };
+    const now = t.camera.position.clone().sub(centre).normalize();
+    const options = [normal, normal.clone().negate()].sort((a, b) => b.dot(now) - a.dot(now));
+    const dir = options.find(seesFrom) ?? options[0]!;
+    let el = (Math.asin(Math.max(-1, Math.min(1, dir.y))) * 180) / Math.PI;
+    if (Math.abs(el) < 12) el = 14; // a wall seen straight on looks flat: tip the box a little
+    const cur = getView();
+    const az = Math.hypot(dir.x, dir.z) < 0.08 ? (cur?.azimuthDeg ?? 0) : (Math.atan2(dir.x, dir.z) * 180) / Math.PI;
+    return { azimuthDeg: Math.round(az * 10) / 10, elevationDeg: Math.round(Math.max(-89, Math.min(89, el)) * 10) / 10 };
+  };
+
+  /** Move the camera to a view over `ms` (turn by the short way round). */
+  const smoothTo = (to: ViewSettings, ms = 380) => {
+    if (moveAnim.current !== null) cancelAnimationFrame(moveAnim.current);
+    moveAnim.current = null;
+    const from = getView();
+    if (!from) return;
+    const t0 = performance.now();
+    const turn = ((((to.azimuthDeg - from.azimuthDeg) % 360) + 540) % 360) - 180;
+    const mix = (a: number, b: number, e: number) => a + (b - a) * e;
+    const step = (now: number) => {
+      const k = Math.min(1, (now - t0) / ms);
+      const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+      const az = from.azimuthDeg + turn * e;
+      applyView({ ...to, azimuthDeg: ((((az + 180) % 360) + 360) % 360) - 180, elevationDeg: mix(from.elevationDeg, to.elevationDeg, e), rollDeg: mix(from.rollDeg, to.rollDeg, e), zoom: mix(from.zoom, to.zoom, e), panX: mix(from.panX, to.panX, e), panY: mix(from.panY, to.panY, e), progress: from.progress });
+      moveAnim.current = k < 1 ? requestAnimationFrame(step) : null;
+    };
+    moveAnim.current = requestAnimationFrame(step);
+  };
+
+  /** The arrow over the picture that points at a panel the camera cannot see (made once, moved every frame while it is needed). */
+  const showArrow = (info: { x: number; y: number; w: number; h: number; front: boolean } | null) => {
+    const el = host.current;
+    if (!el) return;
+    if (!arrowEl.current) {
+      if (getComputedStyle(el).position === "static") el.style.position = "relative";
+      const box = document.createElement("div");
+      box.setAttribute("aria-hidden", "true");
+      box.style.cssText = "position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;z-index:15;display:none";
+      box.innerHTML =
+        '<div class="hover-pulse" style="position:absolute;left:-60px;top:-60px;width:120px;height:120px"><svg data-arrow viewBox="-60 -60 120 120" width="120" height="120" fill="none" stroke="#1d4ed8" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 4px rgba(255,255,255,.9))"><circle r="14"/><path d="M-56 0H-26M-38 -10L-26 0L-38 10"/></svg></div>';
+      el.appendChild(box);
+      arrowEl.current = box;
+    }
+    const box = arrowEl.current;
+    if (!info) {
+      box.style.display = "none";
+      return;
+    }
+    const m = 30;
+    const px = Math.max(m, Math.min(info.w - m, info.x));
+    const py = Math.max(m, Math.min(info.h - m, info.y));
+    const dx = px - info.w / 2;
+    const dy = py - info.h / 2;
+    const angle = Math.hypot(dx, dy) < 2 ? -45 : (Math.atan2(dy, dx) * 180) / Math.PI;
+    box.style.display = "block";
+    box.style.transform = `translate(${px}px, ${py}px)`;
+    const svg = box.querySelector<SVGElement>("[data-arrow]");
+    if (svg) svg.style.transform = `rotate(${angle}deg)`;
+  };
+
+  /** Each frame while an arrow is wanted: show it only while the panel really is out of sight. */
+  const followArrow = () => {
+    const id = arrowFor.current;
+    if (!id) return;
+    const info = panelInfo(id);
+    showArrow(info && !info.visible ? info : null);
+  };
+  arrowTick.current = followArrow;
+
+  const focusPanel = (id: string | null) => {
+    blinkId.current = id;
+    applyBlink();
+    arrowFor.current = null;
+    showArrow(null);
+    if (!id) {
+      const back = savedView.current;
+      savedView.current = null;
+      if (back) smoothTo(back);
+      return;
+    }
+    const info = panelInfo(id);
+    if (!info || info.visible) return;
+    if (keepView.current) {
+      arrowFor.current = id; // locked view: the camera stays, an arrow shows where the panel is
+      followArrow();
+      return;
+    }
+    const to = faceAngles(id);
+    const now = getView();
+    if (!to || !now) return;
+    if (!savedView.current) savedView.current = now;
+    smoothTo({ ...now, azimuthDeg: to.azimuthDeg, elevationDeg: to.elevationDeg });
+  };
+
   useImperativeHandle(ref, () => ({
+    focusPanel,
     highlightPanel: (id) => {
       blinkId.current = id;
       applyBlink();
@@ -588,6 +768,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     resize();
     renderer.setAnimationLoop((now: number) => {
       controls.update();
+      arrowTick.current();
       const mats = blinkMats.current;
       if (mats && blinkMeshes.current.length > 0) {
         // Soft blink: a slow breathing glow, not a flash.

@@ -10,6 +10,7 @@ import { importedStartParams, loadImportedSource } from "@/server/imported-templ
 import { getSaveAsOptions } from "@/server/projects";
 import { readViewSettings } from "@/lib/view-settings";
 import { readTemplateWindows } from "@/lib/template-windows";
+import { readViewTab } from "@/lib/view-tab";
 
 const prefillSchema = z.record(z.string().max(60), z.union([z.number().finite(), z.string().max(100), z.boolean()]));
 
@@ -27,6 +28,7 @@ function readPrefill(raw: string | string[] | undefined, allowed: readonly strin
 async function TemplateView({ params, searchParams }: { params: PageProps<"/template/dieline/[slug]">["params"]; searchParams: PageProps<"/template/dieline/[slug]">["searchParams"] }) {
   const { slug } = await params;
   if (slug.length > 80) notFound();
+  const initialTab = readViewTab((await searchParams).view);
   const row = await db.template.findUnique({
     where: { id: slug },
     select: { id: true, name: true, description: true, source: true, published: true, viewSettings: true, defaultThickness: true, windows: true, categories: { where: { active: true }, select: { name: true } } },
@@ -50,6 +52,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
         imported={{ templateId: imported.templateId, flat: imported.flat, fold: imported.fold }}
         initialView={readViewSettings(row.viewSettings)}
         initialWindows={readTemplateWindows(row.windows)}
+        initialTab={initialTab}
         modelId={row.id}
         title={row.name}
         description={row.description}
@@ -72,6 +75,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
       generatorId={preset.generatorId}
       initialView={readViewSettings(row.viewSettings)}
       initialWindows={readTemplateWindows(row.windows)}
+      initialTab={initialTab}
       modelId={row.id}
       title={row.name}
       description={row.description}
