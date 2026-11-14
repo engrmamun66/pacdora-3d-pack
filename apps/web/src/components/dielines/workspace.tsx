@@ -372,7 +372,8 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
       if (!animate && now < stageUntil.current) return; // a swap is moving it right now
       const target = (centre === "3d" ? centreTarget : asideTarget).current;
       const r = target?.getBoundingClientRect();
-      if (!r || r.width < 1 || r.height < 1 || bodyHidden) {
+      // Split was chosen while the 3D box fills the centre: hide it at once, so it does not sit over the Split placeholder.
+      if (!r || r.width < 1 || r.height < 1 || bodyHidden || (splitTab && centre === "3d")) {
         el.style.visibility = "hidden";
         return;
       }
@@ -387,7 +388,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
       el.style.visibility = "visible";
       el.dataset.placed = "1";
     },
-    [centre, bodyHidden],
+    [centre, bodyHidden, splitTab],
   );
   useLayoutEffect(() => {
     if (!stageOn) return;

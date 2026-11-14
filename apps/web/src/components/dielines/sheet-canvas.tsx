@@ -86,10 +86,20 @@ export function SheetCanvas<T extends Record<string, boolean>>({
 }) {
   const box = useRef<HTMLDivElement>(null);
   const readyOnce = useRef(false);
-  const tellReady = () => {
-    if (readyOnce.current) return;
-    readyOnce.current = true;
-    onReady?.();
+  const settling = useRef(false);
+  /** The picture is loaded, decoded and has had two frames to be painted: only then is the sheet really there. */
+  const settle = (img: HTMLImageElement) => {
+    if (readyOnce.current || settling.current) return;
+    settling.current = true;
+    const done = () =>
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          readyOnce.current = true;
+          onReady?.();
+        }),
+      );
+    if (typeof img.decode === "function") img.decode().then(done, done);
+    else done();
   };
   const [view, setView] = useState<View | null>(null);
   const drag = useRef<{ id: number; x: number; y: number; vx: number; vy: number } | null>(null);
@@ -221,7 +231,7 @@ export function SheetCanvas<T extends Record<string, boolean>>({
             style={{ width: vb.width * view.k, height: vb.height * view.k, transform: `translate(${view.x}px, ${view.y}px)` }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- generated SVG data URL */}
-            <img ref={(el) => { if (el?.complete) tellReady(); }} onLoad={tellReady} src={src} alt="Flat dieline" draggable={false} className="absolute inset-0 size-full max-w-none" />
+            <img ref={(el) => { if (el?.complete) settle(el); }} onLoad={(e) => settle(e.currentTarget)} src={src} alt="Flat dieline" draggable={false} className="absolute inset-0 size-full max-w-none" />
             {/* Above the picture: its SVG paints an opaque white sheet, which would hide a watermark under it. */}
             {highlight && highlight.length >= 3 ? (
               <svg aria-hidden className="absolute inset-0 size-full" viewBox={`${vb.minX ?? 0} ${vb.minY ?? 0} ${vb.width} ${vb.height}`}>
