@@ -161,6 +161,8 @@ export interface CartonViewHandle {
   getView(): ViewSettings | null;
   /** Move the camera to a view. */
   setView(v: ViewSettings): void;
+  /** Glide the camera to a view over `ms` (default 600), turning by the short way round; a new call replaces a running glide. */
+  setViewSmooth(v: ViewSettings, ms?: number): void;
   /** Where the camera is turned, in degrees: x = tilt up/down, y = turn left/right, z = roll (the view turned like a tilted head); null before the model exists. */
   getRotation(): Rotation | null;
   /** Turn the camera to this tilt (x), turn (y) and/or roll (z), in degrees. Zoom and position are kept. */
@@ -597,6 +599,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     resetView: frame,
     getView,
     setView: (v) => applyView(v),
+    setViewSmooth: (v, ms = 600) => smoothTo(v, ms),
     setGridVisible: (on) => {
       gridOn.current = on;
       rebuildGrid();

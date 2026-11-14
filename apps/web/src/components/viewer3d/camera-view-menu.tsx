@@ -24,7 +24,7 @@ export function CameraViewIcon({ view, className = "size-6" }: { view: CameraVie
 /**
  * Tool of a 3D view: a camera icon in the bottom left corner of the picture (above the view's own control bar, if it has one).
  * Clicking it expands a strip of quick views to the right of the icon: small box icons only, sliding in one by one and out again in reverse when closed (`cv-*` in globals.css, `CLOSE_MS` here); the name shows as a tooltip (and for screen readers).
- * Picking one turns the box there at once, back at the standard zoom and position; the fold stays as it is.
+ * Picking one glides the camera there (about 0.6 s), back at the standard zoom and position; the fold stays as it is.
  * The parent must be `relative` and hold the 3D canvas.
  */
 export function CameraViewTool({ viewRef }: { viewRef: RefObject<CartonViewHandle | null> }) {
@@ -79,7 +79,7 @@ export function CameraViewTool({ viewRef }: { viewRef: RefObject<CartonViewHandl
     const h = viewRef.current;
     if (!h) return;
     setCurrent(v.id);
-    h.setView({ ...STANDARD_VIEW, azimuthDeg: v.azimuthDeg, elevationDeg: v.elevationDeg, progress: h.getView()?.progress ?? 1 });
+    h.setViewSmooth({ ...STANDARD_VIEW, azimuthDeg: v.azimuthDeg, elevationDeg: v.elevationDeg, progress: h.getView()?.progress ?? 1 });
   };
 
   return (
