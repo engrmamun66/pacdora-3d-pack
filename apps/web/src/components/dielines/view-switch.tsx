@@ -68,24 +68,12 @@ export function useViewSwitch<T extends string>(initial: T, extraDelay?: (from: 
   return { tab, mounted, switching, select, markReady };
 }
 
-/** Pulsing placeholder that covers a view while it loads (put it in a `relative` container). */
+/**
+ * Placeholder that covers a view while it loads (put it in a `relative` container). One look everywhere: the sheet is a
+ * dieline sketch with pulsing panels and marching creases, the 3D box is a floor grid in perspective drifting toward the viewer.
+ */
 export function ViewSkeleton({ kind, label }: { kind: "sheet" | "box"; label: string }) {
-  const block = "rounded-lg bg-muted-foreground/15";
-  return (
-    <div role="status" aria-live="polite" className="absolute inset-0 z-10 flex items-center justify-center overflow-hidden rounded-[inherit] bg-background">
-      <span className="sr-only">{label}</span>
-      {kind === "sheet" ? (
-        <div aria-hidden className="grid aspect-[4/3] w-[min(70%,420px)] animate-pulse grid-cols-4 grid-rows-3 gap-2">
-          {[0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0].map((on, i) => (on ? <div key={i} className={block} /> : <div key={i} />))}
-        </div>
-      ) : (
-        <div aria-hidden className="flex w-[min(60%,320px)] animate-pulse flex-col items-center gap-4">
-          <div className={`aspect-[4/3] w-full rounded-2xl ${block.replace("rounded-lg ", "")}`} />
-          <div className={`h-3 w-2/3 ${block}`} />
-        </div>
-      )}
-    </div>
-  );
+  return kind === "sheet" ? <DielineSketch label={label} /> : <FloorGridSketch label={label} />;
 }
 
 /** How long the Dieline <-> 3D exchange takes (ms), and its easing. */
@@ -125,33 +113,85 @@ export function SwapIn({ getFrom, className, children }: { getFrom: () => DOMRec
   );
 }
 
-/** A grid of soft cells that pulse in a diagonal wave (the Split placeholder's look). */
-function GridWave({ label }: { label: string }) {
-  const cols = 6;
-  const rows = 7;
+/** Sheet placeholder for Split: a box dieline (cross of panels, flaps, a glue tab) whose panels pulse in turn while its crease lines march. */
+function DielineSketch({ label }: { label: string }) {
+  const panels: { x: number; y: number; w: number; h: number }[] = [
+    { x: 150, y: 40, w: 120, h: 60 },
+    { x: 90, y: 100, w: 60, h: 100 },
+    { x: 150, y: 100, w: 120, h: 100 },
+    { x: 270, y: 100, w: 60, h: 100 },
+    { x: 330, y: 100, w: 60, h: 100 },
+    { x: 150, y: 200, w: 120, h: 60 },
+  ];
   return (
-    <div role="status" aria-live="polite" className="absolute inset-0 z-10 overflow-hidden bg-background p-5">
+    <div role="status" aria-live="polite" className="absolute inset-0 z-10 flex items-center justify-center overflow-hidden rounded-[inherit] bg-background">
       <span className="sr-only">{label}</span>
-      <div aria-hidden className="grid size-full gap-2.5" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}>
-        {Array.from({ length: cols * rows }, (_, i) => (
-          <div key={i} className="animate-pulse rounded-lg bg-muted-foreground/15" style={{ animationDelay: `${((i % cols) + Math.floor(i / cols)) * 110}ms`, animationDuration: "1.6s" }} />
+      <svg aria-hidden viewBox="60 20 360 260" className="w-[min(78%,520px)] text-muted-foreground" fill="none">
+        {panels.map((p, i) => (
+          <rect key={i} {...p} rx={4} className="animate-pulse fill-current" fillOpacity={0.06} style={{ animationDelay: `${i * 160}ms`, animationDuration: "1.5s" }} />
         ))}
+        <g stroke="currentColor" strokeOpacity={0.28} strokeWidth={1.4} strokeDasharray="6 4" className="dl-march">
+          <path d="M150 100V200M270 100V200M330 100V200M150 100H270M150 200H270" />
+        </g>
+        <path d="M150 40H270V100H330V200H270V260H150V200H90V100H150ZM330 100H390V200H330" stroke="currentColor" strokeOpacity={0.2} strokeWidth={1.4} strokeLinejoin="round" />
+      </svg>
+    </div>
+  );
+}
+
+/** 3D placeholder for Split: a floor grid in perspective (like the one under the box) drifting toward the viewer. */
+function FloorGridSketch({ label }: { label: string }) {
+  return (
+    <div role="status" aria-live="polite" className="absolute inset-0 z-10 overflow-hidden rounded-[inherit] bg-muted/40">
+      <span className="sr-only">{label}</span>
+      <div aria-hidden className="absolute inset-x-0 top-0 h-full" style={{ perspective: "650px", perspectiveOrigin: "50% 8%" }}>
+        <div className="floor-grid absolute left-[-60%] top-[6%] h-[170%] w-[220%] origin-top" style={{ transform: "rotateX(64deg)" }} />
       </div>
     </div>
   );
 }
 
-/** Placeholder for the Split view: two grids of pulsing cells side by side (sheet on the left, 3D box on the right), at the width the split will have. */
+/** Placeholder for the Split view: the same two looks side by side (dieline left, 3D right), at the width the split will have. */
 export function SplitSkeleton({ pct, label }: { pct: number; label: string }) {
   return (
     <div role="status" aria-live="polite" style={{ "--split": `${pct}%` } as React.CSSProperties} className="absolute inset-0 z-10 flex flex-col bg-background lg:flex-row">
       <span className="sr-only">{label}</span>
       <div className="relative min-h-0 flex-1 lg:flex-none lg:basis-(--split) lg:border-r">
-        <GridWave label="Loading the dieline" />
+        <ViewSkeleton kind="sheet" label="Loading the dieline" />
       </div>
       <div className="relative min-h-0 flex-1">
-        <GridWave label="Loading the 3D view" />
+        <ViewSkeleton kind="box" label="Loading the 3D view" />
       </div>
+    </div>
+  );
+}
+
+/** How long the placeholder takes to fade away once the views are drawn (ms). */
+const FADE_MS = 280;
+
+/**
+ * The placeholder over a view that is loading: Dieline and 3D show their own look, Split shows both side by side.
+ * It stays until `show` ends and then fades away as one piece, so both halves of Split go together.
+ */
+export function SkeletonOverlay({ show, tab, pct }: { show: boolean; tab: "dieline" | "3d" | "split"; pct: number }) {
+  const [last, setLast] = useState(tab);
+  if (show && last !== tab) setLast(tab);
+  const [wasShown, setWasShown] = useState(show);
+  const [linger, setLinger] = useState(false);
+  if (show !== wasShown) {
+    setWasShown(show);
+    if (!show) setLinger(true);
+  }
+  if (show && linger) setLinger(false);
+  useEffect(() => {
+    if (!linger) return;
+    const t = window.setTimeout(() => setLinger(false), FADE_MS + 40);
+    return () => window.clearTimeout(t);
+  }, [linger]);
+  if (!show && !linger) return null;
+  return (
+    <div className={`absolute inset-0 z-10 transition-opacity ease-out ${show ? "opacity-100" : "pointer-events-none opacity-0"}`} style={{ transitionDuration: `${FADE_MS}ms` }}>
+      {last === "split" ? <SplitSkeleton pct={pct} label="Loading the split view" /> : <ViewSkeleton kind={last === "dieline" ? "sheet" : "box"} label={last === "3d" ? "Loading the 3D view" : "Loading the dieline"} />}
     </div>
   );
 }

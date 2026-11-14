@@ -58,6 +58,7 @@ export function SheetCanvas<T extends Record<string, boolean>>({
   windowCount = 0,
   onHoverMm,
   highlight = null,
+  onReady,
 }: {
   /** Size (mm) of the picture `src` shows, margins included. */
   bounds: { width: number; height: number; minX?: number; minY?: number };
@@ -80,8 +81,16 @@ export function SheetCanvas<T extends Record<string, boolean>>({
   onHoverMm?: (p: { x: number; y: number } | null) => void;
   /** A panel outline (sheet mm) drawn softly over the sheet, e.g. the panel that blinks on the 3D box. */
   highlight?: readonly { x: number; y: number }[] | null;
+  /** Called once, when the sheet picture is loaded and placed (so a loading placeholder can go away). */
+  onReady?: () => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
+  const readyOnce = useRef(false);
+  const tellReady = () => {
+    if (readyOnce.current) return;
+    readyOnce.current = true;
+    onReady?.();
+  };
   const [view, setView] = useState<View | null>(null);
   const drag = useRef<{ id: number; x: number; y: number; vx: number; vy: number } | null>(null);
   const vb = bounds;
@@ -212,7 +221,7 @@ export function SheetCanvas<T extends Record<string, boolean>>({
             style={{ width: vb.width * view.k, height: vb.height * view.k, transform: `translate(${view.x}px, ${view.y}px)` }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- generated SVG data URL */}
-            <img src={src} alt="Flat dieline" draggable={false} className="absolute inset-0 size-full max-w-none" />
+            <img ref={(el) => { if (el?.complete) tellReady(); }} onLoad={tellReady} src={src} alt="Flat dieline" draggable={false} className="absolute inset-0 size-full max-w-none" />
             {/* Above the picture: its SVG paints an opaque white sheet, which would hide a watermark under it. */}
             {highlight && highlight.length >= 3 ? (
               <svg aria-hidden className="absolute inset-0 size-full" viewBox={`${vb.minX ?? 0} ${vb.minY ?? 0} ${vb.width} ${vb.height}`}>

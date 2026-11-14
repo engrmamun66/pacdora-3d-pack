@@ -18,7 +18,7 @@ import { DielineInfo } from "./dieline-info";
 import { boxSizes, dielineStats } from "./info-math";
 import { DielineTopBar } from "./dieline-top-bar";
 import { WindowEditor } from "./window-editor";
-import { SWAP_EASE, SWAP_MS, SplitSkeleton, SwapIn, ViewSkeleton, useViewSwitch } from "./view-switch";
+import { SWAP_EASE, SWAP_MS, SkeletonOverlay, SwapIn, ViewSkeleton, useViewSwitch } from "./view-switch";
 import { MiniSheet } from "./mini-sheet";
 import type { SaveAsOptions } from "@/server/projects";
 import { TemplatePicker } from "./template-picker";
@@ -426,6 +426,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   /** Choose a tab. Between Dieline and 3D the old places are noted first, so the views can glide from them. */
   const pickTab = (id: "dieline" | "3d" | "split") => {
     setHoverPanel(null);
+    if (id === "split") splitFlags.current = { sheet: false, box: false };
     if (id !== sw.tab && id !== "split" && sw.tab !== "split" && !sw.switching) {
       swapFrom.current = { aside: asideSlot.current?.getBoundingClientRect() ?? null, centre: mainBox.current?.getBoundingClientRect() ?? null };
       swapNext.current = true;
@@ -434,6 +435,12 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
     sw.select(id);
   };
   const quickPair = sw.tab !== "split" && sw.mounted !== "split";
+  // Split has two halves that load at different times: the placeholder goes only when both are drawn (then fades as one).
+  const splitFlags = useRef({ sheet: false, box: false });
+  const splitDone = (half: "sheet" | "box") => {
+    splitFlags.current[half] = true;
+    if (splitFlags.current.sheet && splitFlags.current.box) sw.markReady();
+  };
   // Dieline | 3D | Split: what the centre shows. In the header's middle on wide screens, over the canvas on small ones.
   const viewTabs = (
     <div role="tablist" aria-label="What to show" aria-busy={sw.switching} className="flex rounded-lg border bg-background/90 p-0.5 text-xs shadow-xs backdrop-blur">
@@ -630,7 +637,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
             <div ref={splitBox} style={{ "--split": `${splitPct}%` } as React.CSSProperties} className="flex min-h-0 flex-1 flex-col max-lg:pt-14 lg:flex-row">
               <div className="relative flex min-h-[40vh] min-w-0 flex-1 basis-0 flex-col lg:min-h-0 lg:flex-none lg:basis-(--split)">
                 {src ? (
-                  <SheetCanvas onWindows={openWindows} windowCount={windows.length} {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} onHoverMm={hoverAt} highlight={shapes.find((q) => q.id === blinkId)?.poly ?? null} />
+                  <SheetCanvas onReady={() => splitDone("sheet")} onWindows={openWindows} windowCount={windows.length} {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} onHoverMm={hoverAt} highlight={shapes.find((q) => q.id === blinkId)?.poly ?? null} />
                 ) : null}
               </div>
               <div
@@ -670,7 +677,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
                 <span aria-hidden className="absolute top-1/2 left-0 h-10 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full border bg-background shadow-sm group-hover:border-primary" />
               </div>
               <div className="flex min-h-[40vh] min-w-0 flex-1 basis-0 flex-col gap-2 p-4 lg:min-h-0">
-                <FoldPreview large onReady={sw.markReady} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
+                <FoldPreview large onReady={() => splitDone("box")} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
               </div>
             </div>
           ) : shown && foldable && centre === "3d" ? (
@@ -685,9 +692,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
             <p className="p-6 text-sm text-muted-foreground">Enter valid dimensions to see the dieline.</p>
           )}
           {!result.geo && shown ? <p role="status" className="border-t px-4 py-1.5 text-xs text-destructive">Showing the last valid shape.</p> : null}
-          {sw.switching && !quickPair ? (
-            sw.tab === "split" ? <SplitSkeleton pct={splitPct} label="Loading the split view" /> : <ViewSkeleton kind={sw.tab === "dieline" ? "sheet" : "box"} label={sw.tab === "3d" ? "Loading the 3D view" : "Loading the dieline"} />
-          ) : null}
+          <SkeletonOverlay show={sw.switching && !quickPair} tab={sw.tab} pct={splitPct} />
         </main>
 
         {/* Right: 3D + file formats */}
