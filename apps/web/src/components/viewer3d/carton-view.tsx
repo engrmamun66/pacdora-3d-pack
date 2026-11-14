@@ -153,6 +153,20 @@ export interface Rotation {
   z: number;
 }
 
+/** The shadow of the box on the floor: whether it is drawn, which way the light comes from, how high it stands, how dark the shadow is. */
+export interface ShadowSettings {
+  on: boolean;
+  /** Direction the light comes from, in degrees around the box (0 = the front, + = from the right side). */
+  azimuthDeg: number;
+  /** Height of the light above the floor, in degrees (90 = straight above, low = long shadow). */
+  elevationDeg: number;
+  /** Darkness of the shadow, 0 to 1. */
+  strength: number;
+}
+
+/** What a view starts with: the light the viewer always had (from the front right, high), shadow on. */
+export const DEFAULT_SHADOW: Omit<ShadowSettings, "on"> = { azimuthDeg: 39, elevationDeg: 51, strength: 0.18 };
+
 export interface CartonViewHandle {
   /** The carton object currently shown (for GLB export). */
   getModelObject(): THREE.Object3D | null;
@@ -170,6 +184,10 @@ export interface CartonViewHandle {
   /** Show or hide a floor grid (10 mm-style cells) behind the carton. */
   setGridVisible(on: boolean): void;
   isGridVisible(): boolean;
+  /** The shadow settings now in force. */
+  getShadow(): ShadowSettings;
+  /** Change the shadow (any part): shown or hidden, light direction and height, darkness. */
+  setShadow(patch: Partial<ShadowSettings>): void;
   /** Blink one panel softly (by its panel id) so it can be found on the box; null stops it. Kept when the box is rebuilt. */
   highlightPanel(id: string | null): void;
   /**
@@ -230,6 +248,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   const blinkMats = useRef<{ front: THREE.MeshBasicMaterial; through: THREE.MeshBasicMaterial } | null>(null);
   /** Called every frame by the animation loop (moves the arrow that points at a hidden panel). */
   const arrowTick = useRef<() => void>(() => {});
+  const shadowCfg = useRef<ShadowSettings>({ on: shadows, ...DEFAULT_SHADOW });
   const gridObj = useRef<THREE.GridHelper | null>(null);
   const gridOn = useRef(false);
   const keepView = useRef(false);
@@ -245,6 +264,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     camera: THREE.PerspectiveCamera;
     controls: OrbitControls;
     sun: THREE.DirectionalLight;
+    ground: THREE.Mesh;
     model: CartonModel | null;
     tex: THREE.CanvasTexture | null;
     texSource: HTMLCanvasElement | null;
@@ -352,6 +372,28 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     gridObj.current = g;
   };
 
+  /** Put the sun, the shadow switch and the shadow darkness where `shadowCfg` says. */
+  const applyShadow = () => {
+    const t = three.current;
+    if (!t) return;
+    const c = shadowCfg.current;
+    if (c.on && !t.renderer.shadowMap.enabled) {
+      t.renderer.shadowMap.enabled = true; // a view made without shadows: the materials need to learn about them
+      t.scene.traverse((o) => {
+        const m = (o as THREE.Mesh).material;
+        if (Array.isArray(m)) m.forEach((x) => (x.needsUpdate = true));
+        else if (m) m.needsUpdate = true;
+      });
+    }
+    t.sun.castShadow = c.on;
+    t.ground.visible = c.on;
+    (t.ground.material as THREE.ShadowMaterial).opacity = c.strength;
+    const r = frameMm ?? (t.model ? Math.max(t.model.size.x, t.model.size.y, t.model.size.z) : 100);
+    const az = (c.azimuthDeg * Math.PI) / 180;
+    const el = (c.elevationDeg * Math.PI) / 180;
+    t.sun.position.set(Math.sin(az) * Math.cos(el) * r * 5, Math.sin(el) * r * 5, Math.cos(az) * Math.cos(el) * r * 5);
+  };
+
   const notifyRotation = () => {
     if (!rotationListeners.current.size) return;
     const r = getRotation();
@@ -370,7 +412,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     t.camera.far = r * 50;
     t.camera.updateProjectionMatrix();
     t.controls.target.set(0, t.model.size.y / 2, 0);
-    t.sun.position.set(r * 2, r * 4, r * 2.5);
+    applyShadow();
     const sc = t.sun.shadow.camera as THREE.OrthographicCamera;
     sc.left = sc.bottom = -r * 2;
     sc.right = sc.top = r * 2;
@@ -605,6 +647,17 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       rebuildGrid();
     },
     isGridVisible: () => gridOn.current,
+    getShadow: () => ({ ...shadowCfg.current }),
+    setShadow: (patch) => {
+      const c = shadowCfg.current;
+      shadowCfg.current = {
+        on: patch.on ?? c.on,
+        azimuthDeg: patch.azimuthDeg === undefined ? c.azimuthDeg : ((((patch.azimuthDeg + 180) % 360) + 360) % 360) - 180,
+        elevationDeg: patch.elevationDeg === undefined ? c.elevationDeg : Math.max(5, Math.min(88, patch.elevationDeg)),
+        strength: patch.strength === undefined ? c.strength : Math.max(0, Math.min(1, patch.strength)),
+      };
+      applyShadow();
+    },
     setKeepView: (on) => {
       keepView.current = on;
     },
@@ -743,7 +796,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     ground.visible = shadowsAtStart.current;
     scene.add(ground);
 
-    three.current = { renderer, scene, camera, controls, sun, model: null, tex: null, texSource: null, wm: null };
+    three.current = { renderer, scene, camera, controls, sun, ground, model: null, tex: null, texSource: null, wm: null };
     const resize = () => {
       const w = Math.max(1, el.clientWidth);
       const h = Math.max(1, el.clientHeight);
