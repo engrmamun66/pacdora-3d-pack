@@ -45,6 +45,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
   if (row.source === "svg") {
     const imported = await loadImportedSource(row.id);
     if (!imported) notFound();
+    const startParams = importedStartParams(imported.flat, imported.fold);
     return (
       <DielineWorkspace
         mode={{ kind: "create", presetId: row.id }}
@@ -57,7 +58,8 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
         title={row.name}
         description={row.description}
         initialName={row.name}
-        initialParams={importedStartParams(imported.flat, imported.fold)}
+        initialParams={startParams}
+        initialSizeDefaults={startParams}
         watermark={watermark}
         viewer={viewer}
         saveOptions={saveOptions}
@@ -81,6 +83,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
       description={row.description}
       initialName={row.name}
       initialParams={{ ...preset.defaults, ...(row.defaultThickness ? { thickness: row.defaultThickness } : {}), ...prefill }}
+      initialSizeDefaults={{ ...preset.defaults, ...(row.defaultThickness ? { thickness: row.defaultThickness } : {}) }}
       watermark={watermark}
       viewer={viewer}
       saveOptions={saveOptions}

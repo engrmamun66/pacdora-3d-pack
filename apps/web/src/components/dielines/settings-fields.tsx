@@ -77,6 +77,7 @@ export function ParamField({
   placeholderMm,
   error,
   disabled,
+  onUsePlaceholder,
   onChange,
 }: {
   p: ParamDescriptor;
@@ -86,6 +87,8 @@ export function ParamField({
   placeholderMm?: number;
   error?: string;
   disabled?: boolean;
+  /** Copies the calculated default into an empty field when it is double-clicked. */
+  onUsePlaceholder?: (mm: number) => void;
   onChange: (v: string) => void;
 }) {
   const id = `param-${p.key}`;
@@ -141,6 +144,12 @@ export function ParamField({
           onChange(fromDisplay(e.target.value, u));
         }}
         onBlur={() => setDraft(null)}
+        onDoubleClick={() => {
+          if (value.trim() === "" && placeholderMm !== undefined) {
+            setDraft(null);
+            onUsePlaceholder?.(placeholderMm);
+          }
+        }}
         className={inputCls}
       />
       {hint ? <p id={hintId} className="text-xs text-destructive">{hint}</p> : null}

@@ -44,6 +44,8 @@ interface Props {
   description: string;
   initialName: string;
   initialParams: Record<string, unknown>;
+  /** Template-starting dimension values. They remain active while their empty fields show as defaults. */
+  initialSizeDefaults?: Record<string, unknown>;
   /** Template id shown as "Model ID" in the info tab. */
   modelId: string;
   /** The watermark on the sheet and in downloads; null = none. Absent = the default look on screen only. */
@@ -90,11 +92,19 @@ function saveBlob(blob: Blob, filename: string) {
 /** How long the sidebars take to close or open (Split tab); the slow views are built after it, so the motion is not interrupted. Matches `duration-500` on the grid. */
 const SIDEBAR_MS = 520;
 
-export function DielineWorkspace({ mode, generatorId, imported, initialView = null, initialTab = "dieline", title, description, initialName, initialParams, modelId, watermark, viewer = null, saveOptions = null, initialWindows = [] }: Props) {
+export function DielineWorkspace({ mode, generatorId, imported, initialView = null, initialTab = "dieline", title, description, initialName, initialParams, initialSizeDefaults, modelId, watermark, viewer = null, saveOptions = null, initialWindows = [] }: Props) {
   const router = useRouter();
   const gen = useMemo(() => (imported ? createImportedGenerator(imported.templateId, imported.flat as FlatDieline, imported.fold ?? null) : getGenerator(generatorId)), [generatorId, imported]);
   const [values, setValues] = useState<Values>(() =>
-    Object.fromEntries(gen.params.map((p) => [p.key, initialParams[p.key] === undefined ? "" : String(initialParams[p.key])])),
+    Object.fromEntries(
+      gen.params.map((p) => {
+        const initial = initialParams[p.key];
+        const defaultValue = initialSizeDefaults?.[p.key];
+        // On a fresh template, dimensions begin as empty inputs with their template values shown as placeholders.
+        const isTemplateDefault = mode.kind === "create" && p.group === "Dimensions" && p.kind === "number" && initial !== undefined && initial === defaultValue;
+        return [p.key, initial === undefined || isTemplateDefault ? "" : String(initial)];
+      }),
+    ),
   );
   const [name, setName] = useState(initialName);
   const [unit, setUnit] = useState<Unit>("mm");
@@ -114,7 +124,16 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   const viewRef = useRef<CartonViewHandle>(null);
   const deferred = useDeferredValue(values);
 
-  const input = useMemo(() => toInput(gen.params, deferred), [gen.params, deferred]);
+  const input = useMemo(() => {
+    const next = toInput(gen.params, deferred);
+    // Empty Customer Size fields use the template's starting values, so the visual placeholder and live dieline agree.
+    for (const p of gen.params) {
+      if (p.group !== "Dimensions" || p.kind !== "number" || deferred[p.key]?.trim() !== "") continue;
+      const fallback = initialSizeDefaults?.[p.key];
+      if (typeof fallback === "number") next[p.key] = fallback;
+    }
+    return next;
+  }, [gen.params, deferred, initialSizeDefaults]);
   const result: Result = useMemo(() => {
     try {
       return { geo: gen.generate(input), issues: null, error: null };
@@ -337,6 +356,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
           unit={unit}
           {...(p.kind === "number" && typeof resolved[p.key] === "number" ? { placeholderMm: resolved[p.key] as number } : {})}
           {...(issueFor(p.key) ? { error: issueFor(p.key)! } : {})}
+          {...(p.group === "Dimensions" && p.kind === "number" ? { onUsePlaceholder: (mm: number) => setValues((s) => ({ ...s, [p.key]: String(mm) })) } : {})}
           onChange={(v) => setValues((s) => ({ ...s, [p.key]: v }))}
         />
       ));
