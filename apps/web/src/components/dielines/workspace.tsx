@@ -12,7 +12,6 @@ import { svgDataUrl } from "@/lib/dieline-preview";
 import { pathData } from "@/lib/template-import";
 import { createProject, createProjectDraft, saveProjectAs, updateProject, type DesignState } from "@/app/(app)/projects/actions";
 import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
-import { BlinkToggle } from "@/components/viewer3d/blink-toggle";
 import { panelAt, panelShapes } from "@/lib/panel-hit";
 import { DielineInfo } from "./dieline-info";
 import { boxSizes, dielineStats } from "./info-math";
@@ -84,6 +83,9 @@ function saveBlob(blob: Blob, filename: string) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
+
+/** How long the sidebars take to close or open (Split tab); the slow views are built after it, so the motion is not interrupted. Matches `duration-500` on the grid. */
+const SIDEBAR_MS = 520;
 
 export function DielineWorkspace({ mode, generatorId, imported, initialView = null, title, description, initialName, initialParams, modelId, watermark, viewer = null, saveOptions = null, initialWindows = [] }: Props) {
   const router = useRouter();
@@ -173,10 +175,11 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   );
 
   // Dieline | 3D. The tab changes at once; the slow view is built behind a placeholder, and the tabs wait until it is drawn.
-  const sw = useViewSwitch<"dieline" | "3d" | "split">("dieline");
+  const sw = useViewSwitch<"dieline" | "3d" | "split">("dieline", (from, to) => (from === "split" || to === "split" ? SIDEBAR_MS : 0));
   const centre = sw.mounted;
-  // Split: sheet and 3D box side by side, both sidebars hidden. Blink Mode: the panel under the mouse on the sheet blinks on the box.
-  const [blinkMode, setBlinkMode] = useState(false);
+  /** The Split tab is chosen (at once, before its views are built): the sidebars start to close. */
+  const splitTab = sw.tab === "split";
+  // Split: sheet and 3D box side by side, both sidebars hidden. Blinking is always on, in every tab: the panel under the mouse on the sheet (or on the small dieline in the 3D tab) blinks on the 3D box.
   const [hoverPanel, setHoverPanel] = useState<string | null>(null);
   /** Split: share (%) of the width the sheet takes; the divider between the two halves is dragged with the mouse. */
   const [splitPct, setSplitPct] = useState(50);
@@ -191,7 +194,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
     const id = pt ? (panelAt(shapes, pt)?.id ?? null) : null;
     setHoverPanel((cur) => (cur === id ? cur : id));
   };
-  const blinkId = blinkMode && centre === "split" ? hoverPanel : null;
+  const blinkId = hoverPanel;
   useEffect(() => {
     viewRef.current?.highlightPanel(blinkId);
   }, [blinkId, centre, shown]);
@@ -353,7 +356,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
           role="tab"
           aria-selected={sw.tab === id}
           disabled={sw.switching}
-          onClick={() => sw.select(id)}
+          onClick={() => { setHoverPanel(null); sw.select(id); }}
           className={`rounded-md px-3 py-1 font-medium focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${sw.tab === id ? "bg-primary text-primary-foreground disabled:text-primary-foreground" : "text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:text-muted-foreground"} ${sw.switching ? "cursor-wait" : ""}`}
         >
           {text}
@@ -415,9 +418,16 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
       ) : null}
 
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div inert={windowsView === "open"} className={`flex min-h-0 flex-1 flex-col lg:grid ${centre === "split" ? "lg:grid-cols-[minmax(0,1fr)]" : "lg:grid-cols-[372px_minmax(0,1fr)_340px]"} ${bodyHidden ? "hidden" : ""}`}>
+      <div
+        inert={windowsView === "open"}
+        // Wide screens: the side columns shrink to nothing when "Split" is chosen and grow back when it is left (the sidebars stay mounted, clipped).
+        style={{ "--col-l": splitTab ? "0px" : "372px", "--col-r": splitTab ? "0px" : "340px" } as React.CSSProperties}
+        className={`flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[var(--col-l)_minmax(0,1fr)_var(--col-r)] lg:transition-[grid-template-columns] lg:duration-500 lg:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${bodyHidden ? "hidden" : ""}`}
+      >
         {/* Left: vertical menu (Dielines, Basic, Info, More) and the panel of the chosen one */}
-        <aside className={`flex min-h-0 flex-col border-b lg:flex-row lg:border-r lg:border-b-0 ${centre === "split" ? "hidden" : ""}`}>
+        <aside inert={splitTab} className={`min-h-0 min-w-0 overflow-hidden lg:flex lg:justify-end ${splitTab ? "max-lg:hidden" : ""}`}>
+          {/* Anchored to the right edge of its column: as the column closes, the sidebar slides out to the left. */}
+          <div className={`flex h-full min-h-0 flex-col border-b transition-opacity duration-300 lg:w-[372px] lg:shrink-0 lg:flex-row lg:border-r lg:border-b-0 ${splitTab ? "opacity-0" : ""}`}>
           <div role="tablist" aria-label="Settings sections" aria-orientation="vertical" className="flex shrink-0 gap-1 overflow-x-auto border-b p-2 lg:w-[76px] lg:flex-col lg:overflow-visible lg:border-r lg:border-b-0">
             {railTabs.map((t, i) => (
               <div key={t.id} className="contents">
@@ -516,6 +526,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
               </>
             )}
           </div>
+          </div>
         </aside>
 
         {/* Centre: the sheet, or the 3D box filling the same space. The tabs sit in the top right corner. */}
@@ -526,7 +537,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
             <div ref={splitBox} style={{ "--split": `${splitPct}%` } as React.CSSProperties} className="flex min-h-0 flex-1 flex-col max-lg:pt-14 lg:flex-row">
               <div className="relative flex min-h-[40vh] min-w-0 flex-1 basis-0 flex-col lg:min-h-0 lg:flex-none lg:basis-(--split)">
                 {src ? (
-                  <SheetCanvas onWindows={openWindows} windowCount={windows.length} {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} {...(blinkMode ? { onHoverMm: hoverAt, highlight: shapes.find((q) => q.id === blinkId)?.poly ?? null } : {})} />
+                  <SheetCanvas onWindows={openWindows} windowCount={windows.length} {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} onHoverMm={hoverAt} highlight={shapes.find((q) => q.id === blinkId)?.poly ?? null} />
                 ) : null}
               </div>
               <div
@@ -566,7 +577,6 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
                 <span aria-hidden className="absolute top-1/2 left-0 h-10 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full border bg-background shadow-sm group-hover:border-primary" />
               </div>
               <div className="flex min-h-[40vh] min-w-0 flex-1 basis-0 flex-col gap-2 p-4 lg:min-h-0">
-                <BlinkToggle checked={blinkMode} onChange={(on) => { setBlinkMode(on); if (!on) setHoverPanel(null); }} />
                 <FoldPreview large onReady={sw.markReady} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
               </div>
             </div>
@@ -575,7 +585,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
               <FoldPreview large onReady={sw.markReady} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
             </div>
           ) : shown && src ? (
-            <SheetCanvas onWindows={openWindows} windowCount={windows.length} {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} />
+            <SheetCanvas onWindows={openWindows} windowCount={windows.length} {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} onHoverMm={hoverAt} highlight={shapes.find((q) => q.id === blinkId)?.poly ?? null} />
           ) : (
             <p className="p-6 text-sm text-muted-foreground">Enter valid dimensions to see the dieline.</p>
           )}
@@ -584,11 +594,13 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
         </main>
 
         {/* Right: 3D + file formats */}
-        <aside className={`flex min-h-0 flex-col gap-4 overflow-y-auto border-t p-4 lg:border-t-0 lg:border-l ${centre === "split" ? "hidden" : ""}`}>
+        <aside inert={splitTab} className={`min-h-0 min-w-0 overflow-hidden ${splitTab ? "max-lg:hidden" : ""}`}>
+          {/* Anchored to the left edge of its column: as the column closes, the sidebar slides out to the right. */}
+          <div className={`flex h-full min-h-0 flex-col gap-4 overflow-y-auto border-t p-4 transition-opacity duration-300 lg:w-[340px] lg:border-t-0 lg:border-l ${splitTab ? "opacity-0" : ""}`}>
           {shown && foldable ? (
             // Dieline tab: the small 3D card. 3D tab: the dieline takes its place here (a click brings it back to the centre).
             <div className="relative shrink-0 rounded-2xl">
-              {centre === "dieline" ? <FoldPreview onReady={sw.markReady} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} /> : src ? <MiniSheet box={dielineViewBox(shown, 22)} src={src} onOpen={() => sw.select("dieline")} /> : <div className="h-80" aria-hidden />}
+              {centre === "dieline" ? <FoldPreview onReady={sw.markReady} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} /> : src ? <MiniSheet box={dielineViewBox(shown, 22)} src={src} onOpen={() => { setHoverPanel(null); sw.select("dieline"); }} onHoverMm={hoverAt} highlight={shapes.find((q) => q.id === blinkId)?.poly ?? null} /> : <div className="h-80" aria-hidden />}
               {sw.switching && sw.tab === "dieline" ? <ViewSkeleton kind="box" label="Loading the 3D preview" /> : null}
             </div>
           ) : null}
@@ -611,6 +623,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
             unverified={shown?.unverifiedDefaultsUsed ?? []}
             result={dl}
           />
+          </div>
         </aside>
       </div>
       {windowsView !== "closed" && base ? (

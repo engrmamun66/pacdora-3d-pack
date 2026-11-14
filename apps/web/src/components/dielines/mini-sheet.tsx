@@ -18,6 +18,8 @@ export function MiniSheet({
   selected = null,
   onSelect,
   onOpen,
+  onHoverMm,
+  highlight = null,
 }: {
   box: { minX: number; minY: number; width: number; height: number };
   src: string;
@@ -26,10 +28,31 @@ export function MiniSheet({
   selected?: string | null;
   onSelect?: (id: string) => void;
   onOpen?: () => void;
+  /** Called with the sheet point (mm) under the mouse, and null when it leaves; absent = not tracked. */
+  onHoverMm?: (p: { x: number; y: number } | null) => void;
+  /** A panel outline (sheet mm) drawn softly over the picture (the panel that blinks on the 3D box). */
+  highlight?: readonly { x: number; y: number }[] | null;
 }) {
   const picture = (
-    <svg viewBox={`${box.minX} ${box.minY} ${box.width} ${box.height}`} className="max-h-72 w-full select-none" role="img" aria-label="Dieline overview">
+    <svg
+      viewBox={`${box.minX} ${box.minY} ${box.width} ${box.height}`}
+      className="max-h-72 w-full select-none"
+      role="img"
+      aria-label="Dieline overview"
+      {...(onHoverMm
+        ? {
+            onPointerMove: (e: React.PointerEvent<SVGSVGElement>) => {
+              const m = e.currentTarget.getScreenCTM();
+              if (!m) return;
+              const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
+              onHoverMm({ x: pt.x, y: pt.y });
+            },
+            onPointerLeave: () => onHoverMm(null),
+          }
+        : {})}
+    >
       <image href={src} x={box.minX} y={box.minY} width={box.width} height={box.height} preserveAspectRatio="none" />
+      {highlight && highlight.length >= 3 ? <polygon points={highlight.map((q) => `${q.x},${q.y}`).join(" ")} fill="#2f6bff" fillOpacity={0.22} stroke="#2f6bff" strokeWidth={1.6} vectorEffect="non-scaling-stroke" strokeLinejoin="round" pointerEvents="none" className="hover-pulse" /> : null}
       {windows.map((w) => {
         const bad = problemOf?.has(w.id) ?? false;
         return (

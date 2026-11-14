@@ -6,8 +6,7 @@ import type { CartonViewHandle } from "./carton-view";
 import { CameraViewTool } from "./camera-view-menu";
 
 /**
- * Icon button in the top left corner of a 3D view: shows or hides a floor grid behind the carton. The tools under it:
- * keep the view, and the camera views.
+ * Icon button in the top left corner of a 3D view: shows or hides a floor grid behind the carton. Under it: keep the view. The camera views tool sits in the bottom left corner.
  * The parent must be `relative`. On from the start; pass `defaultOn={false}` to start with the grid hidden.
  */
 export function GridToggle({ viewRef, defaultOn = true }: { viewRef: RefObject<CartonViewHandle | null>; defaultOn?: boolean }) {

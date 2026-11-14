@@ -9,8 +9,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
  *   placeholder is painted before the slow build blocks the page.
  * - `switching` is true from the click until the new view says it is drawn (`markReady`). The tabs stay disabled meanwhile.
  * A safety timer ends `switching` even if a view never reports.
+ * `extraDelay(from, to)` (ms) holds the mount back a little longer, e.g. while a sidebar animation plays on a free main thread.
  */
-export function useViewSwitch<T extends string>(initial: T) {
+export function useViewSwitch<T extends string>(initial: T, extraDelay?: (from: T, to: T) => number) {
   const [tab, setTab] = useState<T>(initial);
   const [mounted, setMounted] = useState<T>(initial);
   const [ready, setReady] = useState(true);
@@ -26,15 +27,25 @@ export function useViewSwitch<T extends string>(initial: T) {
     setReady(false);
   };
 
+  const delayRef = useRef(extraDelay);
+  useEffect(() => {
+    delayRef.current = extraDelay;
+  });
   useEffect(() => {
     if (tab === mounted) return;
     let second = 0;
+    let wait = 0;
     const first = requestAnimationFrame(() => {
-      second = requestAnimationFrame(() => setMounted(tab));
+      second = requestAnimationFrame(() => {
+        const ms = delayRef.current?.(mounted, tab) ?? 0;
+        if (ms > 0) wait = window.setTimeout(() => setMounted(tab), ms);
+        else setMounted(tab);
+      });
     });
     return () => {
       cancelAnimationFrame(first);
       cancelAnimationFrame(second);
+      window.clearTimeout(wait);
     };
   }, [tab, mounted]);
 
