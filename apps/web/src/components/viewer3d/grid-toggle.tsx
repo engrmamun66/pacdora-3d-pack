@@ -4,6 +4,7 @@ import { useEffect, useState, type RefObject } from "react";
 import { Grid3x3, Lock, LockOpen } from "lucide-react";
 import type { CartonViewHandle } from "./carton-view";
 import { CameraViewTool } from "./camera-view-menu";
+import { ShadowTool } from "./shadow-menu";
 
 /**
  * Icon button in the top left corner of a 3D view: shows or hides a floor grid behind the carton. Under it: keep the view. The camera views tool sits in the bottom left corner.
@@ -40,6 +41,7 @@ export function GridToggle({ viewRef, defaultOn = true }: { viewRef: RefObject<C
       <Grid3x3 className="size-4" aria-hidden />
     </button>
     <KeepViewToggle viewRef={viewRef} />
+    <ShadowTool viewRef={viewRef} />
     <CameraViewTool viewRef={viewRef} />
     </>
   );
