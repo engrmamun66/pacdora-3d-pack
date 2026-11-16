@@ -89,7 +89,7 @@ export function ArtworkPicker({
 
   /** Count on the top right corner of a tab, as a small round badge (hidden at zero). */
   const badge = (n: number) =>
-    n > 0 ? <span aria-label={`${n} pictures`} className="pointer-events-none absolute top-0.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] leading-none font-medium text-primary-foreground tabular-nums">{n > 999 ? "999+" : n}</span> : null;
+    n > 0 ? <span aria-label={`${n} pictures`} className="pointer-events-none absolute -top-1.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] leading-none font-medium text-primary-foreground tabular-nums">{n > 999 ? "999+" : n}</span> : null;
 
   const tabClass = (on: boolean) => `relative flex-1 border-b-2 px-2 py-1.5 text-xs ${on ? "border-primary font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`;
 
@@ -128,7 +128,7 @@ export function ArtworkPicker({
 
   return (
     <section aria-label="Artwork" style={{ height: "var(--artwork-h, 70%)" }} className="flex min-h-0 shrink-0 flex-col border-t">
-      <div role="tablist" aria-label="Artwork source" className="flex border-b pt-2.5">
+      <div role="tablist" aria-label="Artwork source" className="flex border-b pt-[17px]">
         <button type="button" role="tab" aria-selected={tab === "mine"} className={tabClass(tab === "mine")} onClick={() => setTab("mine")}>Uploads{badge(assets.length)}</button>
         <button type="button" role="tab" aria-selected={tab === "library"} className={tabClass(tab === "library")} onClick={() => setTab("library")}>Library{badge(shown.length)}</button>
         <button type="button" role="tab" aria-selected={tab === "favorites"} className={tabClass(tab === "favorites")} onClick={() => setTab("favorites")}>Favorites{badge(favs.length)}</button>
