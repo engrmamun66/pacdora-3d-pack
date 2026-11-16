@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ImagePlus, Pencil, Trash2, Upload, X } from "lucide-react";
+import { Check, ImagePlus, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { deleteArtwork, updateArtwork } from "@/app/doraadmin/artwork-actions";
 import { MAX_CATEGORY, MAX_NAME, numberedNames, parseTags } from "@/lib/artwork-meta";
@@ -39,7 +39,7 @@ interface Staged {
  * One shared form (name, tags, category) covers the whole batch; several pictures are numbered
  * after the name ("Star 1", "Star 2" ...). "Each separately" lets a picture have its own name and tags.
  */
-export function ArtworkUploadForm({ categories }: { categories: string[] }) {
+function ArtworkUploadForm({ categories, onDone, onBusyChange }: { categories: string[]; /** Called after every picture was added. */ onDone?: () => void; onBusyChange?: (busy: boolean) => void }) {
   const router = useRouter();
   const listId = useId();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -139,14 +139,20 @@ export function ArtworkUploadForm({ categories }: { categories: string[] }) {
       router.refresh();
     }
     if (failed) notify.error(`${failed} picture${failed > 1 ? "s" : ""} could not be added. See the message on each one.`);
-    else clear();
+    else {
+      clear();
+      onDone?.();
+    }
   };
 
   const busy = progress !== null;
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
 
   return (
     <form
-      className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-xs"
+      className="flex flex-col gap-4"
       onSubmit={(e) => {
         e.preventDefault();
         if (!busy && items.length) void submit();
@@ -192,9 +198,9 @@ export function ArtworkUploadForm({ categories }: { categories: string[] }) {
           <ul className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3" aria-label="Pictures to add">
             {items.map((it, i) => (
               <li key={it.key} className={`flex flex-col overflow-hidden rounded-lg border ${it.error ? "border-destructive" : ""}`}>
-                <div className={`relative grid h-24 place-items-center ${checker}`}>
+                <div className={`relative h-24 overflow-hidden ${checker}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
-                  <img src={it.url} alt="" className="max-h-full max-w-full object-contain" />
+                  <img src={it.url} alt="" className="absolute inset-0 size-full object-contain" />
                   {!busy ? (
                     <button type="button" aria-label={`Remove ${it.file.name}`} className="absolute top-1 right-1 grid size-6 place-items-center rounded-full bg-background/90 shadow hover:bg-background" onClick={() => remove(it.key)}><X className="size-3.5" /></button>
                   ) : null}
@@ -228,12 +234,53 @@ export function ArtworkUploadForm({ categories }: { categories: string[] }) {
   );
 }
 
+/** "Add new" button of the page. The upload form (drop area, name, tags) lives in a dialog that opens on click, so the page itself shows only the library. */
+export function AddArtworkButton({ categories }: { categories: string[] }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLDialogElement | null>(null);
+  const titleId = useId();
+
+  return (
+    <>
+      <Button type="button" className="h-9" onClick={() => setOpen(true)}>
+        <Plus className="size-4" aria-hidden />
+        Add new
+      </Button>
+      {open ? (
+        <dialog
+          ref={(el) => {
+            ref.current = el;
+            if (el && !el.open) el.showModal();
+          }}
+          onClose={() => { setOpen(false); setBusy(false); }}
+          onCancel={(e) => { if (busy) e.preventDefault(); }}
+          onClick={(e) => { if (e.target === ref.current && !busy) ref.current?.close(); }}
+          aria-labelledby={titleId}
+          className="m-auto max-h-[94dvh] w-[min(760px,calc(100vw-24px))] overflow-auto rounded-xl border bg-background p-0 text-foreground shadow-xl backdrop:bg-black/40"
+        >
+          <div className="flex items-center justify-between border-b px-5 py-3">
+            <div>
+              <h2 id={titleId} className="font-semibold">Add new artworks</h2>
+              <p className="text-xs text-muted-foreground">PNG or JPEG, up to 10 MB each. Choose several to add them together.</p>
+            </div>
+            <button type="button" aria-label="Close" disabled={busy} className="rounded p-1 hover:bg-muted disabled:opacity-50" onClick={() => ref.current?.close()}><X className="size-4" /></button>
+          </div>
+          <div className="p-5">
+            <ArtworkUploadForm categories={categories} onBusyChange={setBusy} onDone={() => ref.current?.close()} />
+          </div>
+        </dialog>
+      ) : null}
+    </>
+  );
+}
+
 /** Small picture for the list view. */
 function Thumb({ id }: { id: string }) {
   return (
-    <div className={`grid size-10 place-items-center rounded ${checker}`}>
+    <div className={`relative size-10 overflow-hidden rounded ${checker}`}>
       {/* eslint-disable-next-line @next/next/no-img-element -- private route, cached by URL */}
-      <img src={`/api/artworks/${id}/image`} alt="" loading="lazy" className="max-h-full max-w-full object-contain" />
+      <img src={`/api/artworks/${id}/image`} alt="" loading="lazy" className="absolute inset-0 size-full object-contain" />
     </div>
   );
 }
@@ -261,7 +308,7 @@ export function ArtworkGrid({ rows, categories, filtered, view }: { rows: Artwor
     });
 
   if (rows.length === 0) {
-    return <p className="rounded-xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">{filtered ? "No artwork matches." : "No artworks yet. Drop the first pictures above."}</p>;
+    return <p className="rounded-xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">{filtered ? "No artwork matches." : "No artworks yet. Click Add new to add the first pictures."}</p>;
   }
 
   const startEdit = (r: ArtworkRow) => {
@@ -304,9 +351,9 @@ export function ArtworkGrid({ rows, categories, filtered, view }: { rows: Artwor
         <ul className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-4">
           {rows.map((r) => (
             <li key={r.id} className="flex flex-col overflow-hidden rounded-xl border bg-card shadow-xs">
-              <div className={`grid h-40 place-items-center ${checker}`}>
+              <div className={`relative h-40 overflow-hidden ${checker}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- private route, cached by URL */}
-                <img src={`/api/artworks/${r.id}/image`} alt={r.name} loading="lazy" className="max-h-full max-w-full object-contain" />
+                <img src={`/api/artworks/${r.id}/image`} alt={r.name} loading="lazy" className="absolute inset-0 size-full object-contain" />
               </div>
               {editing === r.id ? (
                 <div className="flex flex-col gap-2 border-t p-3">{fields}{editButtons(r)}</div>

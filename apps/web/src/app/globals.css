@@ -325,3 +325,25 @@ dialog.drop-dialog[open]::backdrop {
   .floor-grid, .dl-march { animation: none; }
   .cv-strip, .cv-item, .cv-strip-out, .cv-item-out { animation-duration: 1ms; animation-delay: 0ms !important; }
 }
+
+/* A soft double blink that points the eye at a button (the editor's "Move and resize" button after a picture is chosen). */
+@keyframes soft-blink {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    background-color: transparent;
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
+    background-color: rgba(59, 130, 246, 0.14);
+  }
+}
+.soft-blink {
+  animation: soft-blink 0.8s ease-in-out 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .soft-blink {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+  }
+}

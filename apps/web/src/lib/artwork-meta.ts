@@ -3,6 +3,8 @@ export const MAX_NAME = 80;
 export const MAX_TAGS = 12;
 export const MAX_TAG_LENGTH = 30;
 export const MAX_CATEGORY = 40;
+/** Library pictures in this category are the editor's box backgrounds: the Background panel lists them, the Artwork Library tab leaves them out. */
+export const BACKGROUND_CATEGORY = "Background Image";
 
 /** Collapse white space and cut to a length. */
 const tidy = (s: string, max: number) => s.replace(/\s+/g, " ").trim().slice(0, max);

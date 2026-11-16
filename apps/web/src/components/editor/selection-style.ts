@@ -3,7 +3,7 @@ import { Control, FabricObject, Textbox, type FabricObject as FabricObjectType }
 /**
  * The look of a selected artwork: the same as a selected window hole in the window editor
  * (components/dielines/window-editor.tsx): a blue frame, round white grips with a soft halo on the
- * corners, a pill on each side, and a round turn grip on a stem above. Sizes are screen pixels.
+ * corners, a pill on each side, and a round turn grip with a circular-arrow icon on a stem above. Sizes are screen pixels.
  */
 const BLUE = "#3b82f6";
 const HALO = "rgba(99,102,241,0.18)";
@@ -31,11 +31,45 @@ function gripRenderer(w: number, h: number) {
   };
 }
 
-/** Grip size [width, height] in px: corners 12 round, top/bottom 15 x 6, left/right 6 x 15, turn grip 9 round. */
+/**
+ * The turn grip: a round grip with a circular arrow (about three quarters of a circle, arrow head at the end).
+ * The icon always stays upright, so it reads the same however the artwork is turned.
+ */
+function turnRenderer(size: number) {
+  const round = gripRenderer(size, size);
+  return function render(this: Control, ctx: CanvasRenderingContext2D, left: number, top: number, style: unknown, obj: FabricObjectType) {
+    round.call(this, ctx, left, top, style, obj);
+    const r = size * 0.27;
+    const start = -Math.PI / 2 + 0.55;
+    const end = start + Math.PI * 1.5;
+    const [px, py] = [Math.cos(end) * r, Math.sin(end) * r];
+    const [tx, ty] = [-Math.sin(end), Math.cos(end)]; // the way the arc is going at its end
+    const [nx, ny] = [Math.cos(end), Math.sin(end)]; // outward from the centre
+    const head = size * 0.16;
+    ctx.save();
+    ctx.translate(left, top);
+    ctx.strokeStyle = BLUE;
+    ctx.fillStyle = BLUE;
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(0, 0, r, start, end);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(px + tx * head * 1.2, py + ty * head * 1.2);
+    ctx.lineTo(px + nx * head, py + ny * head);
+    ctx.lineTo(px - nx * head, py - ny * head);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  };
+}
+
+/** Grip size [width, height] in px: corners 12 round, top/bottom 15 x 6, left/right 6 x 15, turn grip 22 round. */
 const SIZES: Record<string, [number, number]> = {
   tl: [12, 12], tr: [12, 12], bl: [12, 12], br: [12, 12],
   mt: [15, 6], mb: [15, 6], ml: [6, 15], mr: [6, 15],
-  mtr: [9, 9],
+  mtr: [22, 22],
 };
 
 function restyle(controls: Record<string, Control>) {
@@ -43,14 +77,14 @@ function restyle(controls: Record<string, Control>) {
     const size = SIZES[key];
     if (!size) continue; // a control of its own kind keeps fabric's look
     const [w, h] = size;
-    c.render = gripRenderer(w, h);
+    c.render = key === "mtr" ? turnRenderer(w) : gripRenderer(w, h);
     c.sizeX = w;
     c.sizeY = h;
     // A little easier to hit than to see, like a thumb on a touch screen.
     c.touchSizeX = w + 8;
     c.touchSizeY = h + 8;
     if (key === "mtr") {
-      c.offsetY = -16; // the stem: 16 px above the top edge
+      c.offsetY = -26; // the stem: 26 px above the top edge
       c.withConnection = true;
     }
   }

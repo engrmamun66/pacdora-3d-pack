@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { generateDieline, outlineBounds, panelOutline } from "@packaging/dieline-engine";
-import { artworkSchema, type ArtworkObject } from "@packaging/schema";
+import { MAX_BACKGROUNDS, artworkSchema, backgroundsOf, type ArtworkObject } from "@packaging/schema";
 import { anchorFor, anchorIndex, backgroundPlacement, objectCentre, orphanedObjects, panelAt, pointInPolygon } from "../src";
 
 const geo = (dims: { width: number; depth: number; height: number }) => generateDieline("tuck-end-carton", dims);
@@ -149,5 +149,17 @@ describe("box background placement", () => {
     expect(artworkSchema.safeParse({ objects: [], background: { assetId: "a", fit: "cover", scale: 1, dx: 0, dy: 0, opacity: 1 } }).success).toBe(true);
     expect(artworkSchema.safeParse({ objects: [], background: { assetId: "a", fit: "zoom", scale: 1, dx: 0, dy: 0, opacity: 1 } }).success).toBe(false);
     expect(artworkSchema.safeParse({ objects: [], background: { assetId: "a", fit: "cover", scale: 99, dx: 0, dy: 0, opacity: 1 } }).success).toBe(false);
+  });
+
+  it("several backgrounds: a stack (bottom to top) up to the limit; an older single one counts as one", () => {
+    const one = { assetId: "a", fit: "cover", scale: 1, dx: 0, dy: 0, opacity: 1 } as const;
+    expect(artworkSchema.safeParse({ objects: [], backgrounds: [one, { ...one, assetId: "b" }] }).success).toBe(true);
+    expect(artworkSchema.safeParse({ objects: [], backgrounds: Array.from({ length: MAX_BACKGROUNDS + 1 }, () => one) }).success).toBe(false);
+    expect(artworkSchema.safeParse({ objects: [], backgrounds: [{ ...one, scale: 99 }] }).success).toBe(false);
+    expect(backgroundsOf({})).toEqual([]);
+    expect(backgroundsOf({ background: null })).toEqual([]);
+    expect(backgroundsOf({ background: one })).toEqual([one]);
+    expect(backgroundsOf({ backgrounds: [], background: one })).toEqual([]);
+    expect(backgroundsOf({ backgrounds: [one, { ...one, assetId: "b" }] }).map((b) => b.assetId)).toEqual(["a", "b"]);
   });
 });

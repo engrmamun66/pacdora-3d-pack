@@ -1,86 +1,211 @@
 "use client";
 
-import { ImagePlus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, Move, Plus, Trash2, Upload } from "lucide-react";
 import { BACKGROUND_FITS, type BackgroundFit, type BoxBackground } from "@packaging/schema";
+import { InfoTip } from "@/components/templates-admin/help-tip";
 import { assetUrl } from "./fabric-map";
-import { NumberField, SelectField } from "./fields";
+import { NumberField } from "./fields";
 
 type Asset = { id: string; fileName: string };
+type LibraryPicture = { id: string; name: string };
 
-const FIT_LABEL: Record<BackgroundFit, string> = { cover: "Fill (crop)", contain: "Fit inside", stretch: "Stretch" };
+const FIT_LABEL: Record<BackgroundFit, string> = { cover: "Fill", contain: "Fit inside", stretch: "Stretch" };
+const FIT_HINT: Record<BackgroundFit, string> = { cover: "Covers the whole box; the edges of the picture may be cut off", contain: "The whole picture is shown, with empty space around it if needed", stretch: "Stretched to the box, the picture may look squashed" };
 
 /**
- * Box background controls: one image under all artwork that fills the print
- * area (the dieline plus bleed). Shown in the Properties panel when nothing is selected.
+ * Box background controls, in the order a customer works with them: a folded "Add a picture" area on top (ready-made ones, their own images, or an upload),
+ * then the pictures already on the box (top first), and the settings of the chosen picture. Pictures are stacked under all artwork; each is placed on the print area (the dieline plus bleed).
  */
 export function BackgroundPanel({
-  background,
+  layers,
+  selected,
+  max,
+  onSelect,
+  onRemove,
+  onMove,
   assets,
+  names,
+  library,
   uploading,
+  editing,
+  onToggleEdit,
   onPatch,
   onPick,
+  onPickLibrary,
   onUpload,
 }: {
-  background: BoxBackground | null;
+  layers: BoxBackground[];
+  selected: number;
+  max: number;
+  onSelect: (i: number) => void;
+  onRemove: (i: number) => void;
+  onMove: (i: number, delta: -1 | 1) => void;
   assets: Asset[];
+  names: Record<string, string>;
+  /** Ready-made background pictures the admin keeps (category "Background Image"). */
+  library: LibraryPicture[];
   uploading: boolean;
-  onPatch: (p: Partial<BoxBackground> | null) => void;
+  editing: boolean;
+  onToggleEdit: () => void;
+  onPatch: (i: number, p: Partial<BoxBackground>) => void;
   onPick: (assetId: string) => void;
+  onPickLibrary: (pictureId: string, name: string) => void;
   onUpload: () => void;
 }) {
-  const current = background ? assets.find((a) => a.id === background.assetId) : undefined;
-  return (
-    <section className="flex flex-col gap-2 border-b px-3 py-3" aria-label="Box background">
-      <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Box background</h3>
-      <p className="text-[11px] text-muted-foreground">An image behind all artwork that covers the whole box, bleed included. It shows in 3D and in every export.</p>
+  const bg = layers[selected] ?? null;
+  const full = layers.length >= max;
+  const nameOf = (b: BoxBackground, i: number) => names[b.assetId] ?? `Background ${i + 1}`;
+  const used = new Set(layers.map((l) => l.assetId));
 
-      {background ? (
-        <div className="flex items-center gap-2 rounded-md border p-1.5">
-          <div className="size-10 shrink-0 overflow-hidden rounded bg-muted">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={assetUrl(background.assetId)} alt="" className="h-full w-full object-cover" />
-          </div>
-          <span className="min-w-0 flex-1 truncate text-xs">{current?.fileName ?? "Background image"}</span>
-          <button type="button" onClick={() => onPatch(null)} className="flex size-7 items-center justify-center rounded-md hover:bg-muted" title="Remove the background" aria-label="Remove the background">
-            <Trash2 className="size-3.5" />
+  // The add area is open while the box has no picture, and folds away once one is added so the settings are in view.
+  const [addOpen, setAddOpen] = useState(layers.length === 0);
+  const [count, setCount] = useState(layers.length);
+  // Choosing a picture blinks the "Move and resize" button twice, so the next step is easy to see (a new key restarts the animation).
+  const [blink, setBlink] = useState(0);
+  const [source, setSource] = useState<"ready" | "mine">("ready");
+  if (count !== layers.length) {
+    setCount(layers.length);
+    setAddOpen(layers.length === 0);
+  }
+  const tab = source === "mine" && assets.length === 0 ? "ready" : library.length === 0 ? "mine" : source;
+
+  const tabBtn = (on: boolean) => `flex-1 rounded-md px-2 py-1 text-xs ${on ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`;
+
+  return (
+    <section className="flex flex-col gap-3 border-b px-3 py-3" aria-label="Background">
+      <h3 className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Background
+        <InfoTip label="Background" className="normal-case">
+          Pictures behind all artwork, stacked on the whole box (bleed included). Add several: each one has its own fit, size, place and opacity. They show in 3D and in every export.
+        </InfoTip>
+      </h3>
+
+      {/* 1. Add a picture: on top, above the pictures already on the box */}
+      <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-2">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setAddOpen((o) => !o)}
+            aria-expanded={addOpen}
+            disabled={full}
+            className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md border bg-background text-xs font-medium hover:bg-muted disabled:opacity-50"
+          >
+            <Plus className="size-3.5" aria-hidden /> Add a picture
+            <ChevronDown className={`size-3.5 transition-transform ${addOpen ? "rotate-180" : ""}`} aria-hidden />
+          </button>
+          <button type="button" onClick={onUpload} disabled={uploading || full} className="flex h-8 items-center justify-center gap-1.5 rounded-md border bg-background px-3 text-xs font-medium hover:bg-muted disabled:opacity-50" title="Upload a picture from your computer">
+            <Upload className="size-3.5" aria-hidden /> {uploading ? "Uploading…" : "Upload"}
           </button>
         </div>
-      ) : null}
+        {full ? <p className="text-[11px] text-muted-foreground">A box can have {max} pictures at most. Remove one to add another.</p> : null}
 
-      <button type="button" onClick={onUpload} disabled={uploading} className="flex h-8 items-center justify-center gap-1.5 rounded-md border text-xs font-medium hover:bg-muted disabled:opacity-50">
-        <ImagePlus className="size-3.5" aria-hidden /> {uploading ? "Uploading…" : background ? "Upload another image" : "Upload background image"}
-      </button>
+        {addOpen && !full ? (
+          <div className="flex flex-col gap-2">
+            {library.length > 0 && assets.length > 0 ? (
+              <div role="tablist" aria-label="Where the picture comes from" className="flex gap-1 rounded-lg bg-muted p-0.5">
+                <button type="button" role="tab" aria-selected={tab === "ready"} className={tabBtn(tab === "ready")} onClick={() => setSource("ready")}>Ready-made</button>
+                <button type="button" role="tab" aria-selected={tab === "mine"} className={tabBtn(tab === "mine")} onClick={() => setSource("mine")}>My images ({assets.length})</button>
+              </div>
+            ) : null}
+            {tab === "ready" && library.length > 0 ? (
+              <div className="grid max-h-56 grid-cols-4 gap-1 overflow-auto">
+                {library.map((l) => (
+                  <button key={l.id} type="button" title={`Add ${l.name}`} aria-label={`Add ${l.name} as a background`} onClick={() => onPickLibrary(l.id, l.name)} className="aspect-square overflow-hidden rounded border bg-muted hover:ring-2 hover:ring-ring">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- private route, cached by URL */}
+                    <img src={`/api/artworks/${l.id}/image`} alt="" className="h-full w-full object-cover" loading="lazy" />
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {tab === "mine" && assets.length > 0 ? (
+              <div className="grid max-h-56 grid-cols-4 gap-1 overflow-auto">
+                {assets.map((a) => (
+                  <button key={a.id} type="button" title={`Add ${a.fileName}`} aria-label={`Add ${a.fileName} as a background`} onClick={() => onPick(a.id)} className={`aspect-square overflow-hidden rounded border bg-muted hover:ring-2 hover:ring-ring ${used.has(a.id) ? "ring-2 ring-primary/60" : ""}`}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={assetUrl(a.id)} alt="" className="h-full w-full object-cover" loading="lazy" />
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {library.length === 0 && assets.length === 0 ? <p className="text-xs text-muted-foreground">Use Upload to add your own picture.</p> : null}
+          </div>
+        ) : null}
+      </div>
 
-      {assets.length ? (
-        <div>
-          <p className="mb-1 text-[11px] text-muted-foreground">Or choose one of your images</p>
-          <div className="grid max-h-40 grid-cols-4 gap-1 overflow-auto">
-            {assets.map((a) => (
-              <button
-                key={a.id}
-                type="button"
-                title={`Use ${a.fileName} as the background`}
-                aria-label={`Use ${a.fileName} as the background`}
-                aria-pressed={background?.assetId === a.id}
-                onClick={() => onPick(a.id)}
-                className={`aspect-square overflow-hidden rounded border bg-muted hover:ring-2 hover:ring-ring ${background?.assetId === a.id ? "ring-2 ring-primary" : ""}`}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={assetUrl(a.id)} alt="" className="h-full w-full object-cover" loading="lazy" />
+      {/* 2. Pictures on the box */}
+      {layers.length ? (
+        <div className="flex flex-col gap-1">
+          <p className="text-[11px] font-medium text-muted-foreground">On the box ({layers.length}), top first</p>
+          <ul className="flex flex-col gap-1" aria-label="Background pictures (top first)">
+            {layers.map((b, i) => ({ b, i })).reverse().map(({ b, i }) => (
+              <li key={`${i}-${b.assetId}`} className={`flex items-center gap-1 rounded-lg border p-1 ${i === selected ? "border-primary bg-primary/5" : ""}`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelect(i);
+                    setBlink((n) => n + 1);
+                  }}
+                  onDoubleClick={() => {
+                    // Double-click: choose it and start moving and resizing it on the dieline.
+                    onSelect(i);
+                    if (!editing) onToggleEdit();
+                  }}
+                  aria-pressed={i === selected}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  title="Click to choose, double-click to move and resize it on the dieline"
+                >
+                  <span className="size-9 shrink-0 overflow-hidden rounded bg-muted">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={assetUrl(b.assetId)} alt="" className="h-full w-full object-cover" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-xs">{nameOf(b, i)}</span>
+                </button>
+                <button type="button" onClick={() => onMove(i, 1)} disabled={i === layers.length - 1} className="flex size-6 items-center justify-center rounded hover:bg-muted disabled:opacity-30" title="Bring forward" aria-label={`Move ${nameOf(b, i)} up`}>
+                  <ArrowUp className="size-3.5" />
+                </button>
+                <button type="button" onClick={() => onMove(i, -1)} disabled={i === 0} className="flex size-6 items-center justify-center rounded hover:bg-muted disabled:opacity-30" title="Send backward" aria-label={`Move ${nameOf(b, i)} down`}>
+                  <ArrowDown className="size-3.5" />
+                </button>
+                <button type="button" onClick={() => onRemove(i)} className="flex size-6 items-center justify-center rounded text-destructive hover:bg-destructive/10" title="Remove this picture" aria-label={`Remove ${nameOf(b, i)}`}>
+                  <Trash2 className="size-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="rounded-lg border border-dashed px-3 py-3 text-center text-xs text-muted-foreground">No background yet. Pick a ready-made picture or upload your own.</p>
+      )}
+
+      {/* 3. Settings of the chosen picture */}
+      {bg ? (
+        <div className="flex flex-col gap-2 rounded-lg border p-2">
+          <p className="truncate text-xs font-medium" title={nameOf(bg, selected)}>Adjust: {nameOf(bg, selected)}</p>
+          <button
+            key={blink}
+            type="button"
+            onClick={onToggleEdit}
+            aria-pressed={editing}
+            className={`flex h-8 items-center justify-center gap-1.5 rounded-md border text-xs font-medium ${blink > 0 && !editing ? "soft-blink" : ""} ${editing ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90" : "hover:bg-muted"}`}
+          >
+            {editing ? <Check className="size-3.5" aria-hidden /> : <Move className="size-3.5" aria-hidden />}
+            {editing ? "Done" : "Move and resize on the dieline"}
+          </button>
+          {editing ? <p className="text-[11px] text-muted-foreground">Drag the picture to move it, drag a round grip to resize it. Arrow keys nudge, Alt turns snapping off, Esc finishes.</p> : null}
+
+          <div role="group" aria-label="Fit" className="flex gap-0.5 rounded-lg bg-muted p-0.5">
+            {BACKGROUND_FITS.map((f) => (
+              <button key={f} type="button" aria-pressed={bg.fit === f} onClick={() => onPatch(selected, { fit: f })} title={FIT_HINT[f]} className={`flex-1 rounded-md px-1 py-1 text-xs ${bg.fit === f ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                {FIT_LABEL[f]}
               </button>
             ))}
           </div>
-        </div>
-      ) : null}
-
-      {background ? (
-        <div className="flex flex-col gap-2 pt-1">
-          <SelectField label="Fit" value={background.fit} options={BACKGROUND_FITS.map((f) => ({ value: f, label: FIT_LABEL[f] }))} onCommit={(fit) => onPatch({ fit })} />
-          <NumberField label="Zoom" value={Math.round(background.scale * 100)} step={5} min={10} max={1000} suffix="%" decimals={0} onCommit={(v) => onPatch({ scale: v / 100 })} />
-          <NumberField label="X offset" value={background.dx} suffix="mm" onCommit={(dx) => onPatch({ dx })} />
-          <NumberField label="Y offset" value={background.dy} suffix="mm" onCommit={(dy) => onPatch({ dy })} />
-          <NumberField label="Opacity" value={Math.round(background.opacity * 100)} step={5} min={0} max={100} suffix="%" decimals={0} onCommit={(v) => onPatch({ opacity: v / 100 })} />
-          <button type="button" onClick={() => onPatch({ fit: "cover", scale: 1, dx: 0, dy: 0, opacity: 1 })} className="h-7 rounded-md border text-xs hover:bg-muted">
+          <NumberField label="Size" value={Math.round(bg.scale * 100)} step={5} min={10} max={1000} suffix="%" decimals={0} onCommit={(v) => onPatch(selected, { scale: v / 100 })} />
+          <NumberField label="Position X" value={bg.dx} suffix="mm" onCommit={(dx) => onPatch(selected, { dx })} />
+          <NumberField label="Position Y" value={bg.dy} suffix="mm" onCommit={(dy) => onPatch(selected, { dy })} />
+          <NumberField label="Opacity" value={Math.round(bg.opacity * 100)} step={5} min={0} max={100} suffix="%" decimals={0} onCommit={(v) => onPatch(selected, { opacity: v / 100 })} />
+          <button type="button" onClick={() => onPatch(selected, { fit: "cover", scale: 1, dx: 0, dy: 0, opacity: 1 })} className="h-7 rounded-md text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
             Reset position and size
           </button>
         </div>

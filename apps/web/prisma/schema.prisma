@@ -40,6 +40,7 @@ model User {
   rateEvents    RateEvent[]
   categories    UserCategory[]
   tags          UserTag[]
+  favoriteArtworks ArtworkFavorite[]
 
   @@map("user")
 }
@@ -304,7 +305,22 @@ model ArtworkItem {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  favorites   ArtworkFavorite[]
+
   @@index([category])
   @@index([createdAt(sort: Desc)])
   @@map("artwork_item")
+}
+
+/// A library picture a customer starred (the editor's "Favorites" tab). Private to the customer.
+model ArtworkFavorite {
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artworkId String
+  artwork   ArtworkItem @relation(fields: [artworkId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+
+  @@id([userId, artworkId])
+  @@index([artworkId])
+  @@map("artwork_favorite")
 }

@@ -54,6 +54,25 @@ const freshId = (list: readonly WindowSpec[]) => {
   for (let i = 1; ; i++) if (!list.some((w) => w.id === `w${i}`)) return `w${i}`;
 };
 
+/** The turn grip above a selected window: size and stem length in screen px, and its circular arrow (the same as the artwork editor's, see editor/selection-style.ts). */
+const TURN_SIZE = 22;
+const TURN_STEM = 26;
+const TURN_ARROW = (() => {
+  const r = TURN_SIZE * 0.27;
+  const start = -Math.PI / 2 + 0.55;
+  const end = start + Math.PI * 1.5;
+  const f = (n: number) => n.toFixed(2);
+  const [sx, sy] = [Math.cos(start) * r, Math.sin(start) * r];
+  const [px, py] = [Math.cos(end) * r, Math.sin(end) * r];
+  const [tx, ty] = [-Math.sin(end), Math.cos(end)]; // the way the arc is going at its end
+  const [nx, ny] = [Math.cos(end), Math.sin(end)]; // outward from the centre
+  const head = TURN_SIZE * 0.16;
+  return {
+    arc: `M ${f(sx)} ${f(sy)} A ${f(r)} ${f(r)} 0 1 1 ${f(px)} ${f(py)}`,
+    head: `M ${f(px + tx * head * 1.2)} ${f(py + ty * head * 1.2)} L ${f(px + nx * head)} ${f(py + ny * head)} L ${f(px - nx * head)} ${f(py - ny * head)} Z`,
+  };
+})();
+
 /** Starting box of a shape, as a share of the panel it goes on (width, height). */
 const SHAPE_MIME = "application/x-dieline-window-shape";
 
@@ -675,9 +694,14 @@ export function WindowEditor({
                       <g pointerEvents="all">
                         {/* The frame of the window, then the grips: round on the corners, a pill on each side. */}
                         <rect x={-w.width / 2} y={-w.height / 2} width={w.width} height={w.height} fill="none" stroke="#3b82f6" strokeWidth={2.2 / v.s} pointerEvents="none" />
-                        <line x1={0} y1={-w.height / 2} x2={0} y2={-w.height / 2 - 16 / v.s} stroke="#3b82f6" strokeWidth={1.2 / v.s} pointerEvents="none" />
-                        <circle cx={0} cy={-w.height / 2 - 16 / v.s} r={6 / v.s} fill="rgba(99,102,241,0.18)" pointerEvents="none" />
-                        <circle cx={0} cy={-w.height / 2 - 16 / v.s} r={4.5 / v.s} fill="#fff" stroke="#e4e1ff" strokeWidth={1 / v.s} className="cursor-grab" onPointerDown={(e) => begin(e, { kind: "rotate" }, w)} />
+                        <line x1={0} y1={-w.height / 2} x2={0} y2={-w.height / 2 - TURN_STEM / v.s} stroke="#3b82f6" strokeWidth={1.2 / v.s} pointerEvents="none" />
+                        {/* The turn grip: a round grip with a circular arrow. It stays upright however the window is turned. */}
+                        <g transform={`translate(0 ${-w.height / 2 - TURN_STEM / v.s}) rotate(${-w.rotation}) scale(${1 / v.s})`} className="cursor-grab" onPointerDown={(e) => begin(e, { kind: "rotate" }, w)}>
+                          <circle r={TURN_SIZE / 2 + 1.2} fill="rgba(99,102,241,0.18)" />
+                          <circle r={TURN_SIZE / 2} fill="#fff" stroke="#e4e1ff" strokeWidth={1} />
+                          <path d={TURN_ARROW.arc} fill="none" stroke="#3b82f6" strokeWidth={1.6} strokeLinecap="round" pointerEvents="none" />
+                          <path d={TURN_ARROW.head} fill="#3b82f6" pointerEvents="none" />
+                        </g>
                         {([[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]] as const).map(([sx, sy]) => {
                           const corner = sx !== 0 && sy !== 0;
                           const cx = (sx * w.width) / 2;

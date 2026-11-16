@@ -153,7 +153,7 @@ export interface Rotation {
   z: number;
 }
 
-/** The shadow of the box on the floor: whether it is drawn, which way the light comes from, how high it stands, how dark the shadow is. */
+/** The shadow of the box on the floor: whether it is drawn, which way the light comes from, how high it stands, how dark and how soft the shadow is. */
 export interface ShadowSettings {
   on: boolean;
   /** Direction the light comes from, in degrees around the box (0 = the front, + = from the right side). */
@@ -162,10 +162,12 @@ export interface ShadowSettings {
   elevationDeg: number;
   /** Darkness of the shadow, 0 to 1. */
   strength: number;
+  /** How soft the edge of the shadow is, 0 (crisp) to 1 (very soft). */
+  softness: number;
 }
 
 /** What a view starts with: the light the viewer always had (from the front right, high), shadow on. */
-export const DEFAULT_SHADOW: Omit<ShadowSettings, "on"> = { azimuthDeg: 39, elevationDeg: 51, strength: 0.18 };
+export const DEFAULT_SHADOW: Omit<ShadowSettings, "on"> = { azimuthDeg: 39, elevationDeg: 51, strength: 0.18, softness: 0 };
 
 export interface CartonViewHandle {
   /** The carton object currently shown (for GLB export). */
@@ -388,6 +390,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     t.sun.castShadow = c.on;
     t.ground.visible = c.on;
     (t.ground.material as THREE.ShadowMaterial).opacity = c.strength;
+    t.sun.shadow.radius = 1 + c.softness * 5; // texels of blur on the edge of the shadow
     const r = frameMm ?? (t.model ? Math.max(t.model.size.x, t.model.size.y, t.model.size.z) : 100);
     const az = (c.azimuthDeg * Math.PI) / 180;
     const el = (c.elevationDeg * Math.PI) / 180;
@@ -655,6 +658,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
         azimuthDeg: patch.azimuthDeg === undefined ? c.azimuthDeg : ((((patch.azimuthDeg + 180) % 360) + 360) % 360) - 180,
         elevationDeg: patch.elevationDeg === undefined ? c.elevationDeg : Math.max(5, Math.min(88, patch.elevationDeg)),
         strength: patch.strength === undefined ? c.strength : Math.max(0, Math.min(1, patch.strength)),
+        softness: patch.softness === undefined ? c.softness : Math.max(0, Math.min(1, patch.softness)),
       };
       applyShadow();
     },

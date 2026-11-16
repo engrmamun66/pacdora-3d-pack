@@ -163,6 +163,19 @@ describe("box background", () => {
     expect(svg.indexOf("<image")).toBeLessThan(svg.indexOf("<path"));
   });
 
+  it("several backgrounds are drawn bottom to top, each under the artwork; one that is missing is skipped alone", async () => {
+    const s = await buildScene(geo, { objects: [text()], backgrounds: [bg, { ...bg, assetId: "img1", fit: "contain", scale: 0.5, opacity: 1 }] }, src);
+    const items = s.layers[0]!.items;
+    expect(items.map((i) => i.kind)).toEqual(["image", "image", expect.not.stringMatching(/^image$/)]);
+    if (items[0]!.kind === "image" && items[1]!.kind === "image") expect(items[1]!.opacity).toBe(1);
+    const part = await buildScene(geo, { objects: [], backgrounds: [{ ...bg, assetId: "gone" }, bg] }, src);
+    expect(part.layers[0]!.items).toHaveLength(1);
+    expect(part.losses.join(" ")).toMatch(/box background/i);
+    // An older file's single background still draws.
+    const legacy = await buildScene(geo, { objects: [], background: bg }, src);
+    expect(legacy.layers[0]!.items).toHaveLength(1);
+  });
+
   it("is skipped with a note when the file is missing, and with artwork off", async () => {
     const miss = await buildScene(geo, { objects: [], background: { ...bg, assetId: "gone" } }, src);
     expect(miss.layers[0]!.items).toHaveLength(0);

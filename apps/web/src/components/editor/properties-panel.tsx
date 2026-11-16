@@ -120,11 +120,24 @@ export function PropertiesPanel({
 }: {
   multi: MultiActions;
   background: {
-    value: BoxBackground | null;
+    /** The background pictures, bottom to top, and the chosen one (-1 = none). */
+    layers: BoxBackground[];
+    selected: number;
+    max: number;
+    onSelect: (i: number) => void;
+    onRemove: (i: number) => void;
+    onMove: (i: number, delta: -1 | 1) => void;
     assets: { id: string; fileName: string }[];
+    /** File name by image id, for the layer list. */
+    names: Record<string, string>;
+    library: { id: string; name: string }[];
     uploading: boolean;
-    onPatch: (p: Partial<BoxBackground> | null) => void;
+    /** The picture is being moved and resized on the dieline. */
+    editing: boolean;
+    onToggleEdit: () => void;
+    onPatch: (i: number, p: Partial<BoxBackground>) => void;
     onPick: (assetId: string) => void;
+    onPickLibrary: (pictureId: string, name: string) => void;
     onUpload: () => void;
   };
   object: ArtworkObject | null;
@@ -136,7 +149,7 @@ export function PropertiesPanel({
   if (selectionCount === 0) {
     return (
       <>
-        <BackgroundPanel background={background.value} assets={background.assets} uploading={background.uploading} onPatch={background.onPatch} onPick={background.onPick} onUpload={background.onUpload} />
+        <BackgroundPanel layers={background.layers} selected={background.selected} max={background.max} onSelect={background.onSelect} onRemove={background.onRemove} onMove={background.onMove} assets={background.assets} names={background.names} library={background.library} uploading={background.uploading} editing={background.editing} onToggleEdit={background.onToggleEdit} onPatch={background.onPatch} onPick={background.onPick} onPickLibrary={background.onPickLibrary} onUpload={background.onUpload} />
         <p className="px-3 py-4 text-xs text-muted-foreground">Select an object to edit it, or add text, shapes and images from the toolbar.</p>
       </>
     );

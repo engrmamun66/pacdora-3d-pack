@@ -25,6 +25,7 @@ export const LIMITS = {
   export: { max: 10, windowSec: 60 },
   upload: { max: 30, windowSec: 60 },
   saveArtwork: { max: 120, windowSec: 60 },
+  favorite: { max: 120, windowSec: 60 },
   saveThreeD: { max: 60, windowSec: 60 },
 } as const;
 

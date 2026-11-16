@@ -2,7 +2,7 @@ import { StaticCanvas } from "fabric";
 import { STYLE, outlinePathD } from "@packaging/render-svg";
 import { anchorIndex } from "@packaging/artwork";
 import type { DielineGeometry, WatermarkSpec } from "@packaging/dieline-engine";
-import type { Artwork } from "@packaging/schema";
+import { type Artwork, backgroundsOf } from "@packaging/schema";
 import { loadBackgroundImage, paintBackground } from "./background";
 import { ensureFont } from "./editor-controller";
 import { toFabric } from "./fabric-map";
@@ -57,13 +57,13 @@ export async function renderArtwork(
   const octx = out.getContext("2d")!;
   octx.fillStyle = opts.background;
   octx.fillRect(0, 0, w, h);
-  if (artwork.background) {
+  for (const bg of backgroundsOf(artwork)) {
     // A background that cannot be loaded is left out, like an image object that fails.
-    const img = await loadBackgroundImage(artwork.background.assetId).catch(() => null);
+    const img = await loadBackgroundImage(bg.assetId).catch(() => null);
     if (img) {
       octx.save();
       octx.setTransform(s, 0, 0, s, -rect.minX * s, -rect.minY * s);
-      paintBackground(octx, geo, artwork.background, img);
+      paintBackground(octx, geo, bg, img);
       octx.restore();
     }
   }

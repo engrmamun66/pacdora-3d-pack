@@ -1,0 +1,722 @@
+[
+  {
+    "file": "bgimg-01.jpg",
+    "name": "Landscape Dawn",
+    "tags": [
+      "background",
+      "image",
+      "landscape",
+      "hills",
+      "dawn"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-02.jpg",
+    "name": "Landscape Meadow",
+    "tags": [
+      "background",
+      "image",
+      "landscape",
+      "hills",
+      "meadow"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-03.jpg",
+    "name": "Landscape Sunset",
+    "tags": [
+      "background",
+      "image",
+      "landscape",
+      "hills",
+      "sunset"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-04.jpg",
+    "name": "Landscape Dusk",
+    "tags": [
+      "background",
+      "image",
+      "landscape",
+      "hills",
+      "dusk"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-05.jpg",
+    "name": "Landscape Night",
+    "tags": [
+      "background",
+      "image",
+      "landscape",
+      "hills",
+      "night"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-06.jpg",
+    "name": "Landscape Autumn",
+    "tags": [
+      "background",
+      "image",
+      "landscape",
+      "hills",
+      "autumn"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-07.jpg",
+    "name": "Landscape Forest",
+    "tags": [
+      "background",
+      "image",
+      "landscape",
+      "hills",
+      "forest"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-08.jpg",
+    "name": "Landscape Desert",
+    "tags": [
+      "background",
+      "image",
+      "landscape",
+      "hills",
+      "desert"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-09.jpg",
+    "name": "Landscape Snow",
+    "tags": [
+      "background",
+      "image",
+      "landscape",
+      "hills",
+      "snow"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-10.jpg",
+    "name": "Landscape Candy",
+    "tags": [
+      "background",
+      "image",
+      "landscape",
+      "hills",
+      "candy"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-11.jpg",
+    "name": "Paper waves Ocean",
+    "tags": [
+      "background",
+      "image",
+      "waves",
+      "layers",
+      "ocean"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-12.jpg",
+    "name": "Paper waves Sunrise",
+    "tags": [
+      "background",
+      "image",
+      "waves",
+      "layers",
+      "sunrise"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-13.jpg",
+    "name": "Paper waves Mint",
+    "tags": [
+      "background",
+      "image",
+      "waves",
+      "layers",
+      "mint"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-14.jpg",
+    "name": "Paper waves Berry",
+    "tags": [
+      "background",
+      "image",
+      "waves",
+      "layers",
+      "berry"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-15.jpg",
+    "name": "Paper waves Lavender",
+    "tags": [
+      "background",
+      "image",
+      "waves",
+      "layers",
+      "lavender"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-16.jpg",
+    "name": "Paper waves Sand",
+    "tags": [
+      "background",
+      "image",
+      "waves",
+      "layers",
+      "sand"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-17.jpg",
+    "name": "Paper waves Forest",
+    "tags": [
+      "background",
+      "image",
+      "waves",
+      "layers",
+      "forest"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-18.jpg",
+    "name": "Paper waves Citrus",
+    "tags": [
+      "background",
+      "image",
+      "waves",
+      "layers",
+      "citrus"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-19.jpg",
+    "name": "Paper waves Slate",
+    "tags": [
+      "background",
+      "image",
+      "waves",
+      "layers",
+      "slate"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-20.jpg",
+    "name": "Paper waves Rose gold",
+    "tags": [
+      "background",
+      "image",
+      "waves",
+      "layers",
+      "rosegold"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-21.jpg",
+    "name": "Bokeh Midnight",
+    "tags": [
+      "background",
+      "image",
+      "bokeh",
+      "lights",
+      "midnight"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-22.jpg",
+    "name": "Bokeh Gold",
+    "tags": [
+      "background",
+      "image",
+      "bokeh",
+      "lights",
+      "gold"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-23.jpg",
+    "name": "Bokeh Rose",
+    "tags": [
+      "background",
+      "image",
+      "bokeh",
+      "lights",
+      "rose"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-24.jpg",
+    "name": "Bokeh Emerald",
+    "tags": [
+      "background",
+      "image",
+      "bokeh",
+      "lights",
+      "emerald"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-25.jpg",
+    "name": "Bokeh Violet",
+    "tags": [
+      "background",
+      "image",
+      "bokeh",
+      "lights",
+      "violet"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-26.jpg",
+    "name": "Bokeh Sunset",
+    "tags": [
+      "background",
+      "image",
+      "bokeh",
+      "lights",
+      "sunset"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-27.jpg",
+    "name": "Bokeh Ice",
+    "tags": [
+      "background",
+      "image",
+      "bokeh",
+      "lights",
+      "ice"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-28.jpg",
+    "name": "Bokeh Candy",
+    "tags": [
+      "background",
+      "image",
+      "bokeh",
+      "lights",
+      "candy"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-29.jpg",
+    "name": "Bokeh Warm white",
+    "tags": [
+      "background",
+      "image",
+      "bokeh",
+      "lights",
+      "warmwhite"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-30.jpg",
+    "name": "Bokeh Teal",
+    "tags": [
+      "background",
+      "image",
+      "bokeh",
+      "lights",
+      "teal"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-31.jpg",
+    "name": "Watercolor Blush",
+    "tags": [
+      "background",
+      "image",
+      "watercolor",
+      "paint",
+      "blush"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-32.jpg",
+    "name": "Watercolor Sky",
+    "tags": [
+      "background",
+      "image",
+      "watercolor",
+      "paint",
+      "sky"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-33.jpg",
+    "name": "Watercolor Spring",
+    "tags": [
+      "background",
+      "image",
+      "watercolor",
+      "paint",
+      "spring"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-34.jpg",
+    "name": "Watercolor Lilac",
+    "tags": [
+      "background",
+      "image",
+      "watercolor",
+      "paint",
+      "lilac"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-35.jpg",
+    "name": "Watercolor Peach",
+    "tags": [
+      "background",
+      "image",
+      "watercolor",
+      "paint",
+      "peach"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-36.jpg",
+    "name": "Watercolor Teal",
+    "tags": [
+      "background",
+      "image",
+      "watercolor",
+      "paint",
+      "teal"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-37.jpg",
+    "name": "Watercolor Coral",
+    "tags": [
+      "background",
+      "image",
+      "watercolor",
+      "paint",
+      "coral"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-38.jpg",
+    "name": "Watercolor Dusk",
+    "tags": [
+      "background",
+      "image",
+      "watercolor",
+      "paint",
+      "dusk"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-39.jpg",
+    "name": "Watercolor Sage",
+    "tags": [
+      "background",
+      "image",
+      "watercolor",
+      "paint",
+      "sage"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-40.jpg",
+    "name": "Watercolor Sunny",
+    "tags": [
+      "background",
+      "image",
+      "watercolor",
+      "paint",
+      "sunny"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-41.jpg",
+    "name": "Marble White",
+    "tags": [
+      "background",
+      "image",
+      "marble",
+      "stone",
+      "white"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-42.jpg",
+    "name": "Marble Black gold",
+    "tags": [
+      "background",
+      "image",
+      "marble",
+      "stone",
+      "blackgold"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-43.jpg",
+    "name": "Marble Rose",
+    "tags": [
+      "background",
+      "image",
+      "marble",
+      "stone",
+      "rose"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-44.jpg",
+    "name": "Marble Emerald",
+    "tags": [
+      "background",
+      "image",
+      "marble",
+      "stone",
+      "emerald"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-45.jpg",
+    "name": "Marble Navy",
+    "tags": [
+      "background",
+      "image",
+      "marble",
+      "stone",
+      "navy"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-46.jpg",
+    "name": "Marble Sand",
+    "tags": [
+      "background",
+      "image",
+      "marble",
+      "stone",
+      "sand"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-47.jpg",
+    "name": "Marble Slate",
+    "tags": [
+      "background",
+      "image",
+      "marble",
+      "stone",
+      "slate"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-48.jpg",
+    "name": "Marble Lilac",
+    "tags": [
+      "background",
+      "image",
+      "marble",
+      "stone",
+      "lilac"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-49.jpg",
+    "name": "Marble Terracotta",
+    "tags": [
+      "background",
+      "image",
+      "marble",
+      "stone",
+      "terracotta"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-50.jpg",
+    "name": "Marble Ice blue",
+    "tags": [
+      "background",
+      "image",
+      "marble",
+      "stone",
+      "iceblue"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-51.jpg",
+    "name": "Liquid lines Kraft",
+    "tags": [
+      "background",
+      "image",
+      "liquid",
+      "flow",
+      "kraft"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-52.jpg",
+    "name": "Liquid lines Mint",
+    "tags": [
+      "background",
+      "image",
+      "liquid",
+      "flow",
+      "mint"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-53.jpg",
+    "name": "Liquid lines Navy",
+    "tags": [
+      "background",
+      "image",
+      "liquid",
+      "flow",
+      "navy"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-54.jpg",
+    "name": "Liquid lines Blush",
+    "tags": [
+      "background",
+      "image",
+      "liquid",
+      "flow",
+      "blush"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-55.jpg",
+    "name": "Liquid lines Charcoal",
+    "tags": [
+      "background",
+      "image",
+      "liquid",
+      "flow",
+      "charcoal"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-56.jpg",
+    "name": "Liquid lines Forest",
+    "tags": [
+      "background",
+      "image",
+      "liquid",
+      "flow",
+      "forest"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-57.jpg",
+    "name": "Liquid lines Ocean",
+    "tags": [
+      "background",
+      "image",
+      "liquid",
+      "flow",
+      "ocean"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-58.jpg",
+    "name": "Liquid lines Plum",
+    "tags": [
+      "background",
+      "image",
+      "liquid",
+      "flow",
+      "plum"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-59.jpg",
+    "name": "Liquid lines Sun",
+    "tags": [
+      "background",
+      "image",
+      "liquid",
+      "flow",
+      "sun"
+    ],
+    "category": "Background Image"
+  },
+  {
+    "file": "bgimg-60.jpg",
+    "name": "Liquid lines Paper",
+    "tags": [
+      "background",
+      "image",
+      "liquid",
+      "flow",
+      "paper"
+    ],
+    "category": "Background Image"
+  }
+]

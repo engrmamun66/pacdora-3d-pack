@@ -1,0 +1,662 @@
+[
+  {
+    "file": "pat-01.png",
+    "name": "Scallops Kraft",
+    "tags": [
+      "pattern",
+      "scallop",
+      "fish scale",
+      "kraft"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-02.png",
+    "name": "Scallops Mint",
+    "tags": [
+      "pattern",
+      "scallop",
+      "fish scale",
+      "mint"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-03.png",
+    "name": "Scallops Blush",
+    "tags": [
+      "pattern",
+      "scallop",
+      "fish scale",
+      "blush"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-04.png",
+    "name": "Scallops Navy and gold",
+    "tags": [
+      "pattern",
+      "scallop",
+      "fish scale",
+      "navy"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-05.png",
+    "name": "Scallops Sunset",
+    "tags": [
+      "pattern",
+      "scallop",
+      "fish scale",
+      "sunset"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-06.png",
+    "name": "Scallops Ocean",
+    "tags": [
+      "pattern",
+      "scallop",
+      "fish scale",
+      "ocean"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-07.png",
+    "name": "Scallops Forest",
+    "tags": [
+      "pattern",
+      "scallop",
+      "fish scale",
+      "forest"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-08.png",
+    "name": "Scallops Lavender",
+    "tags": [
+      "pattern",
+      "scallop",
+      "fish scale",
+      "lavender"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-09.png",
+    "name": "Scallops Mono",
+    "tags": [
+      "pattern",
+      "scallop",
+      "fish scale",
+      "mono"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-10.png",
+    "name": "Scallops Berry",
+    "tags": [
+      "pattern",
+      "scallop",
+      "fish scale",
+      "berry"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-11.png",
+    "name": "Chevron Navy and gold",
+    "tags": [
+      "pattern",
+      "chevron",
+      "zigzag",
+      "navy"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-12.png",
+    "name": "Chevron Sunset",
+    "tags": [
+      "pattern",
+      "chevron",
+      "zigzag",
+      "sunset"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-13.png",
+    "name": "Chevron Ocean",
+    "tags": [
+      "pattern",
+      "chevron",
+      "zigzag",
+      "ocean"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-14.png",
+    "name": "Chevron Forest",
+    "tags": [
+      "pattern",
+      "chevron",
+      "zigzag",
+      "forest"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-15.png",
+    "name": "Chevron Lavender",
+    "tags": [
+      "pattern",
+      "chevron",
+      "zigzag",
+      "lavender"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-16.png",
+    "name": "Chevron Mono",
+    "tags": [
+      "pattern",
+      "chevron",
+      "zigzag",
+      "mono"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-17.png",
+    "name": "Chevron Berry",
+    "tags": [
+      "pattern",
+      "chevron",
+      "zigzag",
+      "berry"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-18.png",
+    "name": "Chevron Kraft",
+    "tags": [
+      "pattern",
+      "chevron",
+      "zigzag",
+      "kraft"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-19.png",
+    "name": "Chevron Mint",
+    "tags": [
+      "pattern",
+      "chevron",
+      "zigzag",
+      "mint"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-20.png",
+    "name": "Chevron Blush",
+    "tags": [
+      "pattern",
+      "chevron",
+      "zigzag",
+      "blush"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-21.png",
+    "name": "Quatrefoil Forest",
+    "tags": [
+      "pattern",
+      "quatrefoil",
+      "tile",
+      "forest"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-22.png",
+    "name": "Quatrefoil Lavender",
+    "tags": [
+      "pattern",
+      "quatrefoil",
+      "tile",
+      "lavender"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-23.png",
+    "name": "Quatrefoil Mono",
+    "tags": [
+      "pattern",
+      "quatrefoil",
+      "tile",
+      "mono"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-24.png",
+    "name": "Quatrefoil Berry",
+    "tags": [
+      "pattern",
+      "quatrefoil",
+      "tile",
+      "berry"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-25.png",
+    "name": "Quatrefoil Kraft",
+    "tags": [
+      "pattern",
+      "quatrefoil",
+      "tile",
+      "kraft"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-26.png",
+    "name": "Quatrefoil Mint",
+    "tags": [
+      "pattern",
+      "quatrefoil",
+      "tile",
+      "mint"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-27.png",
+    "name": "Quatrefoil Blush",
+    "tags": [
+      "pattern",
+      "quatrefoil",
+      "tile",
+      "blush"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-28.png",
+    "name": "Quatrefoil Navy and gold",
+    "tags": [
+      "pattern",
+      "quatrefoil",
+      "tile",
+      "navy"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-29.png",
+    "name": "Quatrefoil Sunset",
+    "tags": [
+      "pattern",
+      "quatrefoil",
+      "tile",
+      "sunset"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-30.png",
+    "name": "Quatrefoil Ocean",
+    "tags": [
+      "pattern",
+      "quatrefoil",
+      "tile",
+      "ocean"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-31.png",
+    "name": "Art deco fans Berry",
+    "tags": [
+      "pattern",
+      "art deco",
+      "fan",
+      "berry"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-32.png",
+    "name": "Art deco fans Kraft",
+    "tags": [
+      "pattern",
+      "art deco",
+      "fan",
+      "kraft"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-33.png",
+    "name": "Art deco fans Mint",
+    "tags": [
+      "pattern",
+      "art deco",
+      "fan",
+      "mint"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-34.png",
+    "name": "Art deco fans Blush",
+    "tags": [
+      "pattern",
+      "art deco",
+      "fan",
+      "blush"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-35.png",
+    "name": "Art deco fans Navy and gold",
+    "tags": [
+      "pattern",
+      "art deco",
+      "fan",
+      "navy"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-36.png",
+    "name": "Art deco fans Sunset",
+    "tags": [
+      "pattern",
+      "art deco",
+      "fan",
+      "sunset"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-37.png",
+    "name": "Art deco fans Ocean",
+    "tags": [
+      "pattern",
+      "art deco",
+      "fan",
+      "ocean"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-38.png",
+    "name": "Art deco fans Forest",
+    "tags": [
+      "pattern",
+      "art deco",
+      "fan",
+      "forest"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-39.png",
+    "name": "Art deco fans Lavender",
+    "tags": [
+      "pattern",
+      "art deco",
+      "fan",
+      "lavender"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-40.png",
+    "name": "Art deco fans Mono",
+    "tags": [
+      "pattern",
+      "art deco",
+      "fan",
+      "mono"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-41.png",
+    "name": "Plaid Blush",
+    "tags": [
+      "pattern",
+      "plaid",
+      "tartan",
+      "blush"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-42.png",
+    "name": "Plaid Navy and gold",
+    "tags": [
+      "pattern",
+      "plaid",
+      "tartan",
+      "navy"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-43.png",
+    "name": "Plaid Sunset",
+    "tags": [
+      "pattern",
+      "plaid",
+      "tartan",
+      "sunset"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-44.png",
+    "name": "Plaid Ocean",
+    "tags": [
+      "pattern",
+      "plaid",
+      "tartan",
+      "ocean"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-45.png",
+    "name": "Plaid Forest",
+    "tags": [
+      "pattern",
+      "plaid",
+      "tartan",
+      "forest"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-46.png",
+    "name": "Plaid Lavender",
+    "tags": [
+      "pattern",
+      "plaid",
+      "tartan",
+      "lavender"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-47.png",
+    "name": "Plaid Mono",
+    "tags": [
+      "pattern",
+      "plaid",
+      "tartan",
+      "mono"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-48.png",
+    "name": "Plaid Berry",
+    "tags": [
+      "pattern",
+      "plaid",
+      "tartan",
+      "berry"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-49.png",
+    "name": "Plaid Kraft",
+    "tags": [
+      "pattern",
+      "plaid",
+      "tartan",
+      "kraft"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-50.png",
+    "name": "Plaid Mint",
+    "tags": [
+      "pattern",
+      "plaid",
+      "tartan",
+      "mint"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-51.png",
+    "name": "Memphis Ocean",
+    "tags": [
+      "pattern",
+      "memphis",
+      "retro",
+      "ocean"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-52.png",
+    "name": "Memphis Forest",
+    "tags": [
+      "pattern",
+      "memphis",
+      "retro",
+      "forest"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-53.png",
+    "name": "Memphis Lavender",
+    "tags": [
+      "pattern",
+      "memphis",
+      "retro",
+      "lavender"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-54.png",
+    "name": "Memphis Mono",
+    "tags": [
+      "pattern",
+      "memphis",
+      "retro",
+      "mono"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-55.png",
+    "name": "Memphis Berry",
+    "tags": [
+      "pattern",
+      "memphis",
+      "retro",
+      "berry"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-56.png",
+    "name": "Memphis Kraft",
+    "tags": [
+      "pattern",
+      "memphis",
+      "retro",
+      "kraft"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-57.png",
+    "name": "Memphis Mint",
+    "tags": [
+      "pattern",
+      "memphis",
+      "retro",
+      "mint"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-58.png",
+    "name": "Memphis Blush",
+    "tags": [
+      "pattern",
+      "memphis",
+      "retro",
+      "blush"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-59.png",
+    "name": "Memphis Navy and gold",
+    "tags": [
+      "pattern",
+      "memphis",
+      "retro",
+      "navy"
+    ],
+    "category": "Patterns"
+  },
+  {
+    "file": "pat-60.png",
+    "name": "Memphis Sunset",
+    "tags": [
+      "pattern",
+      "memphis",
+      "retro",
+      "sunset"
+    ],
+    "category": "Patterns"
+  }
+]

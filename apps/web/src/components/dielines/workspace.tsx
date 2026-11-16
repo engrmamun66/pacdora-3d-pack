@@ -692,10 +692,14 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
                   e.preventDefault();
                 }}
               >
-                {/* A wide invisible grab area around a thin line; the line turns blue on hover, focus and while dragging. */}
+                {/* A wide invisible grab area around the line. Same look as the divider in the artwork editor: always visible, always the same shape; hover, focus and dragging only add a soft blue glow. */}
                 <span aria-hidden className="absolute inset-y-0 -left-2 w-4" />
-                <span aria-hidden className="absolute inset-y-0 left-[-1px] w-0.5 bg-border transition-colors group-hover:bg-primary group-focus-visible:bg-primary group-active:bg-primary" />
-                <span aria-hidden className="absolute top-1/2 left-0 h-10 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full border bg-background shadow-sm group-hover:border-primary" />
+                <span aria-hidden className="absolute inset-y-0 left-0 w-px -translate-x-1/2 bg-border transition-shadow duration-150 group-hover:shadow-[0_0_3px_rgba(59,130,246,0.35)] group-focus-visible:shadow-[0_0_3px_rgba(59,130,246,0.35)] group-active:shadow-[0_0_4px_1px_rgba(59,130,246,0.5)]" />
+                <span aria-hidden className="absolute top-1/2 left-0 flex h-12 w-3 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-full border bg-background shadow-sm transition-shadow duration-150 group-hover:shadow-[0_0_4px_rgba(59,130,246,0.35)] group-focus-visible:shadow-[0_0_4px_rgba(59,130,246,0.35)] group-active:shadow-[0_0_5px_1px_rgba(59,130,246,0.5)]">
+                  <span className="size-[3px] rounded-full bg-muted-foreground/70" />
+                  <span className="size-[3px] rounded-full bg-muted-foreground/70" />
+                  <span className="size-[3px] rounded-full bg-muted-foreground/70" />
+                </span>
               </div>
               <div className="flex min-h-[40vh] min-w-0 flex-1 basis-0 flex-col gap-2 p-4 lg:min-h-0">
                 <FoldPreview large onReady={() => splitDone("box")} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />

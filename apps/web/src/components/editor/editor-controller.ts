@@ -1,8 +1,8 @@
 import { ActiveSelection, Canvas, Ellipse, type FabricObject, FabricImage, Line, Point, Rect, Textbox, type TMat2D, util } from "fabric";
-import { type AnchorIndex, anchorFor, anchorIndex, panelAt } from "@packaging/artwork";
+import { type AnchorIndex, anchorFor, anchorIndex, backgroundPlacement, panelAt } from "@packaging/artwork";
 import { type DielineGeometry, flattenOutline, panelOutline } from "@packaging/dieline-engine";
 import { STYLE, outlinePathD } from "@packaging/render-svg";
-import { type Artwork, type ArtworkObject, type BoxBackground, artworkObject, boxBackground, MM_PER_PT } from "@packaging/schema";
+import { type Artwork, type ArtworkObject, type BoxBackground, MAX_BACKGROUNDS, artworkObject, backgroundsOf, boxBackground, MM_PER_PT } from "@packaging/schema";
 import { loadBackgroundImage, paintBackground } from "./background";
 import { applyLock, assetUrl, fromFabric, metaOf, retag, toFabric } from "./fabric-map";
 import { installSelectionStyle, styleFrame } from "./selection-style";
@@ -23,6 +23,10 @@ export interface EditorCallbacks {
   onError(message: string): void;
   /** A right click (no drag) on artwork: where to show its menu (px from the canvas top-left); the artwork is selected. */
   onContextMenu?(at: { x: number; y: number }): void;
+  /** The chosen background picture changed (index into the stack, -1 = none). */
+  onBackgroundSelect?(index: number): void;
+  /** The "adjust the background on the dieline" mode was switched on or off (also by the editor itself, e.g. when the background is removed). */
+  onBackgroundEdit?(on: boolean): void;
 }
 
 export interface OverlayOptions {
@@ -71,12 +75,30 @@ export class EditorController {
   private history: string[] = [];
   private hpos = -1;
   private busy = false;
-  private bg: BoxBackground | null = null;
-  private bgImg: HTMLImageElement | null = null;
+  /** Background pictures, bottom to top, with their loaded images (null = could not be loaded) and the chosen one. */
+  private bgs: BoxBackground[] = [];
+  private bgImgs: (HTMLImageElement | null)[] = [];
+  private bgSel = -1;
+  /** The chosen background picture: what the edit mode moves and resizes. */
+  private get bg(): BoxBackground | null {
+    return this.bgs[this.bgSel] ?? null;
+  }
+  private set bg(v: BoxBackground | null) {
+    if (v && this.bgSel >= 0) this.bgs[this.bgSel] = v;
+  }
+  private get bgImg(): HTMLImageElement | null {
+    return this.bgImgs[this.bgSel] ?? null;
+  }
   private textTimer: ReturnType<typeof setTimeout> | null = null;
   private panning: { x: number; y: number } | null = null;
   spaceDown = false;
   private panMode = false;
+  /** Background edit mode: the box background can be moved and resized with the pointer; artwork cannot be picked. */
+  private bgEdit = false;
+  private bgDrag:
+    | { kind: "move"; px: number; py: number; dx: number; dy: number }
+    | { kind: "scale"; cx: number; cy: number; hx: number; hy: number; scale: number }
+    | null = null;
   private expanding = false;
   /** Guide lines (sheet mm) shown while artwork is being moved: x = vertical lines, y = horizontal ones. */
   private guides: { x: number[]; y: number[] } = { x: [], y: [] };
@@ -130,9 +152,12 @@ export class EditorController {
         this.panning = { x: me.clientX, y: me.clientY };
         this.canvas.selection = false;
         this.canvas.discardActiveObject();
+      } else if (this.bgEdit && me.button === 0) {
+        this.bgDown(me);
       }
     });
     this.canvas.on("mouse:move", ({ e }) => {
+      if (this.bgEdit && !this.panning) return this.bgMove(e as MouseEvent);
       if (!this.panning) return;
       const me = e as MouseEvent;
       this.pan(me.clientX - this.panning.x, me.clientY - this.panning.y);
@@ -140,7 +165,8 @@ export class EditorController {
     });
     this.canvas.on("mouse:up", () => {
       this.panning = null;
-      this.canvas.selection = !this.panMode;
+      this.canvas.selection = !this.panMode && !this.bgEdit;
+      this.bgUp();
     });
 
     // Right-button drag moves the view (left/right/up/down) wherever the pointer is, even over artwork.
@@ -248,7 +274,10 @@ export class EditorController {
     ctx.fillStyle = "#ffffff";
     ctx.fill(this.paths.sheet, "nonzero");
     ctx.shadowBlur = 0;
-    if (this.bg && this.bgImg) paintBackground(ctx, this.geo, this.bg, this.bgImg);
+    this.bgs.forEach((b, i) => {
+      const img = this.bgImgs[i];
+      if (img) paintBackground(ctx, this.geo, b, img);
+    });
     ctx.fillStyle = "rgba(245,185,66,0.25)";
     ctx.fill(this.paths.glue);
     if (this.overlay.showGrid) this.drawGrid(ctx, z);
@@ -304,6 +333,7 @@ export class EditorController {
     ctx.strokeStyle = STYLE.cut.stroke;
     ctx.stroke(this.paths.cut);
     this.drawGuides(ctx, z);
+    this.drawBackgroundFrame(ctx, z);
     ctx.restore();
   }
 
@@ -330,6 +360,162 @@ export class EditorController {
     }
     ctx.stroke();
     ctx.setLineDash([]);
+  }
+
+  // ---------------------------------------------------------------- background edit mode
+
+  /** Switch the "move and resize the box background on the dieline" mode on or off. It needs a background that is loaded. */
+  setBackgroundEdit(on: boolean) {
+    const next = on && Boolean(this.bg && this.bgImg);
+    if (next === this.bgEdit) return;
+    this.bgEdit = next;
+    this.bgDrag = null;
+    this.canvas.skipTargetFind = next || this.panMode;
+    this.canvas.selection = !next && !this.panMode;
+    if (next) this.canvas.discardActiveObject();
+    this.setCursors(this.panMode ? "grab" : null);
+    this.clearGuides();
+    this.canvas.requestRenderAll();
+    this.cb.onBackgroundEdit?.(next);
+  }
+
+  isBackgroundEditing() {
+    return this.bgEdit;
+  }
+
+  private bgPlacement(i = this.bgSel) {
+    const b = this.bgs[i];
+    const img = this.bgImgs[i];
+    return b && img ? backgroundPlacement(this.geo, b, img.naturalWidth, img.naturalHeight) : null;
+  }
+
+  /** The topmost background picture under a point of the sheet, or -1. */
+  private bgAt(pt: { x: number; y: number }): number {
+    for (let i = this.bgs.length - 1; i >= 0; i--) {
+      const p = this.bgPlacement(i);
+      if (p && Math.abs(pt.x - p.cx) <= p.width / 2 && Math.abs(pt.y - p.cy) <= p.height / 2) return i;
+    }
+    return -1;
+  }
+
+  /** The grips sit on the corners of the part of the picture that shows inside the print area, so they are always reachable. */
+  private bgGrips(): { x: number; y: number }[] {
+    const p = this.bgPlacement();
+    if (!p) return [];
+    const x0 = Math.max(p.cx - p.width / 2, p.clip.minX);
+    const x1 = Math.min(p.cx + p.width / 2, p.clip.minX + p.clip.width);
+    const y0 = Math.max(p.cy - p.height / 2, p.clip.minY);
+    const y1 = Math.min(p.cy + p.height / 2, p.clip.minY + p.clip.height);
+    return [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+  }
+
+  private pointerScene(e: MouseEvent) {
+    const r = this.canvas.upperCanvasEl.getBoundingClientRect();
+    return this.sceneAt(e.clientX - r.left, e.clientY - r.top);
+  }
+
+  private bgHit(pt: { x: number; y: number }): "scale" | "move" | null {
+    const p = this.bgPlacement();
+    if (!p) return null;
+    const tol = 11 / this.canvas.getZoom();
+    if (this.bgGrips().some((g) => Math.hypot(g.x - pt.x, g.y - pt.y) <= tol)) return "scale";
+    return this.bgAt(pt) >= 0 ? "move" : null;
+  }
+
+  private bgDown(e: MouseEvent) {
+    const pt = this.pointerScene(e);
+    const hit = this.bgHit(pt);
+    if (hit === "move") {
+      // A press on another picture chooses it first.
+      const at = this.bgAt(pt);
+      if (at >= 0 && at !== this.bgSel) this.selectBackground(at);
+    }
+    const p = this.bgPlacement();
+    if (!p || !this.bg) return;
+    if (hit === "scale") {
+      const g = this.bgGrips().reduce((a, b) => (Math.hypot(b.x - pt.x, b.y - pt.y) < Math.hypot(a.x - pt.x, a.y - pt.y) ? b : a));
+      this.bgDrag = { kind: "scale", cx: p.cx, cy: p.cy, hx: g.x - p.cx, hy: g.y - p.cy, scale: this.bg.scale };
+    } else if (hit === "move") {
+      this.bgDrag = { kind: "move", px: pt.x, py: pt.y, dx: this.bg.dx, dy: this.bg.dy };
+    }
+  }
+
+  private bgMove(e: MouseEvent) {
+    const bg = this.bg;
+    const p = this.bgPlacement();
+    if (!bg || !p) return;
+    const pt = this.pointerScene(e);
+    const d = this.bgDrag;
+    if (!d) {
+      const hit = this.bgHit(pt);
+      this.canvas.defaultCursor = this.canvas.hoverCursor = hit === "scale" ? "nwse-resize" : hit === "move" ? "move" : "default";
+      return;
+    }
+    if (d.kind === "scale") {
+      // Keep the centre; the grip follows the pointer along its diagonal.
+      const k = ((pt.x - d.cx) * d.hx + (pt.y - d.cy) * d.hy) / (d.hx * d.hx + d.hy * d.hy);
+      const scale = Math.min(10, Math.max(0.1, d.scale * Math.max(k, 0.01)));
+      this.bg = { ...bg, scale: Math.round(scale * 1000) / 1000 };
+    } else {
+      let dx = d.dx + (pt.x - d.px);
+      let dy = d.dy + (pt.y - d.py);
+      const guides = { x: [] as number[], y: [] as number[] };
+      if (!e.altKey) {
+        // Snap the picture's edges and centre to the print area's (Alt = no snapping).
+        const z = this.canvas.getZoom();
+        const thr = 6 / z;
+        const b = this.geo.bleedBounds;
+        const baseX = (b.min.x + b.max.x) / 2;
+        const baseY = (b.min.y + b.max.y) / 2;
+        const snap = (centre: number, half: number, lo: number, hi: number, out: number[]) => {
+          let best: { off: number; at: number } | null = null;
+          for (const [mine, target] of [[centre - half, lo], [centre + half, hi], [centre, (lo + hi) / 2]] as const) {
+            const off = target - mine;
+            if (Math.abs(off) <= thr && (!best || Math.abs(off) < Math.abs(best.off))) best = { off, at: target };
+          }
+          if (best) out.push(best.at);
+          return best ? best.off : 0;
+        };
+        dx += snap(baseX + dx, p.width / 2, b.min.x, b.max.x, guides.x);
+        dy += snap(baseY + dy, p.height / 2, b.min.y, b.max.y, guides.y);
+      }
+      this.guides = guides;
+      this.bg = { ...bg, dx: Math.round(dx * 100) / 100, dy: Math.round(dy * 100) / 100 };
+    }
+    this.canvas.requestRenderAll();
+  }
+
+  private bgUp() {
+    if (!this.bgDrag) return;
+    this.bgDrag = null;
+    this.clearGuides();
+    this.commit();
+  }
+
+  /** Frame of the whole picture (it may reach beyond the print area) and a round grip on each visible corner. */
+  private drawBackgroundFrame(ctx: CanvasRenderingContext2D, z: number) {
+    if (!this.bgEdit) return;
+    const p = this.bgPlacement();
+    if (!p) return;
+    ctx.save();
+    ctx.setLineDash([]);
+    ctx.lineWidth = 2 / z;
+    ctx.strokeStyle = "#3b82f6";
+    ctx.strokeRect(p.cx - p.width / 2, p.cy - p.height / 2, p.width, p.height);
+    for (const g of this.bgGrips()) {
+      ctx.beginPath();
+      ctx.arc(g.x, g.y, 7.2 / z, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(99,102,241,0.18)";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(g.x, g.y, 6 / z, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      ctx.lineWidth = 1 / z;
+      ctx.strokeStyle = "#e4e1ff";
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   private clearGuides() {
@@ -434,8 +620,8 @@ export class EditorController {
   /** Hand tool: dragging moves the view, and objects cannot be picked or moved until it is switched off. */
   setPanMode(on: boolean) {
     this.panMode = on;
-    this.canvas.skipTargetFind = on;
-    this.canvas.selection = !on;
+    this.canvas.skipTargetFind = on || this.bgEdit;
+    this.canvas.selection = !on && !this.bgEdit;
     this.setCursors(on ? "grab" : null);
     if (on) this.canvas.discardActiveObject();
     this.canvas.requestRenderAll();
@@ -484,7 +670,7 @@ export class EditorController {
         artwork.objects.filter((o) => o.type === "text").map((o) => o.type === "text" && ensureFont(o.fontFamily, o.fontWeight, o.fontStyle)),
       );
       const objs = await Promise.all(artwork.objects.map((o) => this.create(o)));
-      await this.applyBackground(artwork.background ?? null);
+      await this.applyBackgrounds(backgroundsOf(artwork));
       this.canvas.discardActiveObject();
       this.canvas.remove(...this.canvas.getObjects());
       if (objs.length) this.canvas.add(...objs);
@@ -494,35 +680,86 @@ export class EditorController {
     }
   }
 
-  /** Use `bg` as the box background; a failed image load keeps the data (so saving does not lose it). */
-  private async applyBackground(bg: BoxBackground | null) {
-    this.bg = bg;
-    this.bgImg = null;
-    if (!bg) return;
-    try {
-      this.bgImg = await loadBackgroundImage(bg.assetId);
-    } catch {
-      this.cb.onError("The box background image could not be loaded.");
+  /** Use `list` as the background pictures; one that fails to load keeps its data (so saving does not lose it) but is not drawn. */
+  private async applyBackgrounds(list: BoxBackground[]) {
+    const imgs = await Promise.all(list.map((b) => loadBackgroundImage(b.assetId).catch(() => null)));
+    if (imgs.some((i) => !i)) this.cb.onError("A box background image could not be loaded.");
+    this.bgs = list;
+    this.bgImgs = imgs;
+    this.bgSel = list.length ? Math.min(Math.max(this.bgSel, 0), list.length - 1) : -1;
+    if (!this.bgImg) this.setBackgroundEdit(false);
+    this.cb.onBackgroundSelect?.(this.bgSel);
+  }
+
+  getBackgrounds(): readonly BoxBackground[] {
+    return this.bgs;
+  }
+
+  /** Choose which background picture the edit mode and the panel work on. */
+  selectBackground(i: number) {
+    if (i < 0 || i >= this.bgs.length || i === this.bgSel) return;
+    this.bgSel = i;
+    this.bgDrag = null;
+    if (this.bgEdit && !this.bgImg) this.setBackgroundEdit(false);
+    this.canvas.requestRenderAll();
+    this.cb.onBackgroundSelect?.(i);
+  }
+
+  /** Put another picture on top of the stack and choose it. One undo step. */
+  async addBackground(bg: BoxBackground) {
+    if (this.bgs.length >= MAX_BACKGROUNDS) {
+      this.cb.onError(`A box can have at most ${MAX_BACKGROUNDS} background pictures. Remove one first.`);
+      return;
     }
+    const parsed = boxBackground.safeParse(bg);
+    if (!parsed.success) {
+      this.cb.onError(parsed.error.issues[0]?.message ?? "Invalid value.");
+      return;
+    }
+    await this.applyBackgrounds([...this.bgs, parsed.data]);
+    this.bgSel = this.bgs.length - 1;
+    this.cb.onBackgroundSelect?.(this.bgSel);
+    this.canvas.requestRenderAll();
+    this.commit();
   }
 
-  getBackground(): BoxBackground | null {
-    return this.bg;
-  }
-
-  /** Set, change (partial patch) or clear (null) the box background. One undo step. */
-  async setBackground(patch: BoxBackground | Partial<BoxBackground> | null) {
-    if (patch === null) {
-      await this.applyBackground(null);
+  /** Change one background picture (partial patch). One undo step. */
+  async patchBackground(i: number, patch: Partial<BoxBackground>) {
+    const cur = this.bgs[i];
+    if (!cur) return;
+    const parsed = boxBackground.safeParse({ ...cur, ...patch });
+    if (!parsed.success) {
+      this.cb.onError(parsed.error.issues[0]?.message ?? "Invalid value.");
+      return;
+    }
+    if (parsed.data.assetId !== cur.assetId || !this.bgImgs[i]) {
+      await this.applyBackgrounds(this.bgs.map((b, k) => (k === i ? parsed.data : b)));
     } else {
-      const parsed = boxBackground.safeParse({ ...this.bg, ...patch });
-      if (!parsed.success) {
-        this.cb.onError(parsed.error.issues[0]?.message ?? "Invalid value.");
-        return;
-      }
-      if (parsed.data.assetId !== this.bg?.assetId || !this.bgImg) await this.applyBackground(parsed.data);
-      else this.bg = parsed.data;
+      this.bgs[i] = parsed.data;
     }
+    this.canvas.requestRenderAll();
+    this.commit();
+  }
+
+  /** Take one background picture away. One undo step. */
+  async removeBackground(i: number) {
+    if (!this.bgs[i]) return;
+    const sel = this.bgSel > i || this.bgSel === this.bgs.length - 1 ? this.bgSel - 1 : this.bgSel;
+    this.bgSel = sel;
+    await this.applyBackgrounds(this.bgs.filter((_, k) => k !== i));
+    this.canvas.requestRenderAll();
+    this.commit();
+  }
+
+  /** Move a background picture up (+1) or down (-1) the stack; it stays the chosen one. One undo step. */
+  moveBackground(i: number, delta: -1 | 1) {
+    const k = i + delta;
+    if (!this.bgs[i] || k < 0 || k >= this.bgs.length) return;
+    [this.bgs[i], this.bgs[k]] = [this.bgs[k]!, this.bgs[i]!];
+    [this.bgImgs[i], this.bgImgs[k]] = [this.bgImgs[k]!, this.bgImgs[i]!];
+    if (this.bgSel === i) this.bgSel = k;
+    else if (this.bgSel === k) this.bgSel = i;
+    this.cb.onBackgroundSelect?.(this.bgSel);
     this.canvas.requestRenderAll();
     this.commit();
   }
@@ -555,7 +792,7 @@ export class EditorController {
       const a = fromFabric(o, this.idx);
       if (a) objects.push(a);
     }
-    return this.bg ? { objects, background: this.bg } : { objects };
+    return this.bgs.length ? { objects, backgrounds: [...this.bgs] } : { objects };
   }
 
   /** Record the current state as one undo step and notify. */
@@ -810,6 +1047,12 @@ export class EditorController {
 
   /** Nudge the selection by (dx, dy) mm. */
   nudge(dx: number, dy: number) {
+    if (this.bgEdit && this.bg) {
+      this.bg = { ...this.bg, dx: this.bg.dx + dx, dy: this.bg.dy + dy };
+      this.canvas.requestRenderAll();
+      this.commit();
+      return;
+    }
     const a = this.canvas.getActiveObject();
     if (!a || (a instanceof Textbox && a.isEditing)) return;
     if (metaOf(a)?.locked) return;

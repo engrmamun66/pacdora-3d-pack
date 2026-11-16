@@ -1,6 +1,6 @@
 "use server";
 
-import { MAX_ARTWORK_JSON_BYTES, artworkSchema, parseProjectDoc, projectDocV1 } from "@packaging/schema";
+import { MAX_ARTWORK_JSON_BYTES, artworkSchema, backgroundsOf, parseProjectDoc, projectDocV1 } from "@packaging/schema";
 import { db } from "@/server/db";
 import { LIMITS, takeToken } from "@/server/limits";
 import { requireUser } from "@/server/session";
@@ -29,7 +29,7 @@ export async function saveArtwork(projectId: string, artwork: unknown): Promise<
 
   // Every referenced image must belong to this user.
   const assetIds = [
-    ...new Set([...parsed.data.objects.flatMap((o) => (o.type === "image" ? [o.assetId] : [])), ...(parsed.data.background ? [parsed.data.background.assetId] : [])]),
+    ...new Set([...parsed.data.objects.flatMap((o) => (o.type === "image" ? [o.assetId] : [])), ...backgroundsOf(parsed.data).map((b) => b.assetId)]),
   ];
   if (assetIds.length) {
     const owned = await db.asset.count({ where: { id: { in: assetIds }, userId: user.id } });

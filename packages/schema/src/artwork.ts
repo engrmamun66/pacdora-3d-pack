@@ -77,10 +77,12 @@ export type ArtworkObject = z.infer<typeof artworkObject>;
 export type ArtworkType = ArtworkObject["type"];
 
 /**
- * Box background: one uploaded image that fills the print area (bleed bounds)
- * under all other artwork. Unlike an image object it is not anchored to a panel:
+ * Box background: an uploaded image that fills the print area (bleed bounds)
+ * under all other artwork. A box can have several, stacked bottom to top (`backgrounds`). Unlike an image object it is not anchored to a panel:
  * `fit` decides the base size, `scale` zooms it, (dx, dy) shifts it from centre.
  */
+/** At most this many stacked background pictures. */
+export const MAX_BACKGROUNDS = 8;
 export const BACKGROUND_FITS = ["cover", "contain", "stretch"] as const;
 export const boxBackground = z.object({
   assetId: z.string().min(1).max(40),
@@ -97,7 +99,9 @@ export const artworkSchema = z
   .object({
     /** Bottom to top. */
     objects: z.array(artworkObject).max(2000),
-    /** Optional image under everything else; absent or null = none. */
+    /** Background pictures under everything else, bottom to top; absent or empty = none. */
+    backgrounds: z.array(boxBackground).max(MAX_BACKGROUNDS).optional(),
+    /** Older files: the single background they had. Read it through `backgroundsOf`; new saves write `backgrounds`. */
     background: boxBackground.nullable().optional(),
   })
   .superRefine((a, ctx) => {
@@ -108,6 +112,11 @@ export const artworkSchema = z
     });
   });
 export type Artwork = z.infer<typeof artworkSchema>;
+
+/** The background pictures of an artwork, bottom to top (an older file's single `background` counts as one). */
+export function backgroundsOf(a: { backgrounds?: readonly BoxBackground[] | undefined; background?: BoxBackground | null | undefined }): BoxBackground[] {
+  return a.backgrounds ? [...a.backgrounds] : a.background ? [a.background] : [];
+}
 
 /** Hard cap on the serialised artwork size accepted by the server. */
 export const MAX_ARTWORK_JSON_BYTES = 1_000_000;

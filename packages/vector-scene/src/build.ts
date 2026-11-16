@@ -1,7 +1,7 @@
 import * as fontkit from "fontkit";
 import { anchorIndex, backgroundPlacement, objectCentre } from "@packaging/artwork";
 import { type DielineGeometry, type WatermarkSpec, flattenOutline, layoutWatermark } from "@packaging/dieline-engine";
-import { type Artwork, type ArtworkFont, type ArtworkObject, type BoxBackground, MM_PER_PT } from "@packaging/schema";
+import { type Artwork, type ArtworkFont, type ArtworkObject, type BoxBackground, MM_PER_PT, backgroundsOf } from "@packaging/schema";
 import { ellipsePath, linePath, mul, outlinePath, pathBounds, polygonPath, rectPath, rotate, scale, transformPath, translate } from "./geometry";
 import { imageSize, imageSizeProblem } from "./images";
 import { layoutTextbox, lineOutlines, measureWith } from "./text";
@@ -102,7 +102,7 @@ export async function buildScene(
     const budget = { bytes: 0, warned: false };
     const items: SceneItem[] = [];
     // Box background first: it sits under every other artwork item.
-    if (artwork.background) items.push(...(await backgroundItems(geo, artwork.background, { images: src.images, losses, budget })));
+    for (const bg of backgroundsOf(artwork)) items.push(...(await backgroundItems(geo, bg, { images: src.images, losses, budget })));
     for (const a of artwork.objects) {
       if (!a.visible) continue;
       items.push(...(await artworkItems(a, objectCentre(idx, a), { fontFor, images: src.images, losses, budget })));

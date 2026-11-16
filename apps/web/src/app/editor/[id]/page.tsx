@@ -25,8 +25,9 @@ async function EditorView({ params }: { params: PageProps<"/editor/[id]">["param
   const library = await db.artworkItem.findMany({
     orderBy: [{ category: "asc" }, { createdAt: "desc" }],
     select: { id: true, name: true, tags: true, category: true },
-    take: 500,
+    take: 1000,
   });
+  const favorites = await db.artworkFavorite.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, select: { artworkId: true } });
   const imported = project.doc.template.generatorId === IMPORTED_GENERATOR_ID ? await loadImportedSource(project.doc.template.presetId) : null;
   if (project.doc.template.generatorId === IMPORTED_GENERATOR_ID && !imported) {
     return <p className="p-8 text-destructive">The template this project was made from is no longer available.</p>;
@@ -43,6 +44,7 @@ async function EditorView({ params }: { params: PageProps<"/editor/[id]">["param
       artwork={project.doc.artwork}
       assets={assets}
       library={library}
+      favoriteIds={favorites.map((f) => f.artworkId)}
       threeD={project.doc.threeD}
       watermark={await getWatermark(user)}
     />

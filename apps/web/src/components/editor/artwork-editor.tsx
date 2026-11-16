@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKGROUND_CATEGORY } from "@/lib/artwork-meta";
 import { notify } from "@/lib/notify";
 import "./fonts";
 import Link from "next/link";
@@ -30,7 +31,7 @@ import {
 import { applyWindows, createImportedGenerator, generateDieline, type FlatDieline, type FoldSetup, type WatermarkSpec, type WindowSpec } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import type { ViewSettings } from "@/lib/view-settings";
-import type { Artwork, ArtworkObject, BoxBackground } from "@packaging/schema";
+import { type Artwork, type ArtworkObject, type BoxBackground, MAX_BACKGROUNDS, backgroundsOf } from "@packaging/schema";
 import { saveArtwork, saveThreeD } from "@/app/editor/[id]/actions";
 import { Preview3D, type ThreeDSettings } from "@/components/viewer3d/preview-3d";
 import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
@@ -49,6 +50,10 @@ const PX_PER_MM_AT_100 = 96 / 25.4;
 
 /** Editor columns (px): the side panels are fixed; the dieline and the 3D view share the rest and can be resized. */
 const LEFT_W = 240;
+/** The Artwork section of the left panel: its share of the height, and the least and most the divider allows. */
+const SPLIT_DEFAULT = 70;
+const SPLIT_MIN = 25;
+const SPLIT_MAX = 85;
 const RIGHT_W = 288;
 const MIN_3D = 240;
 const MIN_CANVAS = 320;
@@ -104,6 +109,7 @@ export function ArtworkEditor({
   artwork: initialArtwork,
   assets: initialAssets,
   library = [],
+  favoriteIds = [],
   threeD: initialThreeD,
   watermark = null,
 }: {
@@ -121,12 +127,17 @@ export function ArtworkEditor({
   assets: Asset[];
   /** Pictures the admin keeps for everyone (the "Library" tab). */
   library?: PickerLibraryItem[];
+  /** Library pictures this customer starred, newest first (the "Favorites" tab). */
+  favoriteIds?: string[];
   threeD: ThreeDSettings;
   /** Put into the PNG and 3D downloads (the server adds it to the other files); null = none. */
   watermark?: WatermarkSpec | null;
 }) {
   // Keyed by value: a props refresh with equal params must not rebuild the editor (and lose undo history).
   const paramsKey = JSON.stringify(params);
+  // Background pictures have their own list in the Background panel; the Artwork Library tab shows the rest.
+  const backgroundLibrary = useMemo(() => library.filter((l) => l.category === BACKGROUND_CATEGORY), [library]);
+  const artworkLibrary = useMemo(() => library.filter((l) => l.category !== BACKGROUND_CATEGORY), [library]);
   const windowsKey = JSON.stringify(windows);
   const geo = useMemo(() => {
     try {
@@ -146,7 +157,11 @@ export function ArtworkEditor({
   const ctl = useRef<EditorController | null>(null);
 
   const [objects, setObjects] = useState<ArtworkObject[]>(initialArtwork.objects);
-  const [background, setBackground] = useState<BoxBackground | null>(initialArtwork.background ?? null);
+  const [backgrounds, setBackgrounds] = useState<BoxBackground[]>(() => backgroundsOf(initialArtwork));
+  const [bgSelected, setBgSelected] = useState(-1);
+  /** File names of the private copies made from library backgrounds (the layer list shows them). */
+  const [libNames, setLibNames] = useState<Record<string, string>>({});
+  const [bgEditing, setBgEditing] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [selectedData, setSelectedData] = useState<ArtworkObject | null>(null);
   const [history, setHistory] = useState({ canUndo: false, canRedo: false });
@@ -168,6 +183,30 @@ export function ArtworkEditor({
     }
   });
   const gridEl = useRef<HTMLDivElement>(null);
+  /** Share (%) of the left panel height the Artwork section takes; the rest is the layer list. Set by dragging the divider, remembered in this browser. */
+  const [splitPct, setSplitPct] = useState<number>(() => {
+    try {
+      const v = Number(localStorage.getItem("editor.artworkHeight"));
+      return Number.isFinite(v) && v >= SPLIT_MIN && v <= SPLIT_MAX ? v : SPLIT_DEFAULT;
+    } catch {
+      return SPLIT_DEFAULT;
+    }
+  });
+  const leftEl = useRef<HTMLElement>(null);
+  const clampSplit = (v: number) => Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, v));
+  /** Keep the height (and remember it in this browser). While dragging only the CSS variable moves, see `dragSplit`. */
+  const saveSplit = (v: number) => {
+    const next = Math.round(clampSplit(v) * 10) / 10;
+    setSplitPct(next);
+    try {
+      if (next === SPLIT_DEFAULT) localStorage.removeItem("editor.artworkHeight");
+      else localStorage.setItem("editor.artworkHeight", String(next));
+    } catch {
+      /* private mode: the height just is not remembered */
+    }
+  };
+  /** A drag in progress: where inside the grip the pointer took hold, the frame waiting to draw, and the latest height. */
+  const dragSplit = useRef<{ grab: number; frame: number | null; pct: number } | null>(null);
   const draggedW = useRef<number | null>(null);
   const saveThreeW = (w: number | null) => {
     setThreeW(w);
@@ -186,7 +225,7 @@ export function ArtworkEditor({
   const [showExport, setShowExport] = useState(false);
   const [threeD, setThreeD] = useState<ThreeDSettings>(initialThreeD);
   const view3d = useRef<CartonViewHandle>(null);
-  const artworkForPreview = useMemo<Artwork>(() => ({ objects, background }), [objects, background]);
+  const artworkForPreview = useMemo<Artwork>(() => ({ objects, backgrounds }), [objects, backgrounds]);
   const updateThreeD = (s: ThreeDSettings) => {
     setThreeD(s);
     void saveThreeD(projectId, s).then((r) => {
@@ -230,7 +269,7 @@ export function ArtworkEditor({
     const c = new EditorController(canvasEl.current, geo, {
       onChange: (art) => {
         setObjects(art.objects);
-        setBackground(art.background ?? null);
+        setBackgrounds(backgroundsOf(art));
         saver.schedule(art);
       },
       onSelection: (ids) => {
@@ -245,6 +284,8 @@ export function ArtworkEditor({
       onContextMenu: (at) => setMenu({ ...c.stackState(), x: Math.max(0, Math.min(at.x, (hostEl.current?.clientWidth ?? 0) - 190)), y: Math.max(0, Math.min(at.y, (hostEl.current?.clientHeight ?? 0) - 270)) }),
       onHistory: setHistory,
       onError: (text) => notify.error(text),
+      onBackgroundEdit: setBgEditing,
+      onBackgroundSelect: setBgSelected,
     });
     ctl.current = c;
     if (process.env.NODE_ENV !== "production") Object.assign(window, { __editor: c });
@@ -289,6 +330,8 @@ export function ArtworkEditor({
         c.spaceDown = true;
         hostEl.current?.style.setProperty("cursor", "grab");
         e.preventDefault();
+      } else if (e.key === "Escape" && c.isBackgroundEditing()) {
+        c.setBackgroundEdit(false);
       } else if (mod && e.key.toLowerCase() === "z") {
         e.preventDefault();
         void (e.shiftKey ? c.redo() : c.undo());
@@ -345,7 +388,7 @@ export function ArtworkEditor({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ------------------------------------------------------------ uploads and placing
-  /** Upload one picture; it joins "My uploads". Returns the new asset, or null (the reason is shown). */
+  /** Upload one picture; it joins "Uploads". Returns the new asset, or null (the reason is shown). */
   const uploadOne = async (file: File): Promise<Asset | null> => {
     try {
       const body = new FormData();
@@ -376,14 +419,14 @@ export function ArtworkEditor({
       if (opts.place) await ctl.current?.addImage(a.id, a.fileName, opts.at ? { x: opts.at.x + i * 24, y: opts.at.y + i * 24 } : undefined);
     }
     setUploading(false);
-    if (added > 1 || (added === 1 && !opts.place)) notify.success(added === 1 ? "Picture added to My uploads." : `${added} pictures added to My uploads.`);
+    if (added > 1 || (added === 1 && !opts.place)) notify.success(added === 1 ? "Picture added to Uploads." : `${added} pictures added to Uploads.`);
   };
 
   const uploadBackground = async (file: File) => {
     setUploading(true);
     const a = await uploadOne(file);
     setUploading(false);
-    if (a) await ctl.current?.setBackground({ assetId: a.id, fit: "cover", scale: 1, dx: 0, dy: 0, opacity: 1 });
+    if (a) await addBackground(a.id);
   };
 
   /** Put a picture on the dieline: an upload directly, a library picture after its private copy is made. */
@@ -394,6 +437,26 @@ export function ArtworkEditor({
       const json = (await res.json().catch(() => ({}))) as { asset?: Asset; error?: string };
       if (!res.ok || !json.asset) throw new Error(json.error ?? `Could not use this picture (${res.status}).`);
       await ctl.current?.addImage(json.asset.id, d.name, at);
+    } catch (e) {
+      notify.error((e as Error).message);
+    }
+  };
+
+  /** Put a picture on top of the background stack. The first one fills the box; later ones start smaller (fit inside, 60 %) so the ones below still show. */
+  const addBackground = async (assetId: string) => {
+    const first = backgrounds.length === 0;
+    await ctl.current?.addBackground({ assetId, fit: first ? "cover" : "contain", scale: first ? 1 : 0.6, dx: 0, dy: 0, opacity: 1 });
+  };
+
+  /** A ready-made background picture: its private copy is made first, like for any library picture, then it joins the stack. */
+  const pickLibraryBackground = async (pictureId: string) => {
+    try {
+      const res = await fetch("/api/assets/from-library", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ artworkId: pictureId, projectId }) });
+      const json = (await res.json().catch(() => ({}))) as { asset?: Asset; error?: string };
+      if (!res.ok || !json.asset) throw new Error(json.error ?? `Could not use this picture (${res.status}).`);
+      const copy = json.asset;
+      setLibNames((n) => ({ ...n, [copy.id]: copy.fileName }));
+      await addBackground(copy.id);
     } catch (e) {
       notify.error((e as Error).message);
     }
@@ -453,7 +516,7 @@ export function ArtworkEditor({
           onChange={(e) => {
             const f = Array.from(e.target.files ?? []);
             e.target.value = "";
-            // One picture goes straight onto the dieline; several are added to My uploads to be dragged from there.
+            // One picture goes straight onto the dieline; several are added to Uploads to be dragged from there.
             if (f.length) void uploadMany(f, { place: f.length === 1 });
           }}
         />
@@ -496,7 +559,7 @@ export function ArtworkEditor({
         style={{ gridTemplateColumns: show3d && foldable ? `${LEFT_W}px minmax(0,1fr) ${threeW === null ? "minmax(280px,38%)" : `${threeW}px`} ${RIGHT_W}px` : `${LEFT_W}px minmax(0,1fr) ${RIGHT_W}px` }}
       >
         {/* Left: layers + uploads */}
-        <aside className="flex min-h-0 flex-col border-r">
+        <aside ref={leftEl} className="flex min-h-0 flex-col border-r" style={{ "--artwork-h": `${splitPct}%` } as React.CSSProperties}>
           <h2 className="border-b px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Layers</h2>
           <LayerList
             layers={layers}
@@ -508,17 +571,69 @@ export function ArtworkEditor({
             onMoveTo={(id, index) => c?.moveTo(id, index)}
             onRename={(id, name) => c?.rename(id, name)}
           />
-          <button
-            type="button"
-            onClick={() => c?.select([])}
-            className={`flex items-center gap-2 border-t px-3 py-1.5 text-left text-xs hover:bg-muted ${selected.length === 0 ? "bg-primary/10" : ""}`}
-            title="Edit the box background"
+          {/* Drag this edge to give the layers or the artwork list more room (arrow keys too; double-click resets). */}
+          <div
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Resize the layers and the artwork list"
+            aria-valuemin={SPLIT_MIN}
+            aria-valuemax={SPLIT_MAX}
+            aria-valuenow={splitPct}
+            tabIndex={0}
+            className="group relative z-10 h-0 shrink-0 outline-none"
+            onKeyDown={(e) => {
+              if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+              e.preventDefault();
+              saveSplit(splitPct + (e.key === "ArrowUp" ? 3 : -3));
+            }}
           >
-            <ImagePlus className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 flex-1 truncate">Box background</span>
-            <span className="text-muted-foreground">{background ? "on" : "none"}</span>
-          </button>
-          <ArtworkPicker assets={assets} library={library} uploading={uploading} onUploadFiles={(f) => void uploadMany(f)} onPlace={(d) => void place(d)} />
+            <div
+              className="absolute inset-x-0 -top-1.5 h-3 cursor-row-resize touch-none"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.currentTarget.setPointerCapture(e.pointerId);
+                const r = e.currentTarget.getBoundingClientRect();
+                dragSplit.current = { grab: r.top + r.height / 2 - e.clientY, frame: null, pct: splitPct };
+              }}
+              onPointerMove={(e) => {
+                const d = dragSplit.current;
+                const box = leftEl.current?.getBoundingClientRect();
+                if (!d || !box || box.height <= 0 || !e.currentTarget.hasPointerCapture(e.pointerId)) return;
+                // Smooth: no rounding and no React render while dragging; the height is a CSS variable set once per frame.
+                d.pct = clampSplit(((box.bottom - (e.clientY + d.grab)) / box.height) * 100);
+                if (d.frame === null) {
+                  d.frame = requestAnimationFrame(() => {
+                    d.frame = null;
+                    leftEl.current?.style.setProperty("--artwork-h", `${d.pct}%`);
+                  });
+                }
+              }}
+              onPointerUp={(e) => {
+                if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+                const d = dragSplit.current;
+                dragSplit.current = null;
+                if (!d) return;
+                if (d.frame !== null) cancelAnimationFrame(d.frame);
+                leftEl.current?.style.setProperty("--artwork-h", `${d.pct}%`);
+                saveSplit(d.pct);
+              }}
+              onPointerCancel={() => {
+                const d = dragSplit.current;
+                dragSplit.current = null;
+                if (d?.frame != null) cancelAnimationFrame(d.frame);
+                leftEl.current?.style.setProperty("--artwork-h", `${splitPct}%`);
+              }}
+              onDoubleClick={() => saveSplit(SPLIT_DEFAULT)}
+            >
+              <span aria-hidden className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border transition-shadow duration-150 group-hover:shadow-[0_0_3px_rgba(59,130,246,0.35)] group-focus-visible:shadow-[0_0_3px_rgba(59,130,246,0.35)] group-active:shadow-[0_0_4px_1px_rgba(59,130,246,0.5)]" />
+              <span aria-hidden className="absolute top-1/2 left-1/2 flex h-3 w-12 -translate-x-1/2 -translate-y-1/2 flex-row items-center justify-center gap-1 rounded-full border bg-background shadow-sm group-hover:shadow-[0_0_4px_rgba(59,130,246,0.35)] group-focus-visible:shadow-[0_0_4px_rgba(59,130,246,0.35)]">
+                <span className="size-[3px] rounded-full bg-muted-foreground/70" />
+                <span className="size-[3px] rounded-full bg-muted-foreground/70" />
+                <span className="size-[3px] rounded-full bg-muted-foreground/70" />
+              </span>
+            </div>
+          </div>
+          <ArtworkPicker assets={assets} library={artworkLibrary} favoriteIds={favoriteIds} uploading={uploading} onUploadFiles={(f) => void uploadMany(f)} onPlace={(d) => void place(d)} />
         </aside>
 
         {/* Centre: rulers + canvas */}
@@ -614,9 +729,9 @@ export function ArtworkEditor({
                 saveThreeW(clampThreeW(now + (e.key === "ArrowLeft" ? 24 : -24)));
               }}
             >
-              {/* Always visible: a line down the edge and a grip in the middle, so it is clear this edge can be dragged. */}
-              <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border transition-colors group-hover:w-0.5 group-hover:bg-primary/60 group-focus-visible:w-0.5 group-focus-visible:bg-primary group-active:w-0.5 group-active:bg-primary" />
-              <span aria-hidden className="absolute top-1/2 left-1/2 flex h-12 w-3 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-full border bg-background shadow-sm transition-colors group-hover:border-primary group-hover:bg-primary/10 group-focus-visible:border-primary group-active:border-primary group-active:bg-primary/20">
+              {/* Always visible and always the same shape: hover, keyboard focus and dragging only add a soft blue glow. */}
+              <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border transition-shadow duration-150 group-hover:shadow-[0_0_3px_rgba(59,130,246,0.35)] group-focus-visible:shadow-[0_0_3px_rgba(59,130,246,0.35)] group-active:shadow-[0_0_4px_1px_rgba(59,130,246,0.5)]" />
+              <span aria-hidden className="absolute top-1/2 left-1/2 flex h-12 w-3 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-full border bg-background shadow-sm transition-shadow duration-150 group-hover:shadow-[0_0_4px_rgba(59,130,246,0.35)] group-focus-visible:shadow-[0_0_4px_rgba(59,130,246,0.35)] group-active:shadow-[0_0_5px_1px_rgba(59,130,246,0.5)]">
                 <span className="size-[3px] rounded-full bg-muted-foreground/70" />
                 <span className="size-[3px] rounded-full bg-muted-foreground/70" />
                 <span className="size-[3px] rounded-full bg-muted-foreground/70" />
@@ -647,11 +762,21 @@ export function ArtworkEditor({
             }}
             onLock={(locked) => selected[0] && c?.setLocked(selected[0], locked)}
             background={{
-              value: background,
+              layers: backgrounds,
+              selected: bgSelected,
+              max: MAX_BACKGROUNDS,
+              onSelect: (i) => c?.selectBackground(i),
+              onRemove: (i) => void c?.removeBackground(i),
+              onMove: (i, d) => c?.moveBackground(i, d),
               assets,
+              names: { ...Object.fromEntries(assets.map((a) => [a.id, a.fileName])), ...libNames },
+              library: backgroundLibrary,
               uploading,
-              onPatch: (p) => void c?.setBackground(p),
-              onPick: (assetId) => void c?.setBackground({ assetId, ...(background ? {} : { fit: "cover", scale: 1, dx: 0, dy: 0, opacity: 1 }) }),
+              onPatch: (i, p) => void c?.patchBackground(i, p),
+              onPick: (assetId) => void addBackground(assetId),
+              onPickLibrary: (id) => void pickLibraryBackground(id),
+              editing: bgEditing,
+              onToggleEdit: () => ctl.current?.setBackgroundEdit(!ctl.current.isBackgroundEditing()),
               onUpload: () => bgFileInput.current?.click(),
             }}
           />
@@ -662,7 +787,7 @@ export function ArtworkEditor({
           projectId={projectId}
           name={name}
           geo={geo}
-          getArtwork={() => ctl.current?.toArtwork() ?? { objects, background }}
+          getArtwork={() => ctl.current?.toArtwork() ?? { objects, backgrounds }}
           boardColor={threeD.outsideColor}
           flushSave={() => saver.settle(ctl.current?.toArtwork())}
           watermark={watermark}
