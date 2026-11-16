@@ -8,8 +8,13 @@ import { AdminUserMenu } from "@/components/admin/admin-user-menu";
 import { requireSuperAdmin } from "@/server/admin";
 import { db } from "@/server/db";
 import { env } from "@/server/env";
+import { getSiteIdentity } from "@/server/site-identity";
 
-export const metadata: Metadata = { title: { default: "Admin", template: "%s | Admin" }, robots: { index: false, follow: false } };
+/** Admin tab titles follow the site pattern: "<site name> | Admin | <page>". */
+export async function generateMetadata(): Promise<Metadata> {
+  const { title } = await getSiteIdentity();
+  return { title: { default: `${title} | Admin`, template: `${title} | Admin | %s` }, robots: { index: false, follow: false } };
+}
 
 async function HeaderUser() {
   const admin = await requireSuperAdmin();

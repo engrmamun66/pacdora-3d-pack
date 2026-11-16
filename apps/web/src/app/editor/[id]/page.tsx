@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { db } from "@/server/db";
@@ -8,6 +9,9 @@ import { IMPORTED_GENERATOR_ID, type WindowSpec } from "@packaging/dieline-engin
 import { loadImportedSource } from "@/server/imported-templates";
 import { readViewSettings } from "@/lib/view-settings";
 import { getWatermark } from "@/server/site-settings";
+
+/** Tab title "<site name> | Online design": the site name is added by the root layout template. */
+export const metadata: Metadata = { title: "Online design" };
 
 async function EditorView({ params }: { params: PageProps<"/editor/[id]">["params"] }) {
   const { id } = await params;

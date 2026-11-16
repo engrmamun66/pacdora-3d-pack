@@ -82,7 +82,7 @@ export function LayerList({
   };
 
   return (
-    <ul className="relative min-h-0 flex-[0.8_1_0] overflow-auto py-1" aria-label="Layers (top first)" onDragEnd={() => { setDragId(null); setOver(null); }}>
+    <ul className="relative min-h-0 flex-1 overflow-auto py-1" aria-label="Layers (top first)" onDragEnd={() => { setDragId(null); setOver(null); }}>
       {layers.length === 0 ? <li className="px-3 py-2 text-xs text-muted-foreground">No artwork yet.</li> : null}
       {layers.map((o, i) => {
         const Icon = TYPE_ICON[o.type];

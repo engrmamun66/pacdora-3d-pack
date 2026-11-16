@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 export async function generateMetadata(): Promise<Metadata> {
   const { title, faviconUrl } = await getSiteIdentity();
   return {
-    title: { default: title, template: `%s | ${title}` },
+    title: { default: title, template: `${title} | %s` },
     description: site.tagline,
     ...(faviconUrl ? { icons: { icon: faviconUrl, shortcut: faviconUrl } } : {}),
   };

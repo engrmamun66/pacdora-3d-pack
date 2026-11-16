@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { z } from "zod";
@@ -11,6 +12,9 @@ import { getSaveAsOptions } from "@/server/projects";
 import { readViewSettings } from "@/lib/view-settings";
 import { readTemplateWindows } from "@/lib/template-windows";
 import { readViewTab } from "@/lib/view-tab";
+
+/** Tab title "<site name> | Dieline": the site name is added by the root layout template. */
+export const metadata: Metadata = { title: "Dieline" };
 
 const prefillSchema = z.record(z.string().max(60), z.union([z.number().finite(), z.string().max(100), z.boolean()]));
 
