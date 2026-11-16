@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Move, Plus, Trash2, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Move, Plus, RotateCcw, Trash2, Upload } from "lucide-react";
 import { BACKGROUND_FITS, BACKGROUND_REPEATS, type BackgroundFit, type BackgroundRepeat, type BoxBackground, backgroundRepeat } from "@packaging/schema";
 import { InfoTip } from "@/components/templates-admin/help-tip";
 import { assetUrl } from "./fabric-map";
@@ -10,7 +10,7 @@ import { NumberField } from "./fields";
 type Asset = { id: string; fileName: string };
 type LibraryPicture = { id: string; name: string; category?: string };
 
-const FIT_LABEL: Record<BackgroundFit, string> = { cover: "Fill", contain: "Fit inside", stretch: "Stretch" };
+const FIT_LABEL: Record<BackgroundFit, string> = { cover: "Fill", contain: "Fit", stretch: "Stretch" };
 const REPEAT_LABEL: Record<BackgroundRepeat, string> = { none: "Once", both: "Tile", x: "Across", y: "Down" };
 const REPEAT_HINT: Record<BackgroundRepeat, string> = { none: "The picture is shown once", both: "The picture repeats across and down, like tiles", x: "The picture repeats from left to right only", y: "The picture repeats from top to bottom only" };
 const FIT_HINT: Record<BackgroundFit, string> = { cover: "Covers the whole box; the edges of the picture may be cut off", contain: "The whole picture is shown, with empty space around it if needed", stretch: "Stretched to the box, the picture may look squashed" };
@@ -19,6 +19,22 @@ const FIT_HINT: Record<BackgroundFit, string> = { cover: "Covers the whole box; 
  * Box background controls, in the order a customer works with them: a folded "Add a picture" area on top (ready-made ones, their own images, or an upload),
  * then the pictures already on the box (top first), and the settings of the chosen picture. Pictures are stacked under all artwork; each is placed on the print area (the dieline plus bleed).
  */
+/** A row of choices where exactly one is on: a label on the left, the choices on the right (like the number rows below it). */
+function Choice<T extends string>({ label, value, options, labels, hints, onPick }: { label: string; value: T; options: readonly T[]; labels: Record<T, string>; hints: Record<T, string>; onPick: (v: T) => void }) {
+  return (
+    <div role="group" aria-label={label} className="grid grid-cols-[3.75rem_1fr] items-center gap-2">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">
+        {options.map((o) => (
+          <button key={o} type="button" aria-pressed={value === o} onClick={() => onPick(o)} title={hints[o]} className={`min-w-0 flex-1 rounded-md px-0.5 py-1 text-xs ${value === o ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+            {labels[o]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function BackgroundPanel({
   layers,
   selected,
@@ -221,7 +237,12 @@ export function BackgroundPanel({
       {/* 3. Settings of the chosen picture */}
       {bg ? (
         <div className="flex flex-col gap-2 rounded-lg border p-2">
-          <p className="truncate text-xs font-medium" title={nameOf(bg, selected)}>Adjust: {nameOf(bg, selected)}</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="truncate text-xs font-medium" title={nameOf(bg, selected)}>Adjust: {nameOf(bg, selected)}</p>
+            <button type="button" title="Reset position, size, fit, repeat and opacity" aria-label="Reset position and size" onClick={() => onPatch(selected, { fit: "cover", repeat: "none", scale: 1, dx: 0, dy: 0, opacity: 1 })} className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+              <RotateCcw className="size-3.5" aria-hidden />
+            </button>
+          </div>
           <button
             key={blink}
             type="button"
@@ -234,27 +255,11 @@ export function BackgroundPanel({
           </button>
           {editing ? <p className="text-[11px] text-muted-foreground">Drag the picture to move it, drag a round grip to resize it. Arrow keys nudge, Alt turns snapping off. Enter, Esc or a double-click on the picture finishes.</p> : null}
 
-          <div role="group" aria-label="Fit" className="flex gap-0.5 rounded-lg bg-muted p-0.5">
-            {BACKGROUND_FITS.map((f) => (
-              <button key={f} type="button" aria-pressed={bg.fit === f} onClick={() => onPatch(selected, { fit: f })} title={FIT_HINT[f]} className={`flex-1 rounded-md px-1 py-1 text-xs ${bg.fit === f ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-                {FIT_LABEL[f]}
-              </button>
-            ))}
+          <div className="flex flex-col gap-2 border-t pt-2">
+            <Choice label="Sizing" value={bg.fit} options={BACKGROUND_FITS} labels={FIT_LABEL} hints={FIT_HINT} onPick={(fit) => onPatch(selected, { fit })} />
+            <Choice label="Repeat" value={backgroundRepeat(bg)} options={BACKGROUND_REPEATS} labels={REPEAT_LABEL} hints={REPEAT_HINT} onPick={(repeat) => onPatch(selected, { repeat })} />
+            <NumberField label="Opacity" value={Math.round(bg.opacity * 100)} step={5} min={0} max={100} suffix="%" decimals={0} onCommit={(v) => onPatch(selected, { opacity: v / 100 })} />
           </div>
-          <div role="group" aria-label="Repeat" className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">Repeat</span>
-            <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">
-              {BACKGROUND_REPEATS.map((r) => (
-                <button key={r} type="button" aria-pressed={backgroundRepeat(bg) === r} onClick={() => onPatch(selected, { repeat: r })} title={REPEAT_HINT[r]} className={`flex-1 rounded-md px-1 py-1 text-xs ${backgroundRepeat(bg) === r ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-                  {REPEAT_LABEL[r]}
-                </button>
-              ))}
-            </div>
-          </div>
-          <NumberField label="Opacity" value={Math.round(bg.opacity * 100)} step={5} min={0} max={100} suffix="%" decimals={0} onCommit={(v) => onPatch(selected, { opacity: v / 100 })} />
-          <button type="button" onClick={() => onPatch(selected, { fit: "cover", repeat: "none", scale: 1, dx: 0, dy: 0, opacity: 1 })} className="h-7 rounded-md text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
-            Reset position and size
-          </button>
         </div>
       ) : null}
     </section>
