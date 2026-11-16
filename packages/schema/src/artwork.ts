@@ -84,9 +84,13 @@ export type ArtworkType = ArtworkObject["type"];
 /** At most this many stacked background pictures. */
 export const MAX_BACKGROUNDS = 8;
 export const BACKGROUND_FITS = ["cover", "contain", "stretch"] as const;
+/** How a background picture repeats over the print area: not at all, in both directions, only across, or only down. */
+export const BACKGROUND_REPEATS = ["none", "both", "x", "y"] as const;
 export const boxBackground = z.object({
   assetId: z.string().min(1).max(40),
   fit: z.enum(BACKGROUND_FITS),
+  /** Older files have no repeat: they read as "none" (see `backgroundRepeat`). */
+  repeat: z.enum(BACKGROUND_REPEATS).optional(),
   scale: finite.min(0.1).max(10),
   dx: finite.min(-10000).max(10000),
   dy: finite.min(-10000).max(10000),
@@ -94,6 +98,9 @@ export const boxBackground = z.object({
 });
 export type BoxBackground = z.infer<typeof boxBackground>;
 export type BackgroundFit = (typeof BACKGROUND_FITS)[number];
+export type BackgroundRepeat = (typeof BACKGROUND_REPEATS)[number];
+/** The repeat of a background, "none" for files made before repeating existed. */
+export const backgroundRepeat = (bg: { repeat?: BackgroundRepeat | undefined }): BackgroundRepeat => bg.repeat ?? "none";
 
 export const artworkSchema = z
   .object({

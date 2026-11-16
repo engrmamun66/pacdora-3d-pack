@@ -5,6 +5,11 @@ export const MAX_TAG_LENGTH = 30;
 export const MAX_CATEGORY = 40;
 /** Library pictures in this category are the editor's box backgrounds: the Background panel lists them, the Artwork Library tab leaves them out. */
 export const BACKGROUND_CATEGORY = "Background Image";
+/** The seeded background sets are named "Backgrounds: Geometric", "Backgrounds: Festive" and so on: they are box backgrounds too. */
+const BACKGROUND_SET_PREFIX = "Backgrounds:";
+
+/** True for a category whose pictures are box backgrounds (not artwork to place on top). */
+export const isBackgroundCategory = (category: string) => category === BACKGROUND_CATEGORY || category.startsWith(BACKGROUND_SET_PREFIX);
 
 /** Collapse white space and cut to a length. */
 const tidy = (s: string, max: number) => s.replace(/\s+/g, " ").trim().slice(0, max);

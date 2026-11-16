@@ -218,7 +218,7 @@ function GlobalLightPanel({ shadow, bottom, onChange }: { shadow: ShadowSettings
           return (
             <div key={row.key} className="flex items-center gap-2">
               <span className="w-14 shrink-0 text-muted-foreground">{row.label}</span>
-              <input type="range" min={row.min} max={row.max} value={value} aria-label={row.label} onChange={(e) => set(Number(e.target.value))} className="min-w-0 flex-1 accent-primary" />
+              <input type="range" min={row.min} max={row.max} value={value} aria-label={row.label} onChange={(e) => set(Number(e.target.value))} className="min-w-0 flex-1" />
               <span className="w-9 shrink-0 text-right tabular-nums">
                 {value}
                 {row.unit}

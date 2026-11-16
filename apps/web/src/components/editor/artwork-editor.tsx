@@ -1,6 +1,6 @@
 "use client";
 
-import { BACKGROUND_CATEGORY } from "@/lib/artwork-meta";
+import { isBackgroundCategory } from "@/lib/artwork-meta";
 import { notify } from "@/lib/notify";
 import "./fonts";
 import Link from "next/link";
@@ -27,6 +27,7 @@ import {
   Trash2,
   Type,
   Undo2,
+  SlidersHorizontal,
 } from "lucide-react";
 import { applyWindows, createImportedGenerator, generateDieline, type FlatDieline, type FoldSetup, type WatermarkSpec, type WindowSpec } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
@@ -78,9 +79,34 @@ function ToolButton({ label, onClick, disabled, children, active }: { label: str
 /** Current width of the 3D panel that holds `el` (the divider), for keyboard resizing from the default width. */
 const sectionWidth = (el: HTMLElement) => el.parentElement?.clientWidth ?? 400;
 
+const OVERLAY_TOGGLES = [
+  { key: "showGrid", label: "Grid" },
+  { key: "showBleed", label: "Bleed" },
+  { key: "showSafe", label: "Safe area" },
+] as const;
+
 /** Bottom bar over the dieline: zoom (minus, plus, percentage, fit) and what to show on the sheet (grid, bleed, safe area). */
 function CanvasBar({ viewport, overlay, onOverlay, onBy, onFit }: { viewport: Viewport | null; overlay: OverlayOptions; onOverlay: (o: OverlayOptions) => void; onBy: (f: number) => void; onFit: () => void }) {
   const z = viewport?.zoom ?? 1;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const away = (e: PointerEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc, true);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", esc, true);
+    };
+  }, [menuOpen]);
   return (
     <div className="absolute inset-x-2 bottom-3 z-10 mx-auto flex w-fit flex-wrap items-center justify-center gap-x-0.5 gap-y-0.5 rounded-lg border bg-background/95 px-1.5 py-1 shadow-md backdrop-blur" role="toolbar" aria-label="Dieline view">
       <ToolButton label="Zoom out (Ctrl/Cmd+-)" onClick={() => onBy(0.8)}><Minus className="size-4" /></ToolButton>
@@ -88,12 +114,38 @@ function CanvasBar({ viewport, overlay, onOverlay, onBy, onFit }: { viewport: Vi
       <ToolButton label="Zoom in (Ctrl/Cmd++)" onClick={() => onBy(1.25)}><Plus className="size-4" /></ToolButton>
       <ToolButton label="Fit to screen (Ctrl/Cmd+0)" onClick={onFit}><Maximize className="size-4" /></ToolButton>
       <div className="mx-0.5 h-5 w-px bg-border" />
-      {(["showGrid", "showBleed", "showSafe"] as const).map((k) => (
-        <label key={k} className="flex items-center gap-1 px-0.5 text-xs">
-          <input type="checkbox" checked={overlay[k]} onChange={(e) => onOverlay({ ...overlay, [k]: e.target.checked })} />
-          {{ showGrid: "Grid", showBleed: "Bleed", showSafe: "Safe area" }[k]}
-        </label>
-      ))}
+      <div ref={menuRef} className="relative">
+        <button
+          type="button"
+          title="View options"
+          aria-label="View options"
+          aria-haspopup="true"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((o) => !o)}
+          className={`flex h-8 min-w-8 items-center justify-center rounded-md outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring ${menuOpen ? "bg-muted" : ""}`}
+        >
+          <SlidersHorizontal className="size-4" />
+        </button>
+        {menuOpen ? (
+          <div role="group" aria-label="View options" className="absolute bottom-full left-1/2 z-20 mb-3 flex w-36 -translate-x-1/2 flex-col rounded-xl border bg-background p-1 shadow-lg">
+            {OVERLAY_TOGGLES.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                role="switch"
+                aria-checked={overlay[key]}
+                onClick={() => onOverlay({ ...overlay, [key]: !overlay[key] })}
+                className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                <span className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${overlay[key] ? "bg-primary" : "bg-muted-foreground/30"}`} aria-hidden>
+                  <span className={`absolute top-0.5 size-3 rounded-full bg-background shadow transition-[left] ${overlay[key] ? "left-[0.8125rem]" : "left-0.5"}`} />
+                </span>
+                <span className="whitespace-nowrap">{label}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -136,8 +188,8 @@ export function ArtworkEditor({
   // Keyed by value: a props refresh with equal params must not rebuild the editor (and lose undo history).
   const paramsKey = JSON.stringify(params);
   // Background pictures have their own list in the Background panel; the Artwork Library tab shows the rest.
-  const backgroundLibrary = useMemo(() => library.filter((l) => l.category === BACKGROUND_CATEGORY), [library]);
-  const artworkLibrary = useMemo(() => library.filter((l) => l.category !== BACKGROUND_CATEGORY), [library]);
+  const backgroundLibrary = useMemo(() => library.filter((l) => isBackgroundCategory(l.category)), [library]);
+  const artworkLibrary = useMemo(() => library.filter((l) => !isBackgroundCategory(l.category)), [library]);
   const windowsKey = JSON.stringify(windows);
   const geo = useMemo(() => {
     try {
@@ -330,7 +382,9 @@ export function ArtworkEditor({
         c.spaceDown = true;
         hostEl.current?.style.setProperty("cursor", "grab");
         e.preventDefault();
-      } else if (e.key === "Escape" && c.isBackgroundEditing()) {
+      } else if ((e.key === "Escape" || e.key === "Enter") && c.isBackgroundEditing()) {
+        // Enter must not also press a focused "Done" button (that would turn the editing on again).
+        if (e.key === "Enter") e.preventDefault();
         c.setBackgroundEdit(false);
       } else if (mod && e.key.toLowerCase() === "z") {
         e.preventDefault();
@@ -402,6 +456,24 @@ export function ArtworkEditor({
     } catch (e) {
       notify.error(`${file.name}: ${(e as Error).message}`);
       return null;
+    }
+  };
+
+  /** Delete one of the user's own uploads for good. Not while it is on this box; the server also refuses while any other project uses it. */
+  const deleteAsset = async (id: string, name: string) => {
+    if (objects.some((o) => o.type === "image" && o.assetId === id) || backgrounds.some((b) => b.assetId === id)) {
+      notify.error(`"${name}" is used on this box. Remove it from the box first.`);
+      return;
+    }
+    if (!window.confirm(`Delete "${name}"? The picture is removed from your uploads and cannot be brought back.`)) return;
+    try {
+      const res = await fetch(`/api/assets/${encodeURIComponent(id)}`, { method: "DELETE" });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(json.error ?? `Delete failed (${res.status}).`);
+      setAssets((a) => a.filter((x) => x.id !== id));
+      notify.success("Picture deleted.");
+    } catch (e) {
+      notify.error((e as Error).message);
     }
   };
 
@@ -495,8 +567,8 @@ export function ArtworkEditor({
     <div className="grid h-screen grid-rows-[48px_1fr] overflow-hidden bg-background">
       {/* Top bar */}
       <header className="flex items-center gap-1 border-b px-2">
-        <Link href={`/projects/${projectId}`} className="mr-2 rounded-md px-2 py-1 text-sm hover:bg-muted">
-          ← <span className="font-medium">{name}</span>
+        <Link href={`/projects/${projectId}`} title={`Back to the dieline page of ${name}`} className="mr-2 rounded-md px-2 py-1 text-sm hover:bg-muted">
+          ← <span className="font-medium">Back to dieline page</span>
         </Link>
         <div className="mx-1 h-5 w-px bg-border" />
         <ToolButton label="Add text" onClick={() => void c?.add("text")}><Type className="size-4" /></ToolButton>
@@ -633,7 +705,7 @@ export function ArtworkEditor({
               </span>
             </div>
           </div>
-          <ArtworkPicker assets={assets} library={artworkLibrary} favoriteIds={favoriteIds} uploading={uploading} onUploadFiles={(f) => void uploadMany(f)} onPlace={(d) => void place(d)} />
+          <ArtworkPicker assets={assets} library={artworkLibrary} favoriteIds={favoriteIds} uploading={uploading} onUploadFiles={(f) => void uploadMany(f)} onPlace={(d) => void place(d)} onDelete={(id, name) => void deleteAsset(id, name)} />
         </aside>
 
         {/* Centre: rulers + canvas */}
@@ -778,6 +850,7 @@ export function ArtworkEditor({
               editing: bgEditing,
               onToggleEdit: () => ctl.current?.setBackgroundEdit(!ctl.current.isBackgroundEditing()),
               onUpload: () => bgFileInput.current?.click(),
+              onDeleteAsset: (id, name) => void deleteAsset(id, name),
             }}
           />
         </aside>

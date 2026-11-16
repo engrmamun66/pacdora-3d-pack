@@ -1,16 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowDown, ArrowUp, Check, ChevronDown, Move, Plus, Trash2, Upload } from "lucide-react";
-import { BACKGROUND_FITS, type BackgroundFit, type BoxBackground } from "@packaging/schema";
+import { useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Move, Plus, Trash2, Upload } from "lucide-react";
+import { BACKGROUND_FITS, BACKGROUND_REPEATS, type BackgroundFit, type BackgroundRepeat, type BoxBackground, backgroundRepeat } from "@packaging/schema";
 import { InfoTip } from "@/components/templates-admin/help-tip";
 import { assetUrl } from "./fabric-map";
 import { NumberField } from "./fields";
 
 type Asset = { id: string; fileName: string };
-type LibraryPicture = { id: string; name: string };
+type LibraryPicture = { id: string; name: string; category?: string };
 
 const FIT_LABEL: Record<BackgroundFit, string> = { cover: "Fill", contain: "Fit inside", stretch: "Stretch" };
+const REPEAT_LABEL: Record<BackgroundRepeat, string> = { none: "Once", both: "Tile", x: "Across", y: "Down" };
+const REPEAT_HINT: Record<BackgroundRepeat, string> = { none: "The picture is shown once", both: "The picture repeats across and down, like tiles", x: "The picture repeats from left to right only", y: "The picture repeats from top to bottom only" };
 const FIT_HINT: Record<BackgroundFit, string> = { cover: "Covers the whole box; the edges of the picture may be cut off", contain: "The whole picture is shown, with empty space around it if needed", stretch: "Stretched to the box, the picture may look squashed" };
 
 /**
@@ -34,6 +36,7 @@ export function BackgroundPanel({
   onPick,
   onPickLibrary,
   onUpload,
+  onDeleteAsset,
 }: {
   layers: BoxBackground[];
   selected: number;
@@ -52,6 +55,8 @@ export function BackgroundPanel({
   onPick: (assetId: string) => void;
   onPickLibrary: (pictureId: string, name: string) => void;
   onUpload: () => void;
+  /** Delete one of the user's own uploads. */
+  onDeleteAsset?: (id: string, name: string) => void;
 }) {
   const bg = layers[selected] ?? null;
   const full = layers.length >= max;
@@ -64,6 +69,14 @@ export function BackgroundPanel({
   // Choosing a picture blinks the "Move and resize" button twice, so the next step is easy to see (a new key restarts the animation).
   const [blink, setBlink] = useState(0);
   const [source, setSource] = useState<"ready" | "mine">("ready");
+  const [category, setCategory] = useState("");
+  const categories = useMemo(() => [...new Set(library.map((l) => l.category ?? "").filter(Boolean))].sort((a, b) => a.localeCompare(b)), [library]);
+  /** Previous / next set, in the order of the list ("All sets" first); it goes round at the ends. */
+  const stepSet = (delta: number) => {
+    const all = ["", ...categories];
+    setCategory(all[(all.indexOf(category) + delta + all.length) % all.length] ?? "");
+  };
+  const shownLibrary = category ? library.filter((l) => l.category === category) : library;
   if (count !== layers.length) {
     setCount(layers.length);
     setAddOpen(layers.length === 0);
@@ -108,23 +121,50 @@ export function BackgroundPanel({
                 <button type="button" role="tab" aria-selected={tab === "mine"} className={tabBtn(tab === "mine")} onClick={() => setSource("mine")}>My images ({assets.length})</button>
               </div>
             ) : null}
+            {tab === "ready" && categories.length > 1 ? (
+              <div className="flex items-center gap-1">
+                <button type="button" title="Previous set" aria-label="Previous set" onClick={() => stepSet(-1)} className="grid size-8 shrink-0 place-items-center rounded-md border bg-background hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+                  <ChevronLeft className="size-4" aria-hidden />
+                </button>
+                <select aria-label="Background set" value={category} onChange={(e) => setCategory(e.target.value)} className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-xs">
+                  <option value="">All sets ({library.length})</option>
+                  {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <button type="button" title="Next set" aria-label="Next set" onClick={() => stepSet(1)} className="grid size-8 shrink-0 place-items-center rounded-md border bg-background hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+                  <ChevronRight className="size-4" aria-hidden />
+                </button>
+              </div>
+            ) : null}
             {tab === "ready" && library.length > 0 ? (
-              <div className="grid max-h-56 grid-cols-4 gap-1 overflow-auto">
-                {library.map((l) => (
-                  <button key={l.id} type="button" title={`Add ${l.name}`} aria-label={`Add ${l.name} as a background`} onClick={() => onPickLibrary(l.id, l.name)} className="aspect-square overflow-hidden rounded border bg-muted hover:ring-2 hover:ring-ring">
+              <div className="grid max-h-56 shrink-0 auto-rows-max grid-cols-4 gap-1 overflow-auto">
+                {shownLibrary.map((l) => (
+                  <button key={l.id} type="button" title={`Add ${l.name}`} aria-label={`Add ${l.name} as a background`} onClick={() => onPickLibrary(l.id, l.name)} className="relative block h-0 w-full overflow-hidden rounded border bg-muted pb-[calc(100%-2px)] hover:ring-2 hover:ring-ring">
                     {/* eslint-disable-next-line @next/next/no-img-element -- private route, cached by URL */}
-                    <img src={`/api/artworks/${l.id}/image`} alt="" className="h-full w-full object-cover" loading="lazy" />
+                    <img src={`/api/artworks/${l.id}/image`} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
                   </button>
                 ))}
               </div>
             ) : null}
             {tab === "mine" && assets.length > 0 ? (
-              <div className="grid max-h-56 grid-cols-4 gap-1 overflow-auto">
+              <div className="grid max-h-56 shrink-0 auto-rows-max grid-cols-4 gap-1 overflow-auto">
                 {assets.map((a) => (
-                  <button key={a.id} type="button" title={`Add ${a.fileName}`} aria-label={`Add ${a.fileName} as a background`} onClick={() => onPick(a.id)} className={`aspect-square overflow-hidden rounded border bg-muted hover:ring-2 hover:ring-ring ${used.has(a.id) ? "ring-2 ring-primary/60" : ""}`}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={assetUrl(a.id)} alt="" className="h-full w-full object-cover" loading="lazy" />
-                  </button>
+                  <div key={a.id} className="group relative">
+                    <button type="button" title={`Add ${a.fileName}`} aria-label={`Add ${a.fileName} as a background`} onClick={() => onPick(a.id)} className={`relative block h-0 w-full overflow-hidden rounded border bg-muted pb-[calc(100%-2px)] hover:ring-2 hover:ring-ring ${used.has(a.id) ? "ring-2 ring-primary/60" : ""}`}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={assetUrl(a.id)} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
+                    </button>
+                    {onDeleteAsset ? (
+                      <button
+                        type="button"
+                        title={`Delete ${a.fileName}`}
+                        aria-label={`Delete ${a.fileName}`}
+                        onClick={() => onDeleteAsset(a.id, a.fileName)}
+                        className="absolute top-0.5 right-0.5 grid size-5 place-items-center rounded bg-background/90 text-muted-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:text-destructive focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none pointer-coarse:opacity-100"
+                      >
+                        <Trash2 className="size-3" aria-hidden />
+                      </button>
+                    ) : null}
+                  </div>
                 ))}
               </div>
             ) : null}
@@ -192,7 +232,7 @@ export function BackgroundPanel({
             {editing ? <Check className="size-3.5" aria-hidden /> : <Move className="size-3.5" aria-hidden />}
             {editing ? "Done" : "Move and resize on the dieline"}
           </button>
-          {editing ? <p className="text-[11px] text-muted-foreground">Drag the picture to move it, drag a round grip to resize it. Arrow keys nudge, Alt turns snapping off, Esc finishes.</p> : null}
+          {editing ? <p className="text-[11px] text-muted-foreground">Drag the picture to move it, drag a round grip to resize it. Arrow keys nudge, Alt turns snapping off. Enter, Esc or a double-click on the picture finishes.</p> : null}
 
           <div role="group" aria-label="Fit" className="flex gap-0.5 rounded-lg bg-muted p-0.5">
             {BACKGROUND_FITS.map((f) => (
@@ -201,11 +241,18 @@ export function BackgroundPanel({
               </button>
             ))}
           </div>
-          <NumberField label="Size" value={Math.round(bg.scale * 100)} step={5} min={10} max={1000} suffix="%" decimals={0} onCommit={(v) => onPatch(selected, { scale: v / 100 })} />
-          <NumberField label="Position X" value={bg.dx} suffix="mm" onCommit={(dx) => onPatch(selected, { dx })} />
-          <NumberField label="Position Y" value={bg.dy} suffix="mm" onCommit={(dy) => onPatch(selected, { dy })} />
+          <div role="group" aria-label="Repeat" className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">Repeat</span>
+            <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">
+              {BACKGROUND_REPEATS.map((r) => (
+                <button key={r} type="button" aria-pressed={backgroundRepeat(bg) === r} onClick={() => onPatch(selected, { repeat: r })} title={REPEAT_HINT[r]} className={`flex-1 rounded-md px-1 py-1 text-xs ${backgroundRepeat(bg) === r ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                  {REPEAT_LABEL[r]}
+                </button>
+              ))}
+            </div>
+          </div>
           <NumberField label="Opacity" value={Math.round(bg.opacity * 100)} step={5} min={0} max={100} suffix="%" decimals={0} onCommit={(v) => onPatch(selected, { opacity: v / 100 })} />
-          <button type="button" onClick={() => onPatch(selected, { fit: "cover", scale: 1, dx: 0, dy: 0, opacity: 1 })} className="h-7 rounded-md text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
+          <button type="button" onClick={() => onPatch(selected, { fit: "cover", repeat: "none", scale: 1, dx: 0, dy: 0, opacity: 1 })} className="h-7 rounded-md text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
             Reset position and size
           </button>
         </div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_NAME, MAX_TAGS, MAX_TAG_LENGTH, cleanCategory, cleanName, numberedNames, parseTags } from "./artwork-meta";
+import { MAX_NAME, MAX_TAGS, MAX_TAG_LENGTH, cleanCategory, cleanName, isBackgroundCategory, numberedNames, parseTags } from "./artwork-meta";
 
 describe("parseTags", () => {
   it("splits on comma, semicolon and new line, lower-cases and drops empties and repeats", () => {
@@ -38,5 +38,16 @@ describe("numberedNames", () => {
     expect(names).toHaveLength(12);
     for (const n of names) expect(n.length).toBeLessThanOrEqual(MAX_NAME);
     expect(names[11]!.endsWith(" 12")).toBe(true);
+  });
+});
+
+describe("isBackgroundCategory", () => {
+  it("takes the Background Image category and the seeded Backgrounds sets", () => {
+    expect(isBackgroundCategory("Background Image")).toBe(true);
+    expect(isBackgroundCategory("Backgrounds: Geometric")).toBe(true);
+    expect(isBackgroundCategory("Backgrounds: Paper & Kraft")).toBe(true);
+  });
+  it("leaves artwork categories out", () => {
+    for (const c of ["Patterns", "Icons", "Stamps", "", "Background"]) expect(isBackgroundCategory(c)).toBe(false);
   });
 });

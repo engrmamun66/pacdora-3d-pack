@@ -163,6 +163,10 @@ export class EditorController {
       this.pan(me.clientX - this.panning.x, me.clientY - this.panning.y);
       this.panning = { x: me.clientX, y: me.clientY };
     });
+    // A double-click on a background picture, while it is being moved and resized, finishes the editing (same as Done).
+    this.canvas.on("mouse:dblclick", ({ e }) => {
+      if (this.bgEdit && this.bgHit(this.pointerScene(e as MouseEvent)) === "move") this.setBackgroundEdit(false);
+    });
     this.canvas.on("mouse:up", () => {
       this.panning = null;
       this.canvas.selection = !this.panMode && !this.bgEdit;
@@ -589,6 +593,8 @@ export class EditorController {
 
   resize(width: number, height: number) {
     this.canvas.setDimensions({ width, height });
+    // Changing the size clears the canvas; draw at once, in the same frame, or the picture blinks while the divider is dragged.
+    this.canvas.renderAll();
     this.emitViewport();
   }
 

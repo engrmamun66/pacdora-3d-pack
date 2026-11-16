@@ -7,7 +7,7 @@ import {
   panelOutline,
   vec,
 } from "@packaging/dieline-engine";
-import type { Artwork, ArtworkObject, BoxBackground } from "@packaging/schema";
+import type { Artwork, ArtworkObject, BackgroundRepeat, BoxBackground } from "@packaging/schema";
 
 /**
  * Artwork anchoring: converts between the stored form (centre offset from a
@@ -110,4 +110,25 @@ export function backgroundPlacement(geo: DielineGeometry, bg: Pick<BoxBackground
     height: bh * bg.scale,
     clip: { minX: b.min.x, minY: b.min.y, width: w, height: h },
   };
+}
+
+/** Most tiles a repeating background may be made of (a tiny picture at a tiny size would otherwise mean thousands). */
+export const MAX_BACKGROUND_TILES = 400;
+
+/**
+ * The copies of a placed background that touch the print area, for a repeat mode. The placement itself is the middle copy;
+ * the others sit a whole width / height away. Without repeat the list is just the placement. Returns null when more than
+ * `MAX_BACKGROUND_TILES` copies would be needed (the caller then shows the single picture).
+ */
+export function backgroundTiles(p: BackgroundPlacement, repeat: BackgroundRepeat): { cx: number; cy: number; width: number; height: number }[] | null {
+  const { cx, cy, width: w, height: h, clip } = p;
+  if (repeat === "none" || !(w > 0) || !(h > 0)) return [{ cx, cy, width: w, height: h }];
+  const range = (centre: number, size: number, min: number, max: number, on: boolean): [number, number] =>
+    on ? [Math.floor((min - centre - size / 2) / size) + 1, Math.ceil((max - centre + size / 2) / size) - 1] : [0, 0];
+  const [i0, i1] = range(cx, w, clip.minX, clip.minX + clip.width, repeat === "both" || repeat === "x");
+  const [j0, j1] = range(cy, h, clip.minY, clip.minY + clip.height, repeat === "both" || repeat === "y");
+  if ((i1 - i0 + 1) * (j1 - j0 + 1) > MAX_BACKGROUND_TILES) return null;
+  const out: { cx: number; cy: number; width: number; height: number }[] = [];
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) out.push({ cx: cx + i * w, cy: cy + j * h, width: w, height: h });
+  return out;
 }

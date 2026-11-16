@@ -188,6 +188,12 @@
   html {
     @apply font-sans;
   }
+  /* Every slider, checkbox and radio button in the project: the text colour (black), not the browser's default blue. */
+  input[type="range"],
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--foreground);
+  }
 }
 /* Landing hero: dieline lines draw themselves, then the box folds (3D, in hero-carton.tsx). */
 @keyframes draw-line {

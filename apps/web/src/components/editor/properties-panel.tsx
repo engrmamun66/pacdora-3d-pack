@@ -139,6 +139,7 @@ export function PropertiesPanel({
     onPick: (assetId: string) => void;
     onPickLibrary: (pictureId: string, name: string) => void;
     onUpload: () => void;
+    onDeleteAsset: (id: string, name: string) => void;
   };
   object: ArtworkObject | null;
   selectionCount: number;
@@ -148,10 +149,7 @@ export function PropertiesPanel({
 }) {
   if (selectionCount === 0) {
     return (
-      <>
-        <BackgroundPanel layers={background.layers} selected={background.selected} max={background.max} onSelect={background.onSelect} onRemove={background.onRemove} onMove={background.onMove} assets={background.assets} names={background.names} library={background.library} uploading={background.uploading} editing={background.editing} onToggleEdit={background.onToggleEdit} onPatch={background.onPatch} onPick={background.onPick} onPickLibrary={background.onPickLibrary} onUpload={background.onUpload} />
-        <p className="px-3 py-4 text-xs text-muted-foreground">Select an object to edit it, or add text, shapes and images from the toolbar.</p>
-      </>
+      <BackgroundPanel layers={background.layers} selected={background.selected} max={background.max} onSelect={background.onSelect} onRemove={background.onRemove} onMove={background.onMove} assets={background.assets} names={background.names} library={background.library} uploading={background.uploading} editing={background.editing} onToggleEdit={background.onToggleEdit} onPatch={background.onPatch} onPick={background.onPick} onPickLibrary={background.onPickLibrary} onUpload={background.onUpload} onDeleteAsset={background.onDeleteAsset} />
     );
   }
   if (selectionCount > 1 || !object) {

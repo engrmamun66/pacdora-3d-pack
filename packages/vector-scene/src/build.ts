@@ -1,7 +1,7 @@
 import * as fontkit from "fontkit";
-import { anchorIndex, backgroundPlacement, objectCentre } from "@packaging/artwork";
+import { anchorIndex, backgroundPlacement, backgroundTiles, objectCentre } from "@packaging/artwork";
 import { type DielineGeometry, type WatermarkSpec, flattenOutline, layoutWatermark } from "@packaging/dieline-engine";
-import { type Artwork, type ArtworkFont, type ArtworkObject, type BoxBackground, MM_PER_PT, backgroundsOf } from "@packaging/schema";
+import { type Artwork, type ArtworkFont, type ArtworkObject, type BoxBackground, MM_PER_PT, backgroundRepeat, backgroundsOf } from "@packaging/schema";
 import { ellipsePath, linePath, mul, outlinePath, pathBounds, polygonPath, rectPath, rotate, scale, transformPath, translate } from "./geometry";
 import { imageSize, imageSizeProblem } from "./images";
 import { layoutTextbox, lineOutlines, measureWith } from "./text";
@@ -218,16 +218,32 @@ async function backgroundItems(
     ctx.losses.push(`The box background image was left out: ${problem}.`);
     return [];
   }
-  ctx.budget.bytes += img.bytes.length;
+  const p = backgroundPlacement(geo, bg, size.width, size.height);
+  if (!p) return [];
+  // A repeating background is one image item per copy that touches the print area. PDF stores the picture once; SVG and EPS write it
+  // for every copy, so the budget counts every copy.
+  let tiles = backgroundTiles(p, backgroundRepeat(bg));
+  if (!tiles) {
+    ctx.losses.push("The box background repeats too many times to export: only one copy of it was drawn.");
+    tiles = [p];
+  }
+  ctx.budget.bytes += img.bytes.length * tiles.length;
   if (ctx.budget.bytes > MAX_EMBEDDED_IMAGE_BYTES) {
     ctx.losses.push("The box background image was left out: the total image data in this export is too large.");
     ctx.budget.warned = true;
     return [];
   }
-  const p = backgroundPlacement(geo, bg, size.width, size.height);
-  if (!p) return [];
-  const m = mul(translate(p.cx, p.cy), mul(scale(p.width, p.height), translate(-0.5, -0.5)));
-  return [{ kind: "image", name: "Box background", opacity: bg.opacity, mime: img.mime as "image/png" | "image/jpeg", bytes: img.bytes, pxWidth: size.width, pxHeight: size.height, matrix: m, clip: p.clip }];
+  return tiles.map((t, i) => ({
+    kind: "image" as const,
+    name: tiles.length > 1 ? `Box background ${i + 1}` : "Box background",
+    opacity: bg.opacity,
+    mime: img.mime as "image/png" | "image/jpeg",
+    bytes: img.bytes,
+    pxWidth: size.width,
+    pxHeight: size.height,
+    matrix: mul(translate(t.cx, t.cy), mul(scale(t.width, t.height), translate(-0.5, -0.5))),
+    clip: p.clip,
+  }));
 }
 
 async function artworkItems(

@@ -809,6 +809,8 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       renderer.domElement.style.height = "100%";
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
+      // Changing the size clears the canvas; draw at once, in the same frame, or the box blinks while a divider is dragged.
+      renderer.render(scene, camera);
     };
     let notifyQueued = false;
     const onChange = () => {

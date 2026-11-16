@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, ImagePlus, Star } from "lucide-react";
+import { ChevronLeft, ChevronRight, ImagePlus, Star, Trash2 } from "lucide-react";
 import { notify } from "@/lib/notify";
 import { assetUrl } from "./fabric-map";
 
@@ -42,6 +42,7 @@ export function ArtworkPicker({
   uploading,
   onUploadFiles,
   onPlace,
+  onDelete,
 }: {
   assets: PickerAsset[];
   library: PickerLibraryItem[];
@@ -50,6 +51,8 @@ export function ArtworkPicker({
   uploading: boolean;
   onUploadFiles: (files: File[]) => void;
   onPlace: (d: Dragged) => void;
+  /** Delete one of the user's own uploads. */
+  onDelete?: (id: string, name: string) => void;
 }) {
   const [tab, setTab] = useState<"mine" | "library" | "favorites">("mine");
   const [category, setCategory] = useState("");
@@ -155,7 +158,7 @@ export function ArtworkPicker({
           {assets.length === 0 ? <p className="px-1 text-xs text-muted-foreground">Your uploads appear here. Only you can see them.</p> : null}
           <ul className="grid grid-cols-3 gap-1.5">
             {assets.map((a) => (
-              <li key={a.id}>
+              <li key={a.id} className="group relative">
                 <button
                   type="button"
                   draggable
@@ -167,6 +170,17 @@ export function ArtworkPicker({
                   {/* eslint-disable-next-line @next/next/no-img-element -- private route, cached by URL */}
                   <img src={assetUrl(a.id)} alt={a.fileName} draggable={false} className="h-full w-full object-contain" loading="lazy" />
                 </button>
+                {onDelete ? (
+                  <button
+                    type="button"
+                    title={`Delete ${a.fileName}`}
+                    aria-label={`Delete ${a.fileName}`}
+                    onClick={() => onDelete(a.id, a.fileName)}
+                    className="absolute top-0.5 right-0.5 grid size-6 place-items-center rounded-md bg-background/90 text-muted-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:text-destructive focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none pointer-coarse:opacity-100"
+                  >
+                    <Trash2 className="size-3.5" aria-hidden />
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>
