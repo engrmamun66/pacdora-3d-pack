@@ -16,10 +16,16 @@ async function EditorView({ params }: { params: PageProps<"/editor/[id]">["param
   if (!project) notFound();
   if (!project.doc) return <p className="p-8 text-destructive">This project file could not be read.</p>;
   const assets = await db.asset.findMany({
-    where: { userId: user.id },
+    // Library copies (storage key "<user>/lib-...") are not uploads: they are made when a library picture is used.
+    where: { userId: user.id, NOT: { storageKey: { contains: "/lib-" } } },
     orderBy: { createdAt: "desc" },
     select: { id: true, fileName: true },
     take: 200,
+  });
+  const library = await db.artworkItem.findMany({
+    orderBy: [{ category: "asc" }, { createdAt: "desc" }],
+    select: { id: true, name: true, tags: true, category: true },
+    take: 500,
   });
   const imported = project.doc.template.generatorId === IMPORTED_GENERATOR_ID ? await loadImportedSource(project.doc.template.presetId) : null;
   if (project.doc.template.generatorId === IMPORTED_GENERATOR_ID && !imported) {
@@ -36,6 +42,7 @@ async function EditorView({ params }: { params: PageProps<"/editor/[id]">["param
       windows={(project.doc.windows ?? []) as WindowSpec[]}
       artwork={project.doc.artwork}
       assets={assets}
+      library={library}
       threeD={project.doc.threeD}
       watermark={await getWatermark(user)}
     />

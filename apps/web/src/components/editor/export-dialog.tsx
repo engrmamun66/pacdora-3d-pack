@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Download, X } from "lucide-react";
+import { Box, ChevronDown, Download, FileText, Image as ImageIcon, X } from "lucide-react";
 import type { DielineGeometry, WatermarkSpec } from "@packaging/dieline-engine";
 import { ILLUSTRATOR_PROFILES } from "@packaging/render-print/profiles";
 import type { Artwork } from "@packaging/schema";
@@ -21,6 +21,13 @@ const FORMATS: { value: Format; label: string; hint: string }[] = [
   { value: "png-hires", label: "PNG, 300 dpi (high resolution)", hint: "Flat artwork image for print proofs." },
   { value: "glb", label: "3D model (GLB)", hint: "The 3D carton as shown in the preview, in metres." },
   { value: "json", label: "Project file (JSON)", hint: "Everything needed to rebuild this project." },
+];
+
+/** The three choices most people need; every other format is under "More formats and options". */
+const SIMPLE: { value: Format; label: string; hint: string; icon: typeof FileText }[] = [
+  { value: "pdf", label: "Print file (PDF)", hint: "For your printer: die lines and artwork.", icon: FileText },
+  { value: "png", label: "Picture (PNG)", hint: "For screens and quick sharing.", icon: ImageIcon },
+  { value: "glb", label: "3D model (GLB)", hint: "The box as shown in the 3D preview.", icon: Box },
 ];
 
 const SERVER: readonly Format[] = ["pdf", "ai", "eps", "svg", "dxf", "json"];
@@ -65,6 +72,7 @@ export function ExportDialog({
   const [opts, setOpts] = useState({ artwork: true, dieline: true, bleed: false, safe: false, dimensions: false });
   const [cutSpot, setCutSpot] = useState("CutContour");
   const [creaseSpot, setCreaseSpot] = useState("Crease");
+  const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; title: string; notes: string[] } | null>(null);
   const ref = useRef<HTMLDialogElement>(null);
@@ -156,19 +164,40 @@ export function ExportDialog({
         </button>
       </div>
       <div className="flex flex-col gap-4 px-5 py-4">
-        <div className="flex flex-col gap-1 text-sm">
-          <label htmlFor="export-format">Format</label>
-          <select id="export-format" aria-describedby="export-format-hint" className="h-9 rounded-md border bg-background px-2" value={format} onChange={(e) => setFormat(e.target.value as Format)}>
-            {FORMATS.filter((f) => f.value !== "glb" || geo.foldTree.hinges.length > 0).map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-          <span id="export-format-hint" className="text-xs text-muted-foreground">{meta.hint}</span>
+        <div role="radiogroup" aria-label="What to export" className="grid gap-2 sm:grid-cols-3">
+          {SIMPLE.filter((f) => f.value !== "glb" || geo.foldTree.hinges.length > 0).map((f) => {
+            const on = format === f.value;
+            return (
+              <label key={f.value} className={`flex cursor-pointer flex-col items-start gap-1 rounded-lg border p-3 text-sm focus-within:ring-2 focus-within:ring-ring ${on ? "border-primary bg-primary/5" : "hover:bg-muted"}`}>
+                <input type="radio" name="export-choice" className="sr-only" checked={on} onChange={() => setFormat(f.value)} />
+                <f.icon className="size-5 text-muted-foreground" aria-hidden />
+                <span className="font-medium">{f.label}</span>
+                <span className="text-xs text-muted-foreground">{f.hint}</span>
+              </label>
+            );
+          })}
         </div>
 
-        {needsProfile ? (
+        <div className="flex flex-col gap-4">
+          <button type="button" aria-expanded={more} onClick={() => setMore((v) => !v)} className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+            <ChevronDown className={`size-4 transition-transform ${more ? "rotate-180" : ""}`} aria-hidden /> More formats and options
+          </button>
+          {more ? (
+            <div className="flex flex-col gap-1 text-sm">
+              <label htmlFor="export-format">Format</label>
+              <select id="export-format" aria-describedby="export-format-hint" className="h-9 rounded-md border bg-background px-2" value={format} onChange={(e) => setFormat(e.target.value as Format)}>
+                {FORMATS.filter((f) => f.value !== "glb" || geo.foldTree.hinges.length > 0).map((f) => (
+                  <option key={f.value} value={f.value}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+              <span id="export-format-hint" className="text-xs text-muted-foreground">{meta.hint}</span>
+            </div>
+          ) : null}
+        </div>
+
+        {more && needsProfile ? (
           <div className="flex flex-col gap-1 text-sm">
             <label htmlFor="export-profile">Illustrator version</label>
             <select id="export-profile" aria-describedby="export-profile-hint" className="h-9 rounded-md border bg-background px-2" value={effectiveProfile} onChange={(e) => setProfile(e.target.value)}>
@@ -184,7 +213,7 @@ export function ExportDialog({
           </div>
         ) : null}
 
-        {format !== "json" && format !== "glb" ? (
+        {more && format !== "json" && format !== "glb" ? (
           <fieldset className="grid grid-cols-2 gap-2">
             <legend className="mb-1 text-sm">Include</legend>
             {check("artwork", "Artwork", format === "dxf")}
@@ -195,7 +224,7 @@ export function ExportDialog({
           </fieldset>
         ) : null}
 
-        {vector && opts.dieline && (format === "pdf" || format === "ai" || format === "eps") ? (
+        {(more || !spotNameOk(cutSpot) || !spotNameOk(creaseSpot)) && vector && opts.dieline && (format === "pdf" || format === "ai" || format === "eps") ? (
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">
               Cut spot colour name

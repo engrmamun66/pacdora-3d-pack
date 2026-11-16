@@ -1,0 +1,62 @@
+[
+  {
+    "file": "recycle-badge.png",
+    "name": "Recycle badge",
+    "tags": "recycle,eco,green,badge",
+    "category": "Eco"
+  },
+  {
+    "file": "fragile-glass.png",
+    "name": "Fragile glass",
+    "tags": "fragile,handle with care,glass,warning",
+    "category": "Handling"
+  },
+  {
+    "file": "this-side-up.png",
+    "name": "This side up",
+    "tags": "arrows,this side up,handling,logistics",
+    "category": "Handling"
+  },
+  {
+    "file": "keep-dry.png",
+    "name": "Keep dry umbrella",
+    "tags": "keep dry,umbrella,rain,handling",
+    "category": "Handling"
+  },
+  {
+    "file": "natural-leaf-seal.png",
+    "name": "Natural leaf seal",
+    "tags": "natural,leaf,organic,seal,eco",
+    "category": "Eco"
+  },
+  {
+    "file": "handmade-stamp.png",
+    "name": "Handmade with love stamp",
+    "tags": "handmade,stamp,love,craft,heart",
+    "category": "Stamps"
+  },
+  {
+    "file": "fresh-baked-cookie.png",
+    "name": "Fresh baked cookie",
+    "tags": "cookie,bakery,fresh baked,food,badge",
+    "category": "Food"
+  },
+  {
+    "file": "natural-starburst.png",
+    "name": "Starburst sticker",
+    "tags": "starburst,sticker,sale,new,badge",
+    "category": "Stickers"
+  },
+  {
+    "file": "pattern-semicircles.png",
+    "name": "Semicircle pattern",
+    "tags": "pattern,geometric,kraft,seamless,background",
+    "category": "Patterns"
+  },
+  {
+    "file": "pattern-waves-dots.png",
+    "name": "Waves and dots pattern",
+    "tags": "pattern,waves,dots,retro,background",
+    "category": "Patterns"
+  }
+]

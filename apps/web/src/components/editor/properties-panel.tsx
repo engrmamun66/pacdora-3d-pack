@@ -1,6 +1,7 @@
 "use client";
 
-import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical } from "lucide-react";
+import { useState } from "react";
+import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignHorizontalDistributeCenter, AlignStartHorizontal, AlignStartVertical, AlignVerticalDistributeCenter, Group, RotateCcw, RotateCw, Ungroup } from "lucide-react";
 import { ARTWORK_FONTS, type ArtworkObject, type BoxBackground } from "@packaging/schema";
 import { BackgroundPanel } from "./background-panel";
 import type { AlignMode } from "./editor-controller";
@@ -26,15 +27,85 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-export function AlignBar({ onAlign, disabled }: { onAlign: (m: AlignMode) => void; disabled: boolean }) {
+export function AlignBar({ onAlign, disabled, target = "its panel" }: { onAlign: (m: AlignMode) => void; disabled: boolean; /** Words for the tooltip: what it aligns to. */ target?: string }) {
   return (
     <div className="flex gap-1">
       {ALIGN.map(({ mode, label, Icon }) => (
-        <button key={mode} type="button" title={`${label} (to its panel)`} aria-label={label} disabled={disabled} onClick={() => onAlign(mode)} className="flex size-7 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40">
+        <button key={mode} type="button" title={`${label} (to ${target})`} aria-label={label} disabled={disabled} onClick={() => onAlign(mode)} className="flex size-7 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40">
           <Icon className="size-3.5" />
         </button>
       ))}
     </div>
+  );
+}
+
+/** What the multi-selection panel can do (all act on the whole selection). */
+export interface MultiActions {
+  /** Count of objects in the selection. */
+  count: number;
+  canGroup: boolean;
+  canUngroup: boolean;
+  onGroup: () => void;
+  onUngroup: () => void;
+  onAlign: (m: AlignMode, to: "panel" | "selection") => void;
+  onDistribute: (axis: "h" | "v") => void;
+  /** Factor, 1 = unchanged. */
+  onScale: (factor: number) => void;
+  /** Degrees, clockwise. */
+  onRotate: (deg: number) => void;
+}
+
+const iconBtn = "flex h-7 items-center justify-center gap-1 rounded-md border px-2 text-xs hover:bg-muted disabled:opacity-40";
+
+/** Several objects chosen: align them, group them, make them bigger or smaller, turn them. */
+function MultiPanel({ m }: { m: MultiActions }) {
+  const [to, setTo] = useState<"selection" | "panel">("selection");
+  const [percent, setPercent] = useState("110");
+  const [degrees, setDegrees] = useState("15");
+  const num = (v: string) => (v.trim() === "" ? NaN : Number(v));
+  return (
+    <>
+      <Section title={`${m.count} objects`}>
+        <div role="radiogroup" aria-label="Align to" className="grid grid-cols-2 gap-1 rounded-md bg-muted p-0.5 text-xs">
+          {(["selection", "panel"] as const).map((v) => (
+            <label key={v} className={`cursor-pointer rounded px-2 py-1 text-center ${to === v ? "bg-background font-medium shadow-sm" : "text-muted-foreground"}`}>
+              <input type="radio" name="align-to" className="sr-only" checked={to === v} onChange={() => setTo(v)} />
+              {v === "selection" ? "To selection" : "To panel"}
+            </label>
+          ))}
+        </div>
+        <AlignBar onAlign={(mode) => m.onAlign(mode, to)} disabled={false} target={to === "selection" ? "the selection" : "its panel"} />
+        <div className="flex gap-1">
+          <button type="button" className={iconBtn} disabled={m.count < 3} title="Space out evenly, left to right (3 or more objects)" aria-label="Distribute horizontally" onClick={() => m.onDistribute("h")}><AlignHorizontalDistributeCenter className="size-3.5" /> Spread across</button>
+          <button type="button" className={iconBtn} disabled={m.count < 3} title="Space out evenly, top to bottom (3 or more objects)" aria-label="Distribute vertically" onClick={() => m.onDistribute("v")}><AlignVerticalDistributeCenter className="size-3.5" /> Spread down</button>
+        </div>
+      </Section>
+      <Section title="Group">
+        <div className="flex gap-1">
+          <button type="button" className={iconBtn} disabled={!m.canGroup} title="Group (Ctrl/Cmd+G): they move, resize and turn together" onClick={m.onGroup}><Group className="size-3.5" /> Group</button>
+          <button type="button" className={iconBtn} disabled={!m.canUngroup} title="Ungroup (Shift+Ctrl/Cmd+G)" onClick={m.onUngroup}><Ungroup className="size-3.5" /> Ungroup</button>
+        </div>
+      </Section>
+      <Section title="Size and rotation">
+        <div className="flex items-center gap-1">
+          <label className="flex items-center gap-1 text-xs text-muted-foreground">
+            Scale
+            <input aria-label="Scale by percent" inputMode="decimal" value={percent} onChange={(e) => setPercent(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") m.onScale(num(percent) / 100); }} className="h-7 w-14 rounded-md border bg-background px-1.5 text-right text-xs text-foreground" />
+            %
+          </label>
+          <button type="button" className={iconBtn} disabled={!(num(percent) > 0)} onClick={() => m.onScale(num(percent) / 100)}>Apply</button>
+        </div>
+        <p className="text-[11px] text-muted-foreground">100 keeps the size; 50 halves it, 200 doubles it. You can also drag the corner handles on the canvas.</p>
+        <div className="flex items-center gap-1">
+          <button type="button" className={iconBtn} title="Turn 90° anticlockwise" aria-label="Turn 90 degrees anticlockwise" onClick={() => m.onRotate(-90)}><RotateCcw className="size-3.5" /> 90°</button>
+          <button type="button" className={iconBtn} title="Turn 90° clockwise" aria-label="Turn 90 degrees clockwise" onClick={() => m.onRotate(90)}><RotateCw className="size-3.5" /> 90°</button>
+          <input aria-label="Turn by degrees" inputMode="decimal" value={degrees} onChange={(e) => setDegrees(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") m.onRotate(num(degrees)); }} className="ml-1 h-7 w-12 rounded-md border bg-background px-1.5 text-right text-xs" />
+          <span className="text-xs text-muted-foreground">°</span>
+          <button type="button" className={iconBtn} disabled={!Number.isFinite(num(degrees))} onClick={() => m.onRotate(num(degrees))}>Turn</button>
+        </div>
+        <p className="text-[11px] text-muted-foreground">Or drag the round handle above the selection.</p>
+      </Section>
+    </>
   );
 }
 
@@ -44,8 +115,10 @@ export function PropertiesPanel({
   onPatch,
   onAlign,
   onLock,
+  multi,
   background,
 }: {
+  multi: MultiActions;
   background: {
     value: BoxBackground | null;
     assets: { id: string; fileName: string }[];
@@ -69,12 +142,7 @@ export function PropertiesPanel({
     );
   }
   if (selectionCount > 1 || !object) {
-    return (
-      <Section title={`${selectionCount} objects`}>
-        <AlignBar onAlign={onAlign} disabled={false} />
-        <p className="text-[11px] text-muted-foreground">Each object aligns to the panel it sits on.</p>
-      </Section>
-    );
+    return <MultiPanel m={multi} />;
   }
   const o = object;
   const disabled = o.locked;

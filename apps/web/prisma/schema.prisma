@@ -286,3 +286,25 @@ model TemplateCategory {
   @@index([kind, sortOrder])
   @@map("template_category")
 }
+
+/// A picture an admin added to the artwork library (shown in the customer artwork menu). The file is in storage (PNG or JPEG).
+model ArtworkItem {
+  id          String   @id @default(cuid())
+  name        String
+  /// Search words, lower case, at most 12 (see lib/artwork-meta.ts).
+  tags        String[]
+  /// Free text group, "" = none. The admin picks an existing one or types a new one.
+  category    String   @default("")
+  storageKey  String   @unique
+  mime        String
+  widthPx     Int
+  heightPx    Int
+  sizeBytes   Int
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([createdAt(sort: Desc)])
+  @@map("artwork_item")
+}

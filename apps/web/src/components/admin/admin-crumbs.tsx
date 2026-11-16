@@ -8,6 +8,7 @@ const LABELS: Record<string, string> = {
   users: "Users",
   templates: "Templates",
   "template-categories": "Categories",
+  artworks: "Artworks",
   settings: "Settings",
   profile: "Profile",
 };

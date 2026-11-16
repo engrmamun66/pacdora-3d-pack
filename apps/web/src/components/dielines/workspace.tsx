@@ -721,11 +721,11 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
           {/* Anchored to the left edge of its column: as the column closes, the sidebar slides out to the right. */}
           <div className={`flex h-full min-h-0 flex-col gap-4 overflow-y-auto border-t p-4 transition-opacity duration-300 lg:w-[340px] lg:border-t-0 lg:border-l ${splitTab ? "opacity-0" : ""}`}>
           {shown && foldable ? (
-            // Dieline tab: the small 3D card. 3D tab: the dieline takes its place here (a click brings it back to the centre).
+            // Dieline tab: the small 3D card. 3D tab: the dieline takes its place here as a picture only: clicking it does not change the tab (hovering a panel blinks it on the box).
             <div ref={asideSlot} className="relative shrink-0 rounded-2xl">
               {centre === "dieline" ? <div ref={asideTarget} className="h-[17rem]" /> : src ? (
                 <SwapIn getFrom={() => swapFrom.current?.centre}>
-                  <MiniSheet box={dielineViewBox(shown, 22)} src={src} onOpen={() => pickTab("dieline")} onHoverMm={hoverAt} highlight={shapes.find((q) => q.id === blinkId)?.poly ?? null} />
+                  <MiniSheet box={dielineViewBox(shown, 22)} src={src} onHoverMm={hoverAt} highlight={shapes.find((q) => q.id === blinkId)?.poly ?? null} />
                 </SwapIn>
               ) : <div className="h-80" aria-hidden />}
               {sw.switching && !quickPair && sw.tab === "dieline" ? <ViewSkeleton kind="box" label="Loading the 3D preview" /> : null}

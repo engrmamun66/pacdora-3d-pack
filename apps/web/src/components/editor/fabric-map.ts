@@ -14,6 +14,8 @@ export interface ObjectMeta {
   readonly type: ArtworkObject["type"];
   readonly assetId?: string;
   locked: boolean;
+  /** Same value = grouped together (artwork `groupId`). */
+  groupId?: string;
 }
 
 const metas = new WeakMap<FabricObject, ObjectMeta>();
@@ -67,14 +69,14 @@ export async function toFabric(a: ArtworkObject, idx: AnchorIndex): Promise<Fabr
       o.setPositionByOrigin(new Point(c.x, c.y), "center", "center");
       break;
   }
-  metas.set(o, { id: a.id, name: a.name, type: a.type, ...(a.type === "image" ? { assetId: a.assetId } : {}), locked: a.locked });
+  metas.set(o, { id: a.id, name: a.name, type: a.type, ...(a.type === "image" ? { assetId: a.assetId } : {}), locked: a.locked, ...(a.groupId ? { groupId: a.groupId } : {}) });
   applyLock(o, a.locked);
   return o;
 }
 
 /** Make `o` stand in for `a`, e.g. a grey box for an image that failed to load. */
 export function retag(o: FabricObject, a: ArtworkObject) {
-  metas.set(o, { id: a.id, name: a.name, type: a.type, ...(a.type === "image" ? { assetId: a.assetId } : {}), locked: a.locked });
+  metas.set(o, { id: a.id, name: a.name, type: a.type, ...(a.type === "image" ? { assetId: a.assetId } : {}), locked: a.locked, ...(a.groupId ? { groupId: a.groupId } : {}) });
   if (a.type === "image") o.set({ flipX: a.flipX, flipY: a.flipY });
 }
 
@@ -91,7 +93,7 @@ export function fromFabric(o: FabricObject, idx: AnchorIndex): ArtworkObject | n
   const anchor = anchorFor(idx, { x: t.translateX, y: t.translateY });
   const a360 = ((t.angle % 360) + 360) % 360;
   const angle = a360 > 180 ? a360 - 360 : a360; // -180..180
-  const base = { id: m.id, name: m.name, ...anchor, angle, opacity: o.opacity, visible: o.visible, locked: m.locked };
+  const base = { id: m.id, name: m.name, ...anchor, angle, opacity: o.opacity, visible: o.visible, locked: m.locked, ...(m.groupId ? { groupId: m.groupId } : {}) };
   const color = (v: unknown): string | null => (typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v) ? v : null);
   let a: unknown;
   switch (m.type) {

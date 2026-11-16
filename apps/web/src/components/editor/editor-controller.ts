@@ -1,10 +1,13 @@
-import { ActiveSelection, Canvas, Ellipse, type FabricObject, FabricImage, Line, Point, Rect, Textbox, type TMat2D } from "fabric";
-import { type AnchorIndex, anchorIndex } from "@packaging/artwork";
+import { ActiveSelection, Canvas, Ellipse, type FabricObject, FabricImage, Line, Point, Rect, Textbox, type TMat2D, util } from "fabric";
+import { type AnchorIndex, anchorFor, anchorIndex, panelAt } from "@packaging/artwork";
 import { type DielineGeometry, flattenOutline, panelOutline } from "@packaging/dieline-engine";
 import { STYLE, outlinePathD } from "@packaging/render-svg";
 import { type Artwork, type ArtworkObject, type BoxBackground, artworkObject, boxBackground, MM_PER_PT } from "@packaging/schema";
 import { loadBackgroundImage, paintBackground } from "./background";
 import { applyLock, assetUrl, fromFabric, metaOf, retag, toFabric } from "./fabric-map";
+import { installSelectionStyle, styleFrame } from "./selection-style";
+
+installSelectionStyle();
 
 export interface Viewport {
   readonly zoom: number; // screen px per mm
@@ -18,6 +21,8 @@ export interface EditorCallbacks {
   onViewport(v: Viewport): void;
   onHistory(h: { canUndo: boolean; canRedo: boolean }): void;
   onError(message: string): void;
+  /** A right click (no drag) on artwork: where to show its menu (px from the canvas top-left); the artwork is selected. */
+  onContextMenu?(at: { x: number; y: number }): void;
 }
 
 export interface OverlayOptions {
@@ -30,8 +35,9 @@ export type NewObjectKind = "text" | "rect" | "ellipse" | "line";
 export type AlignMode = "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom";
 
 const MAX_HISTORY = 100;
-const MIN_ZOOM = 0.05;
-const MAX_ZOOM = 60;
+/** Zoom limits in screen px per mm (also the ends of the zoom slider). */
+export const MIN_ZOOM = 0.05;
+export const MAX_ZOOM = 60;
 
 const newId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).replace(/-/g, "").slice(0, 20);
 
@@ -70,6 +76,16 @@ export class EditorController {
   private textTimer: ReturnType<typeof setTimeout> | null = null;
   private panning: { x: number; y: number } | null = null;
   spaceDown = false;
+  private panMode = false;
+  private expanding = false;
+  /** Guide lines (sheet mm) shown while artwork is being moved: x = vertical lines, y = horizontal ones. */
+  private guides: { x: number[]; y: number[] } = { x: [], y: [] };
+  /**
+   * Right button: a drag moves the view (left/right/up/down, even over artwork); a click without a
+   * drag on artwork selects it and asks for its menu. Holds the pointer, where it was last, and the artwork under it.
+   */
+  private rightPan: { id: number; x: number; y: number; moved: boolean; target: FabricObject | undefined } | null = null;
+  private readonly offRightPan: () => void;
 
   constructor(
     el: HTMLCanvasElement,
@@ -88,6 +104,8 @@ export class EditorController {
     });
     this.canvas.on("before:render", ({ ctx }) => this.drawUnder(ctx));
     this.canvas.on("after:render", ({ ctx }) => this.drawOver(ctx));
+    this.canvas.on("object:moving", ({ target, e }) => this.snapMove(target, !(e as MouseEvent | undefined)?.altKey));
+    this.canvas.on("mouse:up", () => this.clearGuides());
     this.canvas.on("object:modified", ({ target }) => {
       if (target && !(target instanceof ActiveSelection)) this.bakeScale(target);
       this.commit();
@@ -97,14 +115,18 @@ export class EditorController {
       this.textTimer = setTimeout(() => this.commit(), 500);
     });
     this.canvas.on("text:editing:exited", () => this.commit());
-    const sel = () => this.cb.onSelection(this.selectedIds());
+    const sel = () => {
+      if (!this.expanding && this.expandToGroups()) return;
+      styleFrame(this.canvas.getActiveObject());
+      this.cb.onSelection(this.selectedIds());
+    };
     this.canvas.on("selection:created", sel);
     this.canvas.on("selection:updated", sel);
     this.canvas.on("selection:cleared", sel);
     this.canvas.on("mouse:wheel", ({ e }) => this.onWheel(e as WheelEvent));
     this.canvas.on("mouse:down", ({ e }) => {
       const me = e as MouseEvent;
-      if (this.spaceDown || me.button === 1) {
+      if (this.spaceDown || this.panMode || me.button === 1) {
         this.panning = { x: me.clientX, y: me.clientY };
         this.canvas.selection = false;
         this.canvas.discardActiveObject();
@@ -118,8 +140,62 @@ export class EditorController {
     });
     this.canvas.on("mouse:up", () => {
       this.panning = null;
-      this.canvas.selection = true;
+      this.canvas.selection = !this.panMode;
     });
+
+    // Right-button drag moves the view (left/right/up/down) wherever the pointer is, even over artwork.
+    const host = this.canvas.upperCanvasEl;
+    const down = (e: PointerEvent) => {
+      if (e.button !== 2) return;
+      e.preventDefault();
+      this.rightPan = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false, target: this.panMode ? undefined : this.canvas.findTarget(e).target };
+      host.setPointerCapture(e.pointerId);
+    };
+    const move = (e: PointerEvent) => {
+      const r = this.rightPan;
+      if (!r || r.id !== e.pointerId) return;
+      if (!r.moved) {
+        if (Math.hypot(e.clientX - r.x, e.clientY - r.y) < 4) return; // still a click
+        r.moved = true;
+        this.canvas.discardActiveObject();
+        this.setCursors("grabbing");
+        this.canvas.requestRenderAll();
+      }
+      this.pan(e.clientX - r.x, e.clientY - r.y);
+      r.x = e.clientX;
+      r.y = e.clientY;
+    };
+    const up = (e: PointerEvent) => {
+      const r = this.rightPan;
+      if (!r || r.id !== e.pointerId) return;
+      this.rightPan = null;
+      if (host.hasPointerCapture(e.pointerId)) host.releasePointerCapture(e.pointerId);
+      if (r.moved) return void this.setCursors(this.panMode ? "grab" : null);
+      // The target is the selection itself when several objects (or a group) are chosen and the click is on one of them.
+      const onSelection = r.target instanceof ActiveSelection;
+      if (e.type === "pointerup" && r.target && (onSelection || metaOf(r.target))) {
+        if (!onSelection && !this.canvas.getActiveObjects().includes(r.target)) this.canvas.setActiveObject(r.target);
+        this.canvas.requestRenderAll();
+        const box = host.getBoundingClientRect();
+        this.cb.onContextMenu?.({ x: e.clientX - box.left, y: e.clientY - box.top });
+      }
+    };
+    host.addEventListener("pointerdown", down);
+    host.addEventListener("pointermove", move);
+    host.addEventListener("pointerup", up);
+    host.addEventListener("pointercancel", up);
+    this.offRightPan = () => {
+      host.removeEventListener("pointerdown", down);
+      host.removeEventListener("pointermove", move);
+      host.removeEventListener("pointerup", up);
+      host.removeEventListener("pointercancel", up);
+    };
+  }
+
+  /** The cursor over the canvas: a fixed one (hand), or null for the normal ones (arrow, move). */
+  private setCursors(c: "grab" | "grabbing" | null) {
+    this.canvas.defaultCursor = c ?? "default";
+    this.canvas.hoverCursor = c ?? "move";
   }
 
   // ---------------------------------------------------------------- geometry layer
@@ -227,7 +303,91 @@ export class EditorController {
     ctx.lineWidth = 1.25 / z;
     ctx.strokeStyle = STYLE.cut.stroke;
     ctx.stroke(this.paths.cut);
+    this.drawGuides(ctx, z);
     ctx.restore();
+  }
+
+  /** Orange dashed guides (the same as in the window editor), across the whole visible sheet area. */
+  private drawGuides(ctx: CanvasRenderingContext2D, z: number) {
+    const { x, y } = this.guides;
+    if (!x.length && !y.length) return;
+    const v = this.canvas.viewportTransform;
+    const x0 = -v[4] / z;
+    const x1 = (this.canvas.width - v[4]) / z;
+    const y0 = -v[5] / z;
+    const y1 = (this.canvas.height - v[5]) / z;
+    ctx.setLineDash([5 / z, 3 / z]);
+    ctx.lineWidth = 1.2 / z;
+    ctx.strokeStyle = "#f97316";
+    ctx.beginPath();
+    for (const gx of x) {
+      ctx.moveTo(gx, y0);
+      ctx.lineTo(gx, y1);
+    }
+    for (const gy of y) {
+      ctx.moveTo(x0, gy);
+      ctx.lineTo(x1, gy);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  private clearGuides() {
+    if (!this.guides.x.length && !this.guides.y.length) return;
+    this.guides = { x: [], y: [] };
+    this.canvas.requestRenderAll();
+  }
+
+  /**
+   * While artwork is dragged: pull it onto nearby lines (edges and centre of its panel, of the sheet and of other
+   * artwork, within 6 screen pixels) and remember the lines to draw. Holding Alt turns the snapping off.
+   */
+  private snapMove(target: FabricObject, on: boolean) {
+    this.guides = { x: [], y: [] };
+    if (!on) return;
+    target.setCoords(); // fresh corner positions for this frame
+    const moving = new Set<FabricObject>(target instanceof ActiveSelection ? target.getObjects() : [target]);
+    const box = (o: FabricObject) => {
+      const c = o.getCoords();
+      const xs = c.map((p) => p.x);
+      const ys = c.map((p) => p.y);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      return { minX, maxX, minY, maxY, midX: (minX + maxX) / 2, midY: (minY + maxY) / 2 };
+    };
+    const me = box(target);
+    // Lines to snap to: the panel the object is over, the whole sheet, and every other visible object.
+    const xs: number[] = [];
+    const ys: number[] = [];
+    const lines = (b: { minX: number; maxX: number; minY: number; maxY: number }) => {
+      xs.push(b.minX, (b.minX + b.maxX) / 2, b.maxX);
+      ys.push(b.minY, (b.minY + b.maxY) / 2, b.maxY);
+    };
+    const panelId = panelAt(this.idx, { x: me.midX, y: me.midY });
+    const poly = panelId ? this.idx.panels.get(panelId)?.polygon : undefined;
+    if (poly) lines({ minX: Math.min(...poly.map((p) => p.x)), maxX: Math.max(...poly.map((p) => p.x)), minY: Math.min(...poly.map((p) => p.y)), maxY: Math.max(...poly.map((p) => p.y)) });
+    const cb = this.geo.cutBounds;
+    lines({ minX: cb.min.x, maxX: cb.max.x, minY: cb.min.y, maxY: cb.max.y });
+    for (const o of this.canvas.getObjects()) if (o.visible && !moving.has(o) && metaOf(o)) lines(box(o));
+
+    const tol = 6 / this.canvas.getZoom();
+    const best = (mine: number[], cands: number[]) => {
+      let d = 0;
+      let min = tol;
+      for (const m of mine) for (const c of cands) if (Math.abs(c - m) < min) { min = Math.abs(c - m); d = c - m; }
+      return min < tol ? d : 0;
+    };
+    const dx = best([me.minX, me.midX, me.maxX], xs);
+    const dy = best([me.minY, me.midY, me.maxY], ys);
+    if (dx || dy) {
+      target.set({ left: target.left + dx, top: target.top + dy });
+      target.setCoords();
+    }
+    const at = box(target);
+    const hit = (mine: number[], cands: number[]) => [...new Set(cands.filter((c) => mine.some((m) => Math.abs(c - m) < 0.01)).map((c) => Math.round(c * 100) / 100))];
+    this.guides = { x: hit([at.minX, at.midX, at.maxX], xs), y: hit([at.minY, at.midY, at.maxY], ys) };
   }
 
   // ---------------------------------------------------------------- viewport
@@ -266,21 +426,52 @@ export class EditorController {
     this.emitViewport();
   }
 
+  /** Set the zoom to an exact value (screen px per mm), around the middle of the view. */
+  setZoom(z: number) {
+    this.zoomBy(z / this.canvas.getZoom());
+  }
+
+  /** Hand tool: dragging moves the view, and objects cannot be picked or moved until it is switched off. */
+  setPanMode(on: boolean) {
+    this.panMode = on;
+    this.canvas.skipTargetFind = on;
+    this.canvas.selection = !on;
+    this.setCursors(on ? "grab" : null);
+    if (on) this.canvas.discardActiveObject();
+    this.canvas.requestRenderAll();
+  }
+
+  /** A point of the canvas element (px, from its top-left corner) on the flat sheet (mm). */
+  sceneAt(x: number, y: number): { x: number; y: number } {
+    const p = new Point(x, y).transform(util.invertTransform(this.canvas.viewportTransform));
+    return { x: p.x, y: p.y };
+  }
+
   pan(dx: number, dy: number) {
     this.canvas.relativePan(new Point(dx, dy));
     this.emitViewport();
   }
 
+  /**
+   * The mouse wheel zooms around the pointer (no key needed). Shift + wheel moves the view sideways.
+   * Pinch on a trackpad arrives as ctrl + wheel with small steps, so it gets a finer factor.
+   */
   private onWheel(e: WheelEvent) {
     e.preventDefault();
     e.stopPropagation();
-    if (e.ctrlKey || e.metaKey) {
-      // Pinch-zoom on trackpads arrives as ctrl + wheel.
-      const rect = this.canvas.upperCanvasEl.getBoundingClientRect();
-      this.zoomBy(Math.exp(-e.deltaY * 0.01), { x: e.clientX - rect.left, y: e.clientY - rect.top });
-    } else {
-      this.pan(-e.deltaX, -e.deltaY);
+    if (e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      this.pan(-(e.deltaX || e.deltaY), 0);
+      return;
     }
+    const rect = this.canvas.upperCanvasEl.getBoundingClientRect();
+    const at = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    if (e.ctrlKey || e.metaKey) {
+      this.zoomBy(Math.exp(-e.deltaY * 0.01), at);
+      return;
+    }
+    // One notch of a mouse wheel is about 100 px (3 lines in Firefox): about 15% zoom.
+    const dy = Math.max(-120, Math.min(120, e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY));
+    this.zoomBy(Math.exp(-dy * 0.0015), at);
   }
 
   // ---------------------------------------------------------------- document
@@ -490,12 +681,17 @@ export class EditorController {
     await this.insert(a);
   }
 
-  /** Place an uploaded image on the default panel, fitted to 60% of its width/height. */
-  async addImage(assetId: string, fileName: string) {
+  /**
+   * Place an uploaded image, fitted to 60% of the default panel. Without `at` it goes in the middle of
+   * that panel; with `at` (a point of the canvas element, px: where it was dropped) its centre is there
+   * and it belongs to the panel under that point.
+   */
+  async addImage(assetId: string, fileName: string, at?: { x: number; y: number }) {
     const probe = await FabricImage.fromURL(assetUrl(assetId));
     const { t, base } = this.baseFor(fileName.replace(/\.[a-z]+$/i, "").slice(0, 60) || "Image");
     const k = Math.min((t.w * 0.6) / probe.width, (t.h * 0.6) / probe.height);
-    await this.insert({ ...base, type: "image", assetId, width: probe.width * k, height: probe.height * k, flipX: false, flipY: false });
+    const place = at ? anchorFor(this.idx, this.sceneAt(at.x, at.y)) : {};
+    await this.insert({ ...base, ...place, type: "image", assetId, width: probe.width * k, height: probe.height * k, flipX: false, flipY: false });
   }
 
   /** Change properties of one object (validated by the artwork schema). */
@@ -520,6 +716,28 @@ export class EditorController {
     this.canvas.insertAt(index, fresh);
     this.busy = false;
     if (wasActive && next.visible) this.canvas.setActiveObject(fresh);
+    this.canvas.requestRenderAll();
+    this.commit();
+  }
+
+  /** Rename a layer (kept as typed, up to 80 characters; an empty name is ignored). */
+  rename(id: string, name: string) {
+    const o = this.find(id);
+    const m = o && metaOf(o);
+    const next = name.trim().slice(0, 80);
+    if (!m || !next || next === m.name) return;
+    m.name = next;
+    this.commit();
+  }
+
+  /** Put a layer at a place in the stack: 0 = bottom (what the layer list shows last). */
+  moveTo(id: string, index: number) {
+    const o = this.find(id);
+    if (!o) return;
+    const objs = this.canvas.getObjects();
+    const to = Math.max(0, Math.min(objs.length - 1, index));
+    if (objs.indexOf(o) === to) return;
+    this.canvas.moveObjectTo(o, to);
     this.canvas.requestRenderAll();
     this.commit();
   }
@@ -563,8 +781,10 @@ export class EditorController {
     const ids = this.selectedIds();
     const data = ids.map((id) => this.getData(id)).filter((x): x is ArtworkObject => Boolean(x));
     const created: FabricObject[] = [];
+    const groups = new Map<string, string>(); // a copied group becomes a new group of its own
     for (const d of data) {
-      const copy = { ...d, id: newId(), name: `${d.name} copy`.slice(0, 80), dx: d.dx + 5, dy: d.dy + 5, locked: false };
+      const gid = d.groupId ? (groups.get(d.groupId) ?? groups.set(d.groupId, newId()).get(d.groupId)) : undefined;
+      const copy = { ...d, id: newId(), name: `${d.name} copy`.slice(0, 80), dx: d.dx + 5, dy: d.dy + 5, locked: false, ...(gid ? { groupId: gid } : {}) };
       const o = await this.create(copy);
       this.canvas.add(o);
       created.push(o);
@@ -599,17 +819,26 @@ export class EditorController {
     this.commit();
   }
 
-  /** Align each selected object to the edges/centre of the panel it sits on. */
-  align(mode: AlignMode) {
+  /**
+   * Align the selected objects. `to` "panel": each to the edges/centre of the panel it sits on.
+   * `to` "selection": to the edges/centre of the whole selection (needs two or more objects).
+   */
+  align(mode: AlignMode, to: "panel" | "selection" = "panel") {
     const objs = this.canvas.getActiveObjects();
     if (!objs.length) return;
     this.canvas.discardActiveObject(); // so coordinates are absolute
+    const boundsOf = (o: FabricObject) => {
+      const c = o.getCoords();
+      return { minX: Math.min(...c.map((p) => p.x)), maxX: Math.max(...c.map((p) => p.x)), minY: Math.min(...c.map((p) => p.y)), maxY: Math.max(...c.map((p) => p.y)) };
+    };
+    const all = objs.map(boundsOf);
+    const union = { minX: Math.min(...all.map((b) => b.minX)), maxX: Math.max(...all.map((b) => b.maxX)), minY: Math.min(...all.map((b) => b.minY)), maxY: Math.max(...all.map((b) => b.maxY)) };
     for (const o of objs) {
       const data = fromFabric(o, this.idx);
       if (!data || data.locked) continue;
       const panel = data.panelId ? this.idx.panels.get(data.panelId) : undefined;
       const poly = panel?.polygon;
-      const pb = poly
+      const pb = to === "selection" && objs.length > 1 ? union : poly
         ? { minX: Math.min(...poly.map((p) => p.x)), maxX: Math.max(...poly.map((p) => p.x)), minY: Math.min(...poly.map((p) => p.y)), maxY: Math.max(...poly.map((p) => p.y)) }
         : { minX: this.geo.cutBounds.min.x, maxX: this.geo.cutBounds.max.x, minY: this.geo.cutBounds.min.y, maxY: this.geo.cutBounds.max.y };
       const c = o.getCoords();
@@ -631,8 +860,172 @@ export class EditorController {
     this.commit();
   }
 
+  // ---------------------------------------------------------------- groups, stacking, transforms
+
+  /** Select these objects (one, or several as a selection). */
+  private selectObjects(objs: FabricObject[]) {
+    this.canvas.discardActiveObject();
+    if (objs.length === 1) this.canvas.setActiveObject(objs[0]!);
+    else if (objs.length > 1) this.canvas.setActiveObject(new ActiveSelection(objs, { canvas: this.canvas }));
+    this.canvas.requestRenderAll();
+  }
+
+  /** Choosing one member of a group chooses the whole group. Returns true when it changed the selection. */
+  private expandToGroups(): boolean {
+    const active = this.canvas.getActiveObjects();
+    const ids = new Set(active.map((o) => metaOf(o)?.groupId).filter((g): g is string => Boolean(g)));
+    if (ids.size === 0) return false;
+    const all = this.canvas.getObjects().filter((o) => o.visible && (active.includes(o) || ids.has(metaOf(o)?.groupId ?? "")));
+    if (all.length === active.length) return false;
+    this.expanding = true;
+    try {
+      this.selectObjects(all);
+    } finally {
+      this.expanding = false;
+    }
+    return true;
+  }
+
+  /** Put the stack in exactly this order (bottom first). */
+  private applyOrder(order: FabricObject[]) {
+    order.forEach((o, i) => this.canvas.moveObjectTo(o, i));
+  }
+
+  /** Where the selection sits in the stack: all on top, all at the bottom, or neither (for greying out the arrange commands). */
+  stackState(): { atTop: boolean; atBottom: boolean } {
+    const chosen = new Set(this.canvas.getActiveObjects());
+    const all = this.canvas.getObjects();
+    const k = chosen.size;
+    return { atTop: k > 0 && all.slice(all.length - k).every((o) => chosen.has(o)), atBottom: k > 0 && all.slice(0, k).every((o) => chosen.has(o)) };
+  }
+
+  /**
+   * Change the stacking of the selected objects (their order among themselves stays):
+   * "front" / "back" to the very top / bottom, "forward" / "backward" one step.
+   */
+  arrange(mode: "front" | "forward" | "backward" | "back") {
+    const chosen = new Set(this.canvas.getActiveObjects());
+    if (chosen.size === 0) return;
+    const before = this.canvas.getObjects().slice();
+    const picked = before.filter((o) => chosen.has(o)); // bottom first
+    const rest = before.filter((o) => !chosen.has(o));
+    let order: FabricObject[];
+    if (mode === "front") order = [...rest, ...picked];
+    else if (mode === "back") order = [...picked, ...rest];
+    else {
+      // One step: each chosen object swaps with its neighbour, unless that neighbour is chosen too.
+      order = before.slice();
+      const walk = mode === "forward" ? [...picked].reverse() : picked;
+      for (const o of walk) {
+        const i = order.indexOf(o);
+        const j = mode === "forward" ? i + 1 : i - 1;
+        if (j < 0 || j >= order.length || chosen.has(order[j]!)) continue;
+        [order[i], order[j]] = [order[j]!, order[i]!];
+      }
+    }
+    if (order.every((o, i) => o === before[i])) return;
+    this.canvas.discardActiveObject(); // objects of a selection are moved one by one
+    this.applyOrder(order);
+    this.selectObjects(picked);
+    this.commit();
+  }
+
+  /** Join the selected objects into a group. They also become neighbours in the stack, at the place of the top one. */
+  group() {
+    const chosen = new Set(this.canvas.getActiveObjects());
+    if (chosen.size < 2) return;
+    const all = this.canvas.getObjects().slice();
+    const picked = all.filter((o) => chosen.has(o));
+    const rest = all.filter((o) => !chosen.has(o));
+    const topIndex = all.lastIndexOf(picked.at(-1)!);
+    const below = all.slice(0, topIndex).filter((o) => !chosen.has(o)).length;
+    const gid = newId();
+    this.canvas.discardActiveObject();
+    this.applyOrder([...rest.slice(0, below), ...picked, ...rest.slice(below)]);
+    for (const o of picked) {
+      const m = metaOf(o);
+      if (m) m.groupId = gid;
+    }
+    this.selectObjects(picked);
+    this.commit();
+  }
+
+  /** Dissolve the groups the selection belongs to; the objects stay selected. */
+  ungroup() {
+    const active = this.canvas.getActiveObjects();
+    const ids = new Set(active.map((o) => metaOf(o)?.groupId).filter((g): g is string => Boolean(g)));
+    if (ids.size === 0) return;
+    for (const o of this.canvas.getObjects()) {
+      const m = metaOf(o);
+      if (m?.groupId && ids.has(m.groupId)) delete m.groupId;
+    }
+    this.commit();
+  }
+
+  /** Spread three or more selected objects so the gaps between them are equal (the outer two stay). */
+  distribute(axis: "h" | "v") {
+    const objs = this.canvas.getActiveObjects();
+    if (objs.length < 3) return;
+    this.canvas.discardActiveObject();
+    const lo = axis === "h" ? "minX" : "minY";
+    const hi = axis === "h" ? "maxX" : "maxY";
+    const items = objs
+      .map((o) => {
+        const c = o.getCoords();
+        const xs = c.map((p) => p.x);
+        const ys = c.map((p) => p.y);
+        return { o, minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+      })
+      .sort((a, b) => a[lo] - b[lo]);
+    const span = Math.max(...items.map((i) => i[hi])) - items[0]![lo];
+    const used = items.reduce((n, i) => n + (i[hi] - i[lo]), 0);
+    const gap = (span - used) / (items.length - 1);
+    let at = items[0]![lo];
+    for (const i of items) {
+      const d = at - i[lo];
+      if (!metaOf(i.o)?.locked) {
+        i.o.set(axis === "h" ? { left: i.o.left + d } : { top: i.o.top + d });
+        i.o.setCoords();
+      }
+      at += i[hi] - i[lo] + gap;
+    }
+    this.selectObjects(objs);
+    this.commit();
+  }
+
+  /** Make the whole selection bigger or smaller by `factor` (around its middle). Refused if an object would leave the allowed size range. */
+  scaleSelection(factor: number) {
+    const a = this.canvas.getActiveObject();
+    if (!a || !Number.isFinite(factor) || factor <= 0) return;
+    const sx = a.scaleX;
+    const sy = a.scaleY;
+    a.set({ scaleX: sx * factor, scaleY: sy * factor });
+    a.setCoords();
+    // An object scaled out of range would fail the artwork check and silently vanish from the saved file: undo instead.
+    if (this.toArtwork().objects.length !== this.canvas.getObjects().length) {
+      a.set({ scaleX: sx, scaleY: sy });
+      a.setCoords();
+      this.canvas.requestRenderAll();
+      this.cb.onError("That size is outside the allowed range for one of the objects.");
+      return;
+    }
+    this.canvas.requestRenderAll();
+    this.canvas.fire("object:modified", { target: a } as never);
+  }
+
+  /** Turn the whole selection clockwise by `deg` degrees around its middle. */
+  rotateSelection(deg: number) {
+    const a = this.canvas.getActiveObject();
+    if (!a || !Number.isFinite(deg)) return;
+    a.rotate(a.angle + deg);
+    a.setCoords();
+    this.canvas.requestRenderAll();
+    this.canvas.fire("object:modified", { target: a } as never);
+  }
+
   dispose() {
     if (this.textTimer) clearTimeout(this.textTimer);
+    this.offRightPan();
     void this.canvas.dispose();
   }
 }

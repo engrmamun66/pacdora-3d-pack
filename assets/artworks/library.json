@@ -1,0 +1,6097 @@
+[
+  {
+    "file": "art-eco-01.png",
+    "name": "Plant Based",
+    "tags": [
+      "eco",
+      "plant",
+      "based",
+      "leaf",
+      "green",
+      "circle"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-02.png",
+    "name": "Recyclable",
+    "tags": [
+      "eco",
+      "recyclable",
+      "recycle",
+      "darkgreen",
+      "double"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-03.png",
+    "name": "Planet First",
+    "tags": [
+      "eco",
+      "planet",
+      "first",
+      "globe",
+      "teal",
+      "seal"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-04.png",
+    "name": "Water Saving",
+    "tags": [
+      "eco",
+      "water",
+      "saving",
+      "drop",
+      "kraft",
+      "square"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-05.png",
+    "name": "Eco Friendly",
+    "tags": [
+      "eco",
+      "friendly",
+      "leaf",
+      "green",
+      "hex"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-06.png",
+    "name": "Solar Powered",
+    "tags": [
+      "eco",
+      "solar",
+      "powered",
+      "sun",
+      "darkgreen",
+      "circle"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-07.png",
+    "name": "Reuse Me",
+    "tags": [
+      "eco",
+      "reuse",
+      "recycle",
+      "teal",
+      "double"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-08.png",
+    "name": "Biodegradable",
+    "tags": [
+      "eco",
+      "biodegradable",
+      "flower",
+      "kraft",
+      "seal"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-09.png",
+    "name": "Compostable",
+    "tags": [
+      "eco",
+      "compostable",
+      "leaf",
+      "green",
+      "square"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-10.png",
+    "name": "Carbon Neutral",
+    "tags": [
+      "eco",
+      "carbon",
+      "neutral",
+      "globe",
+      "darkgreen",
+      "hex"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-11.png",
+    "name": "Earth Love",
+    "tags": [
+      "eco",
+      "earth",
+      "love",
+      "heart",
+      "teal",
+      "circle"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-12.png",
+    "name": "Recycled Paper",
+    "tags": [
+      "eco",
+      "recycled",
+      "paper",
+      "recycle",
+      "kraft",
+      "double"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-13.png",
+    "name": "Natural Fibre",
+    "tags": [
+      "eco",
+      "natural",
+      "fibre",
+      "wheat",
+      "green",
+      "seal"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-14.png",
+    "name": "Plastic Free",
+    "tags": [
+      "eco",
+      "plastic",
+      "free",
+      "drop",
+      "darkgreen",
+      "square"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-15.png",
+    "name": "Zero Waste",
+    "tags": [
+      "eco",
+      "zero",
+      "waste",
+      "leaf",
+      "teal",
+      "hex"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-16.png",
+    "name": "Organic",
+    "tags": [
+      "eco",
+      "organic",
+      "flower",
+      "kraft",
+      "circle"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-17.png",
+    "name": "Reduce Reuse Recycle",
+    "tags": [
+      "eco",
+      "reduce",
+      "reuse",
+      "recycle",
+      "cube",
+      "green",
+      "double"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-18.png",
+    "name": "Save The Earth",
+    "tags": [
+      "eco",
+      "save",
+      "the",
+      "earth",
+      "globe",
+      "darkgreen",
+      "seal"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-19.png",
+    "name": "Green Energy",
+    "tags": [
+      "eco",
+      "green",
+      "energy",
+      "sun",
+      "teal",
+      "square"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-eco-20.png",
+    "name": "Sustainable",
+    "tags": [
+      "eco",
+      "sustainable",
+      "check",
+      "kraft",
+      "hex"
+    ],
+    "category": "Eco"
+  },
+  {
+    "file": "art-handling-01.png",
+    "name": "Fragile",
+    "tags": [
+      "handling",
+      "fragile",
+      "glass",
+      "ink",
+      "square"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-02.png",
+    "name": "This Side Up",
+    "tags": [
+      "handling",
+      "this",
+      "side",
+      "arrowup",
+      "ink",
+      "circle"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-03.png",
+    "name": "Keep Dry",
+    "tags": [
+      "handling",
+      "keep",
+      "dry",
+      "umbrella",
+      "blue",
+      "hex"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-04.png",
+    "name": "Keep Cool",
+    "tags": [
+      "handling",
+      "keep",
+      "cool",
+      "thermo",
+      "blue",
+      "square"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-05.png",
+    "name": "Do Not Stack",
+    "tags": [
+      "handling",
+      "not",
+      "stack",
+      "ink",
+      "circle"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-06.png",
+    "name": "Away From Sun",
+    "tags": [
+      "handling",
+      "away",
+      "from",
+      "sun",
+      "ink",
+      "hex"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-07.png",
+    "name": "No Water",
+    "tags": [
+      "handling",
+      "water",
+      "drop",
+      "blue",
+      "square"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-08.png",
+    "name": "Keep From Heat",
+    "tags": [
+      "handling",
+      "keep",
+      "from",
+      "heat",
+      "flame",
+      "red",
+      "circle"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-09.png",
+    "name": "Handle With Care",
+    "tags": [
+      "handling",
+      "handle",
+      "with",
+      "care",
+      "cube",
+      "ink",
+      "hex"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-10.png",
+    "name": "Shipping",
+    "tags": [
+      "handling",
+      "shipping",
+      "truck",
+      "orange",
+      "square"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-11.png",
+    "name": "Open Here",
+    "tags": [
+      "handling",
+      "open",
+      "here",
+      "envelope",
+      "ink",
+      "circle"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-12.png",
+    "name": "Perishable",
+    "tags": [
+      "handling",
+      "perishable",
+      "clock",
+      "red",
+      "hex"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-13.png",
+    "name": "Keep Frozen",
+    "tags": [
+      "handling",
+      "keep",
+      "frozen",
+      "snowflake",
+      "blue",
+      "square"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-14.png",
+    "name": "Caution",
+    "tags": [
+      "handling",
+      "caution",
+      "bolt",
+      "orange",
+      "circle"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-15.png",
+    "name": "Please Recycle",
+    "tags": [
+      "handling",
+      "please",
+      "recycle",
+      "green",
+      "hex"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-16.png",
+    "name": "Gift Inside",
+    "tags": [
+      "handling",
+      "gift",
+      "inside",
+      "pink",
+      "square"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-17.png",
+    "name": "Home Delivery",
+    "tags": [
+      "handling",
+      "home",
+      "delivery",
+      "house",
+      "teal",
+      "circle"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-18.png",
+    "name": "Inspected",
+    "tags": [
+      "handling",
+      "inspected",
+      "check",
+      "green",
+      "hex"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-19.png",
+    "name": "Heavy Item",
+    "tags": [
+      "handling",
+      "heavy",
+      "item",
+      "cube",
+      "black",
+      "square"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-handling-20.png",
+    "name": "Store Upright",
+    "tags": [
+      "handling",
+      "store",
+      "upright",
+      "arrowup",
+      "black",
+      "circle"
+    ],
+    "category": "Handling"
+  },
+  {
+    "file": "art-food-01.png",
+    "name": "Fresh Baked",
+    "tags": [
+      "food",
+      "fresh",
+      "baked",
+      "cookie",
+      "kraft",
+      "circle"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-02.png",
+    "name": "Sweet Treats",
+    "tags": [
+      "food",
+      "sweet",
+      "treats",
+      "cupcake",
+      "orange",
+      "double"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-03.png",
+    "name": "Coffee Time",
+    "tags": [
+      "food",
+      "coffee",
+      "time",
+      "cup",
+      "red",
+      "seal"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-04.png",
+    "name": "Fruit Fresh",
+    "tags": [
+      "food",
+      "fruit",
+      "fresh",
+      "cherry",
+      "pink",
+      "square"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-05.png",
+    "name": "Whole Grain",
+    "tags": [
+      "food",
+      "whole",
+      "grain",
+      "wheat",
+      "gold",
+      "circle"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-06.png",
+    "name": "Hot And Fresh",
+    "tags": [
+      "food",
+      "hot",
+      "and",
+      "fresh",
+      "flame",
+      "kraft",
+      "double"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-07.png",
+    "name": "Homemade Cookies",
+    "tags": [
+      "food",
+      "homemade",
+      "cookies",
+      "cookie",
+      "orange",
+      "seal"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-08.png",
+    "name": "Baked With Love",
+    "tags": [
+      "food",
+      "baked",
+      "with",
+      "love",
+      "cupcake",
+      "red",
+      "square"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-09.png",
+    "name": "Tea And Cake",
+    "tags": [
+      "food",
+      "tea",
+      "and",
+      "cake",
+      "cup",
+      "pink",
+      "circle"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-10.png",
+    "name": "Sweet Cherry",
+    "tags": [
+      "food",
+      "sweet",
+      "cherry",
+      "gold",
+      "double"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-11.png",
+    "name": "Artisan Bread",
+    "tags": [
+      "food",
+      "artisan",
+      "bread",
+      "wheat",
+      "kraft",
+      "seal"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-12.png",
+    "name": "Chocolate Chip",
+    "tags": [
+      "food",
+      "chocolate",
+      "chip",
+      "cookie",
+      "orange",
+      "square"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-13.png",
+    "name": "Cupcake Box",
+    "tags": [
+      "food",
+      "cupcake",
+      "box",
+      "red",
+      "circle"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-14.png",
+    "name": "Tasty Gift",
+    "tags": [
+      "food",
+      "tasty",
+      "gift",
+      "heart",
+      "pink",
+      "double"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-15.png",
+    "name": "Spicy",
+    "tags": [
+      "food",
+      "spicy",
+      "flame",
+      "gold",
+      "seal"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-16.png",
+    "name": "Pure Honey",
+    "tags": [
+      "food",
+      "pure",
+      "honey",
+      "drop",
+      "kraft",
+      "square"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-17.png",
+    "name": "Fresh Herbs",
+    "tags": [
+      "food",
+      "fresh",
+      "herbs",
+      "leaf",
+      "orange",
+      "circle"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-18.png",
+    "name": "Barista Blend",
+    "tags": [
+      "food",
+      "barista",
+      "blend",
+      "cup",
+      "red",
+      "double"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-19.png",
+    "name": "Sweet Gift Box",
+    "tags": [
+      "food",
+      "sweet",
+      "gift",
+      "box",
+      "pink",
+      "seal"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-food-20.png",
+    "name": "Chef'S Choice",
+    "tags": [
+      "food",
+      "chefs",
+      "choice",
+      "star",
+      "gold",
+      "square"
+    ],
+    "category": "Food"
+  },
+  {
+    "file": "art-stamps-01.png",
+    "name": "Handmade With Love",
+    "tags": [
+      "stamps",
+      "handmade",
+      "with",
+      "love",
+      "heart",
+      "red",
+      "double"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-02.png",
+    "name": "Small Batch",
+    "tags": [
+      "stamps",
+      "small",
+      "batch",
+      "star",
+      "ink",
+      "circle"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-03.png",
+    "name": "Original Recipe",
+    "tags": [
+      "stamps",
+      "original",
+      "recipe",
+      "leaf",
+      "blue",
+      "double"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-04.png",
+    "name": "Premium Quality",
+    "tags": [
+      "stamps",
+      "premium",
+      "quality",
+      "crown",
+      "darkgreen",
+      "circle"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-05.png",
+    "name": "Fresh Daily",
+    "tags": [
+      "stamps",
+      "fresh",
+      "daily",
+      "sun",
+      "purple",
+      "double"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-06.png",
+    "name": "Locally Made",
+    "tags": [
+      "stamps",
+      "locally",
+      "made",
+      "house",
+      "red",
+      "circle"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-07.png",
+    "name": "Thank You",
+    "tags": [
+      "stamps",
+      "thank",
+      "you",
+      "heart",
+      "ink",
+      "double"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-08.png",
+    "name": "Best Quality",
+    "tags": [
+      "stamps",
+      "best",
+      "quality",
+      "check",
+      "blue",
+      "circle"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-09.png",
+    "name": "Order Number One",
+    "tags": [
+      "stamps",
+      "order",
+      "number",
+      "one",
+      "star",
+      "darkgreen",
+      "double"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-10.png",
+    "name": "Quality Checked",
+    "tags": [
+      "stamps",
+      "quality",
+      "checked",
+      "check",
+      "purple",
+      "circle"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-11.png",
+    "name": "Made With Care",
+    "tags": [
+      "stamps",
+      "made",
+      "with",
+      "care",
+      "flower",
+      "red",
+      "double"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-12.png",
+    "name": "Packed With Love",
+    "tags": [
+      "stamps",
+      "packed",
+      "with",
+      "love",
+      "cube",
+      "ink",
+      "circle"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-13.png",
+    "name": "Baked In Small Batches",
+    "tags": [
+      "stamps",
+      "baked",
+      "small",
+      "batches",
+      "cookie",
+      "blue",
+      "double"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-14.png",
+    "name": "Brewed Fresh",
+    "tags": [
+      "stamps",
+      "brewed",
+      "fresh",
+      "cup",
+      "darkgreen",
+      "circle"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-15.png",
+    "name": "Worldwide Shipping",
+    "tags": [
+      "stamps",
+      "worldwide",
+      "shipping",
+      "globe",
+      "purple",
+      "double"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-16.png",
+    "name": "Farm To Table",
+    "tags": [
+      "stamps",
+      "farm",
+      "table",
+      "wheat",
+      "red",
+      "circle"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-17.png",
+    "name": "Roasted Fresh",
+    "tags": [
+      "stamps",
+      "roasted",
+      "fresh",
+      "flame",
+      "ink",
+      "double"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-18.png",
+    "name": "Gift Edition",
+    "tags": [
+      "stamps",
+      "gift",
+      "edition",
+      "blue",
+      "circle"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-19.png",
+    "name": "Limited Edition",
+    "tags": [
+      "stamps",
+      "limited",
+      "edition",
+      "tag",
+      "darkgreen",
+      "double"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stamps-20.png",
+    "name": "Naturally Made",
+    "tags": [
+      "stamps",
+      "naturally",
+      "made",
+      "leaf",
+      "purple",
+      "circle"
+    ],
+    "category": "Stamps"
+  },
+  {
+    "file": "art-stickers-01.png",
+    "name": "Sale",
+    "tags": [
+      "stickers",
+      "sale",
+      "orange",
+      "burst"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-02.png",
+    "name": "New",
+    "tags": [
+      "stickers",
+      "new",
+      "red",
+      "seal"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-03.png",
+    "name": "-20%",
+    "tags": [
+      "stickers",
+      "20%",
+      "pink",
+      "circle"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-04.png",
+    "name": "-50%",
+    "tags": [
+      "stickers",
+      "50%",
+      "purple",
+      "burst"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-05.png",
+    "name": "Hot Deal",
+    "tags": [
+      "stickers",
+      "hot",
+      "deal",
+      "teal",
+      "seal"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-06.png",
+    "name": "Best Seller",
+    "tags": [
+      "stickers",
+      "best",
+      "seller",
+      "blue",
+      "circle"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-07.png",
+    "name": "Limited",
+    "tags": [
+      "stickers",
+      "limited",
+      "orange",
+      "burst"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-08.png",
+    "name": "Free Gift",
+    "tags": [
+      "stickers",
+      "free",
+      "gift",
+      "red",
+      "seal"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-09.png",
+    "name": "100% Natural",
+    "tags": [
+      "stickers",
+      "100%",
+      "natural",
+      "pink",
+      "circle"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-10.png",
+    "name": "Gluten Free",
+    "tags": [
+      "stickers",
+      "gluten",
+      "free",
+      "purple",
+      "burst"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-11.png",
+    "name": "Vegan",
+    "tags": [
+      "stickers",
+      "vegan",
+      "teal",
+      "seal"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-12.png",
+    "name": "New Flavour",
+    "tags": [
+      "stickers",
+      "new",
+      "flavour",
+      "blue",
+      "circle"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-13.png",
+    "name": "Special Offer",
+    "tags": [
+      "stickers",
+      "special",
+      "offer",
+      "orange",
+      "burst"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-14.png",
+    "name": "Top Pick",
+    "tags": [
+      "stickers",
+      "top",
+      "pick",
+      "red",
+      "seal"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-15.png",
+    "name": "Only Today",
+    "tags": [
+      "stickers",
+      "only",
+      "today",
+      "pink",
+      "circle"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-16.png",
+    "name": "Buy 1 Get 1",
+    "tags": [
+      "stickers",
+      "buy",
+      "get",
+      "purple",
+      "burst"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-17.png",
+    "name": "Free Shipping",
+    "tags": [
+      "stickers",
+      "free",
+      "shipping",
+      "teal",
+      "seal"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-18.png",
+    "name": "Super Saver",
+    "tags": [
+      "stickers",
+      "super",
+      "saver",
+      "blue",
+      "circle"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-19.png",
+    "name": "Extra Fresh",
+    "tags": [
+      "stickers",
+      "extra",
+      "fresh",
+      "orange",
+      "burst"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-stickers-20.png",
+    "name": "Wow!",
+    "tags": [
+      "stickers",
+      "wow",
+      "red",
+      "seal"
+    ],
+    "category": "Stickers"
+  },
+  {
+    "file": "art-badges-01.png",
+    "name": "Premium Quality",
+    "tags": [
+      "badges",
+      "premium",
+      "quality",
+      "star",
+      "gold",
+      "seal"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-02.png",
+    "name": "Best Seller",
+    "tags": [
+      "badges",
+      "best",
+      "seller",
+      "crown",
+      "kraft",
+      "shield"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-03.png",
+    "name": "Top Rated",
+    "tags": [
+      "badges",
+      "top",
+      "rated",
+      "check",
+      "ink",
+      "hex"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-04.png",
+    "name": "Gold Standard",
+    "tags": [
+      "badges",
+      "gold",
+      "standard",
+      "star",
+      "darkgreen",
+      "double"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-05.png",
+    "name": "Award Winner",
+    "tags": [
+      "badges",
+      "award",
+      "winner",
+      "crown",
+      "purple",
+      "seal"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-06.png",
+    "name": "Trusted",
+    "tags": [
+      "badges",
+      "trusted",
+      "check",
+      "black",
+      "shield"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-07.png",
+    "name": "Excellence",
+    "tags": [
+      "badges",
+      "excellence",
+      "star",
+      "gold",
+      "hex"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-08.png",
+    "name": "Guaranteed",
+    "tags": [
+      "badges",
+      "guaranteed",
+      "check",
+      "kraft",
+      "double"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-09.png",
+    "name": "Authentic",
+    "tags": [
+      "badges",
+      "authentic",
+      "crown",
+      "ink",
+      "seal"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-10.png",
+    "name": "Verified",
+    "tags": [
+      "badges",
+      "verified",
+      "check",
+      "darkgreen",
+      "shield"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-11.png",
+    "name": "Certified",
+    "tags": [
+      "badges",
+      "certified",
+      "star",
+      "purple",
+      "hex"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-12.png",
+    "name": "Luxury",
+    "tags": [
+      "badges",
+      "luxury",
+      "crown",
+      "black",
+      "double"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-13.png",
+    "name": "Number One",
+    "tags": [
+      "badges",
+      "number",
+      "one",
+      "star",
+      "gold",
+      "seal"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-14.png",
+    "name": "Champion",
+    "tags": [
+      "badges",
+      "champion",
+      "crown",
+      "kraft",
+      "shield"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-15.png",
+    "name": "Select",
+    "tags": [
+      "badges",
+      "select",
+      "check",
+      "ink",
+      "hex"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-16.png",
+    "name": "Grand Choice",
+    "tags": [
+      "badges",
+      "grand",
+      "choice",
+      "star",
+      "darkgreen",
+      "double"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-17.png",
+    "name": "Master Craft",
+    "tags": [
+      "badges",
+      "master",
+      "craft",
+      "crown",
+      "purple",
+      "seal"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-18.png",
+    "name": "Finest",
+    "tags": [
+      "badges",
+      "finest",
+      "star",
+      "black",
+      "shield"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-19.png",
+    "name": "Heirloom",
+    "tags": [
+      "badges",
+      "heirloom",
+      "heart",
+      "gold",
+      "hex"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-badges-20.png",
+    "name": "Signature",
+    "tags": [
+      "badges",
+      "signature",
+      "crown",
+      "kraft",
+      "double"
+    ],
+    "category": "Badges"
+  },
+  {
+    "file": "art-labels-01.png",
+    "name": "Thank You",
+    "tags": [
+      "labels",
+      "thank",
+      "you",
+      "heart",
+      "red",
+      "ribbon",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-02.png",
+    "name": "Open Here",
+    "tags": [
+      "labels",
+      "open",
+      "here",
+      "text",
+      "pink",
+      "pill",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-03.png",
+    "name": "Made With Love",
+    "tags": [
+      "labels",
+      "made",
+      "with",
+      "love",
+      "text",
+      "purple",
+      "flag",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-04.png",
+    "name": "Handle With Care",
+    "tags": [
+      "labels",
+      "handle",
+      "with",
+      "care",
+      "flower",
+      "kraft",
+      "tag",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-05.png",
+    "name": "Fresh And Tasty",
+    "tags": [
+      "labels",
+      "fresh",
+      "and",
+      "tasty",
+      "text",
+      "green",
+      "plaque",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-06.png",
+    "name": "Just For You",
+    "tags": [
+      "labels",
+      "just",
+      "for",
+      "you",
+      "text",
+      "orange",
+      "ribbon",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-07.png",
+    "name": "Best Wishes",
+    "tags": [
+      "labels",
+      "best",
+      "wishes",
+      "cup",
+      "ink",
+      "pill",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-08.png",
+    "name": "Happy Birthday",
+    "tags": [
+      "labels",
+      "happy",
+      "birthday",
+      "text",
+      "blue",
+      "flag",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-09.png",
+    "name": "Congratulations",
+    "tags": [
+      "labels",
+      "congratulations",
+      "text",
+      "gold",
+      "tag",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-10.png",
+    "name": "Welcome",
+    "tags": [
+      "labels",
+      "welcome",
+      "gift",
+      "teal",
+      "plaque",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-11.png",
+    "name": "Enjoy!",
+    "tags": [
+      "labels",
+      "enjoy",
+      "text",
+      "red",
+      "ribbon",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-12.png",
+    "name": "Gift For You",
+    "tags": [
+      "labels",
+      "gift",
+      "for",
+      "you",
+      "text",
+      "pink",
+      "pill",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-13.png",
+    "name": "Small Batch",
+    "tags": [
+      "labels",
+      "small",
+      "batch",
+      "leaf",
+      "purple",
+      "flag",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-14.png",
+    "name": "Delivered With Care",
+    "tags": [
+      "labels",
+      "delivered",
+      "with",
+      "care",
+      "text",
+      "kraft",
+      "tag",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-15.png",
+    "name": "Eat Me",
+    "tags": [
+      "labels",
+      "eat",
+      "text",
+      "green",
+      "plaque",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-16.png",
+    "name": "Treat Yourself",
+    "tags": [
+      "labels",
+      "treat",
+      "yourself",
+      "star",
+      "orange",
+      "ribbon",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-17.png",
+    "name": "Sweet Moments",
+    "tags": [
+      "labels",
+      "sweet",
+      "moments",
+      "text",
+      "ink",
+      "pill",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-18.png",
+    "name": "Cookies Inside",
+    "tags": [
+      "labels",
+      "cookies",
+      "inside",
+      "text",
+      "blue",
+      "flag",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-19.png",
+    "name": "Fresh Today",
+    "tags": [
+      "labels",
+      "fresh",
+      "today",
+      "cookie",
+      "gold",
+      "tag",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-labels-20.png",
+    "name": "Hello",
+    "tags": [
+      "labels",
+      "hello",
+      "text",
+      "teal",
+      "plaque",
+      "banner"
+    ],
+    "category": "Labels"
+  },
+  {
+    "file": "art-frames-01.png",
+    "name": "Double line frame Kraft",
+    "tags": [
+      "frame",
+      "border",
+      "double",
+      "kraft",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-02.png",
+    "name": "Rounded frame Kraft",
+    "tags": [
+      "frame",
+      "border",
+      "rounded",
+      "kraft",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-03.png",
+    "name": "Ornate corner frame Kraft",
+    "tags": [
+      "frame",
+      "border",
+      "corners",
+      "kraft",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-04.png",
+    "name": "Scalloped frame Kraft",
+    "tags": [
+      "frame",
+      "border",
+      "scallop",
+      "kraft",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-05.png",
+    "name": "Dotted frame Kraft",
+    "tags": [
+      "frame",
+      "border",
+      "dotted",
+      "kraft",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-06.png",
+    "name": "Double line frame Ink",
+    "tags": [
+      "frame",
+      "border",
+      "double",
+      "ink",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-07.png",
+    "name": "Rounded frame Ink",
+    "tags": [
+      "frame",
+      "border",
+      "rounded",
+      "ink",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-08.png",
+    "name": "Ornate corner frame Ink",
+    "tags": [
+      "frame",
+      "border",
+      "corners",
+      "ink",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-09.png",
+    "name": "Scalloped frame Ink",
+    "tags": [
+      "frame",
+      "border",
+      "scallop",
+      "ink",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-10.png",
+    "name": "Dotted frame Ink",
+    "tags": [
+      "frame",
+      "border",
+      "dotted",
+      "ink",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-11.png",
+    "name": "Double line frame Gold",
+    "tags": [
+      "frame",
+      "border",
+      "double",
+      "gold",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-12.png",
+    "name": "Rounded frame Gold",
+    "tags": [
+      "frame",
+      "border",
+      "rounded",
+      "gold",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-13.png",
+    "name": "Ornate corner frame Gold",
+    "tags": [
+      "frame",
+      "border",
+      "corners",
+      "gold",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-14.png",
+    "name": "Scalloped frame Gold",
+    "tags": [
+      "frame",
+      "border",
+      "scallop",
+      "gold",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-15.png",
+    "name": "Dotted frame Gold",
+    "tags": [
+      "frame",
+      "border",
+      "dotted",
+      "gold",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-16.png",
+    "name": "Double line frame Green",
+    "tags": [
+      "frame",
+      "border",
+      "double",
+      "green",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-17.png",
+    "name": "Rounded frame Green",
+    "tags": [
+      "frame",
+      "border",
+      "rounded",
+      "green",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-18.png",
+    "name": "Ornate corner frame Green",
+    "tags": [
+      "frame",
+      "border",
+      "corners",
+      "green",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-19.png",
+    "name": "Scalloped frame Green",
+    "tags": [
+      "frame",
+      "border",
+      "scallop",
+      "green",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-frames-20.png",
+    "name": "Dotted frame Green",
+    "tags": [
+      "frame",
+      "border",
+      "dotted",
+      "green",
+      "label"
+    ],
+    "category": "Frames"
+  },
+  {
+    "file": "art-icons-01.png",
+    "name": "Leaf icon",
+    "tags": [
+      "icon",
+      "leaf",
+      "green",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-02.png",
+    "name": "Drop icon",
+    "tags": [
+      "icon",
+      "drop",
+      "blue",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-03.png",
+    "name": "Sun icon",
+    "tags": [
+      "icon",
+      "sun",
+      "orange",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-04.png",
+    "name": "Heart icon",
+    "tags": [
+      "icon",
+      "heart",
+      "pink",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-05.png",
+    "name": "Star icon",
+    "tags": [
+      "icon",
+      "star",
+      "gold",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-06.png",
+    "name": "Cube icon",
+    "tags": [
+      "icon",
+      "cube",
+      "kraft",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-07.png",
+    "name": "Cookie icon",
+    "tags": [
+      "icon",
+      "cookie",
+      "red",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-08.png",
+    "name": "Cup icon",
+    "tags": [
+      "icon",
+      "cup",
+      "teal",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-09.png",
+    "name": "Gift icon",
+    "tags": [
+      "icon",
+      "gift",
+      "purple",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-10.png",
+    "name": "Truck icon",
+    "tags": [
+      "icon",
+      "truck",
+      "ink",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-11.png",
+    "name": "Snowflake icon",
+    "tags": [
+      "icon",
+      "snowflake",
+      "green",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-12.png",
+    "name": "Umbrella icon",
+    "tags": [
+      "icon",
+      "umbrella",
+      "blue",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-13.png",
+    "name": "Flame icon",
+    "tags": [
+      "icon",
+      "flame",
+      "orange",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-14.png",
+    "name": "Bolt icon",
+    "tags": [
+      "icon",
+      "bolt",
+      "pink",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-15.png",
+    "name": "Clock icon",
+    "tags": [
+      "icon",
+      "clock",
+      "gold",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-16.png",
+    "name": "Tag icon",
+    "tags": [
+      "icon",
+      "tag",
+      "kraft",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-17.png",
+    "name": "Crown icon",
+    "tags": [
+      "icon",
+      "crown",
+      "red",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-18.png",
+    "name": "Cherry icon",
+    "tags": [
+      "icon",
+      "cherry",
+      "teal",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-19.png",
+    "name": "Flower icon",
+    "tags": [
+      "icon",
+      "flower",
+      "purple",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-icons-20.png",
+    "name": "Globe icon",
+    "tags": [
+      "icon",
+      "globe",
+      "ink",
+      "symbol"
+    ],
+    "category": "Icons"
+  },
+  {
+    "file": "art-seasonal-01.png",
+    "name": "Winter",
+    "tags": [
+      "seasonal",
+      "winter",
+      "snowflake",
+      "red",
+      "circle"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-02.png",
+    "name": "Valentine",
+    "tags": [
+      "seasonal",
+      "valentine",
+      "heart",
+      "blue",
+      "double"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-03.png",
+    "name": "Holiday Gift",
+    "tags": [
+      "seasonal",
+      "holiday",
+      "gift",
+      "green",
+      "seal"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-04.png",
+    "name": "New Year",
+    "tags": [
+      "seasonal",
+      "new",
+      "year",
+      "star",
+      "gold",
+      "hex"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-05.png",
+    "name": "Spring",
+    "tags": [
+      "seasonal",
+      "spring",
+      "flower",
+      "pink",
+      "square"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-06.png",
+    "name": "Summer",
+    "tags": [
+      "seasonal",
+      "summer",
+      "sun",
+      "orange",
+      "circle"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-07.png",
+    "name": "Autumn",
+    "tags": [
+      "seasonal",
+      "autumn",
+      "leaf",
+      "purple",
+      "double"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-08.png",
+    "name": "Eid Mubarak",
+    "tags": [
+      "seasonal",
+      "eid",
+      "mubarak",
+      "moon",
+      "teal",
+      "seal"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-09.png",
+    "name": "Ramadan Kareem",
+    "tags": [
+      "seasonal",
+      "ramadan",
+      "kareem",
+      "moon",
+      "red",
+      "hex"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-10.png",
+    "name": "Birthday",
+    "tags": [
+      "seasonal",
+      "birthday",
+      "gift",
+      "blue",
+      "square"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-11.png",
+    "name": "Mother'S Day",
+    "tags": [
+      "seasonal",
+      "mothers",
+      "day",
+      "heart",
+      "green",
+      "circle"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-12.png",
+    "name": "Summer Fruit",
+    "tags": [
+      "seasonal",
+      "summer",
+      "fruit",
+      "cherry",
+      "gold",
+      "double"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-13.png",
+    "name": "Season'S Greetings",
+    "tags": [
+      "seasonal",
+      "seasons",
+      "greetings",
+      "snowflake",
+      "pink",
+      "seal"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-14.png",
+    "name": "Festive Season",
+    "tags": [
+      "seasonal",
+      "festive",
+      "season",
+      "star",
+      "orange",
+      "hex"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-15.png",
+    "name": "Eid Special",
+    "tags": [
+      "seasonal",
+      "eid",
+      "special",
+      "moon",
+      "purple",
+      "square"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-16.png",
+    "name": "Wedding",
+    "tags": [
+      "seasonal",
+      "wedding",
+      "heart",
+      "teal",
+      "circle"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-17.png",
+    "name": "Anniversary",
+    "tags": [
+      "seasonal",
+      "anniversary",
+      "heart",
+      "red",
+      "double"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-18.png",
+    "name": "Baby Shower",
+    "tags": [
+      "seasonal",
+      "baby",
+      "shower",
+      "flower",
+      "blue",
+      "seal"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-19.png",
+    "name": "Thank You",
+    "tags": [
+      "seasonal",
+      "thank",
+      "you",
+      "heart",
+      "green",
+      "hex"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "art-seasonal-20.png",
+    "name": "Father'S Day",
+    "tags": [
+      "seasonal",
+      "fathers",
+      "day",
+      "star",
+      "gold",
+      "square"
+    ],
+    "category": "Seasonal"
+  },
+  {
+    "file": "bg-geometric-01.png",
+    "name": "Semicircles Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "semicircles",
+      "kraft",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-02.png",
+    "name": "Semicircles Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "semicircles",
+      "mint",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-03.png",
+    "name": "Semicircles Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "semicircles",
+      "blush",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-04.png",
+    "name": "Semicircles Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "semicircles",
+      "navy",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-05.png",
+    "name": "Semicircles Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "semicircles",
+      "sunset",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-06.png",
+    "name": "Semicircles Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "semicircles",
+      "ocean",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-07.png",
+    "name": "Semicircles Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "semicircles",
+      "forest",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-08.png",
+    "name": "Semicircles Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "semicircles",
+      "lavender",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-09.png",
+    "name": "Semicircles Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "semicircles",
+      "mono",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-10.png",
+    "name": "Semicircles Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "semicircles",
+      "citrus",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-11.png",
+    "name": "Triangles Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "triangles",
+      "blush",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-12.png",
+    "name": "Triangles Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "triangles",
+      "navy",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-13.png",
+    "name": "Triangles Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "triangles",
+      "sunset",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-14.png",
+    "name": "Triangles Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "triangles",
+      "ocean",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-15.png",
+    "name": "Triangles Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "triangles",
+      "forest",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-16.png",
+    "name": "Triangles Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "triangles",
+      "lavender",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-17.png",
+    "name": "Triangles Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "triangles",
+      "mono",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-18.png",
+    "name": "Triangles Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "triangles",
+      "citrus",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-19.png",
+    "name": "Triangles Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "triangles",
+      "berry",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-20.png",
+    "name": "Triangles Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "triangles",
+      "sand",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-21.png",
+    "name": "Hexagons Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "hexagons",
+      "sunset",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-22.png",
+    "name": "Hexagons Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "hexagons",
+      "ocean",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-23.png",
+    "name": "Hexagons Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "hexagons",
+      "forest",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-24.png",
+    "name": "Hexagons Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "hexagons",
+      "lavender",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-25.png",
+    "name": "Hexagons Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "hexagons",
+      "mono",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-26.png",
+    "name": "Hexagons Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "hexagons",
+      "citrus",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-27.png",
+    "name": "Hexagons Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "hexagons",
+      "berry",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-28.png",
+    "name": "Hexagons Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "hexagons",
+      "sand",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-29.png",
+    "name": "Hexagons Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "hexagons",
+      "kraft",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-30.png",
+    "name": "Hexagons Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "hexagons",
+      "mint",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-31.png",
+    "name": "Diamonds Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "diamonds",
+      "forest",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-32.png",
+    "name": "Diamonds Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "diamonds",
+      "lavender",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-33.png",
+    "name": "Diamonds Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "diamonds",
+      "mono",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-34.png",
+    "name": "Diamonds Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "diamonds",
+      "citrus",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-35.png",
+    "name": "Diamonds Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "diamonds",
+      "berry",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-36.png",
+    "name": "Diamonds Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "diamonds",
+      "sand",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-37.png",
+    "name": "Diamonds Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "diamonds",
+      "kraft",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-38.png",
+    "name": "Diamonds Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "diamonds",
+      "mint",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-39.png",
+    "name": "Diamonds Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "diamonds",
+      "blush",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-40.png",
+    "name": "Diamonds Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "diamonds",
+      "navy",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-41.png",
+    "name": "Rings Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "rings",
+      "mono",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-42.png",
+    "name": "Rings Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "rings",
+      "citrus",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-43.png",
+    "name": "Rings Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "rings",
+      "berry",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-44.png",
+    "name": "Rings Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "rings",
+      "sand",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-45.png",
+    "name": "Rings Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "rings",
+      "kraft",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-46.png",
+    "name": "Rings Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "rings",
+      "mint",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-47.png",
+    "name": "Rings Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "rings",
+      "blush",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-48.png",
+    "name": "Rings Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "rings",
+      "navy",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-49.png",
+    "name": "Rings Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "rings",
+      "sunset",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-geometric-50.png",
+    "name": "Rings Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "rings",
+      "ocean",
+      "geometric"
+    ],
+    "category": "Backgrounds: Geometric"
+  },
+  {
+    "file": "bg-stripes-01.png",
+    "name": "Vertical stripes Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "stripes",
+      "blush"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-02.png",
+    "name": "Vertical stripes Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "stripes",
+      "navy"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-03.png",
+    "name": "Vertical stripes Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "stripes",
+      "sunset"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-04.png",
+    "name": "Vertical stripes Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "stripes",
+      "ocean"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-05.png",
+    "name": "Vertical stripes Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "stripes",
+      "forest"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-06.png",
+    "name": "Vertical stripes Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "stripes",
+      "lavender"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-07.png",
+    "name": "Vertical stripes Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "stripes",
+      "mono"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-08.png",
+    "name": "Vertical stripes Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "stripes",
+      "citrus"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-09.png",
+    "name": "Vertical stripes Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "stripes",
+      "berry"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-10.png",
+    "name": "Vertical stripes Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "stripes",
+      "sand"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-11.png",
+    "name": "Diagonal stripes Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "sunset",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-12.png",
+    "name": "Diagonal stripes Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "ocean",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-13.png",
+    "name": "Diagonal stripes Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "forest",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-14.png",
+    "name": "Diagonal stripes Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "lavender",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-15.png",
+    "name": "Diagonal stripes Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "mono",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-16.png",
+    "name": "Diagonal stripes Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "citrus",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-17.png",
+    "name": "Diagonal stripes Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "berry",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-18.png",
+    "name": "Diagonal stripes Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "sand",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-19.png",
+    "name": "Diagonal stripes Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "kraft",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-20.png",
+    "name": "Diagonal stripes Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "mint",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-21.png",
+    "name": "Polka dots Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "dots",
+      "forest",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-22.png",
+    "name": "Polka dots Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "dots",
+      "lavender",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-23.png",
+    "name": "Polka dots Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "dots",
+      "mono",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-24.png",
+    "name": "Polka dots Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "dots",
+      "citrus",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-25.png",
+    "name": "Polka dots Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "dots",
+      "berry",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-26.png",
+    "name": "Polka dots Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "dots",
+      "sand",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-27.png",
+    "name": "Polka dots Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "dots",
+      "kraft",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-28.png",
+    "name": "Polka dots Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "dots",
+      "mint",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-29.png",
+    "name": "Polka dots Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "dots",
+      "blush",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-30.png",
+    "name": "Polka dots Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "dots",
+      "navy",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-31.png",
+    "name": "Checkerboard Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "checker",
+      "mono",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-32.png",
+    "name": "Checkerboard Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "checker",
+      "citrus",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-33.png",
+    "name": "Checkerboard Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "checker",
+      "berry",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-34.png",
+    "name": "Checkerboard Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "checker",
+      "sand",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-35.png",
+    "name": "Checkerboard Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "checker",
+      "kraft",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-36.png",
+    "name": "Checkerboard Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "checker",
+      "mint",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-37.png",
+    "name": "Checkerboard Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "checker",
+      "blush",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-38.png",
+    "name": "Checkerboard Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "checker",
+      "navy",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-39.png",
+    "name": "Checkerboard Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "checker",
+      "sunset",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-40.png",
+    "name": "Checkerboard Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "checker",
+      "ocean",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-41.png",
+    "name": "Gingham Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "gingham",
+      "berry",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-42.png",
+    "name": "Gingham Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "gingham",
+      "sand",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-43.png",
+    "name": "Gingham Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "gingham",
+      "kraft",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-44.png",
+    "name": "Gingham Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "gingham",
+      "mint",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-45.png",
+    "name": "Gingham Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "gingham",
+      "blush",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-46.png",
+    "name": "Gingham Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "gingham",
+      "navy",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-47.png",
+    "name": "Gingham Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "gingham",
+      "sunset",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-48.png",
+    "name": "Gingham Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "gingham",
+      "ocean",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-49.png",
+    "name": "Gingham Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "gingham",
+      "forest",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-stripes-50.png",
+    "name": "Gingham Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "gingham",
+      "lavender",
+      "stripes"
+    ],
+    "category": "Backgrounds: Stripes & Dots"
+  },
+  {
+    "file": "bg-organic-01.png",
+    "name": "Waves Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "waves",
+      "sunset",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-02.png",
+    "name": "Waves Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "waves",
+      "ocean",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-03.png",
+    "name": "Waves Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "waves",
+      "forest",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-04.png",
+    "name": "Waves Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "waves",
+      "lavender",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-05.png",
+    "name": "Waves Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "waves",
+      "mono",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-06.png",
+    "name": "Waves Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "waves",
+      "citrus",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-07.png",
+    "name": "Waves Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "waves",
+      "berry",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-08.png",
+    "name": "Waves Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "waves",
+      "sand",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-09.png",
+    "name": "Waves Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "waves",
+      "kraft",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-10.png",
+    "name": "Waves Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "waves",
+      "mint",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-11.png",
+    "name": "Leaves Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "leaves",
+      "forest",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-12.png",
+    "name": "Leaves Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "leaves",
+      "lavender",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-13.png",
+    "name": "Leaves Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "leaves",
+      "mono",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-14.png",
+    "name": "Leaves Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "leaves",
+      "citrus",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-15.png",
+    "name": "Leaves Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "leaves",
+      "berry",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-16.png",
+    "name": "Leaves Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "leaves",
+      "sand",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-17.png",
+    "name": "Leaves Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "leaves",
+      "kraft",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-18.png",
+    "name": "Leaves Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "leaves",
+      "mint",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-19.png",
+    "name": "Leaves Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "leaves",
+      "blush",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-20.png",
+    "name": "Leaves Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "leaves",
+      "navy",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-21.png",
+    "name": "Flowers Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "floral",
+      "mono",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-22.png",
+    "name": "Flowers Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "floral",
+      "citrus",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-23.png",
+    "name": "Flowers Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "floral",
+      "berry",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-24.png",
+    "name": "Flowers Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "floral",
+      "sand",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-25.png",
+    "name": "Flowers Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "floral",
+      "kraft",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-26.png",
+    "name": "Flowers Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "floral",
+      "mint",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-27.png",
+    "name": "Flowers Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "floral",
+      "blush",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-28.png",
+    "name": "Flowers Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "floral",
+      "navy",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-29.png",
+    "name": "Flowers Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "floral",
+      "sunset",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-30.png",
+    "name": "Flowers Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "floral",
+      "ocean",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-31.png",
+    "name": "Terrazzo Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "terrazzo",
+      "berry",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-32.png",
+    "name": "Terrazzo Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "terrazzo",
+      "sand",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-33.png",
+    "name": "Terrazzo Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "terrazzo",
+      "kraft",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-34.png",
+    "name": "Terrazzo Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "terrazzo",
+      "mint",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-35.png",
+    "name": "Terrazzo Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "terrazzo",
+      "blush",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-36.png",
+    "name": "Terrazzo Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "terrazzo",
+      "navy",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-37.png",
+    "name": "Terrazzo Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "terrazzo",
+      "sunset",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-38.png",
+    "name": "Terrazzo Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "terrazzo",
+      "ocean",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-39.png",
+    "name": "Terrazzo Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "terrazzo",
+      "forest",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-40.png",
+    "name": "Terrazzo Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "terrazzo",
+      "lavender",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-41.png",
+    "name": "Blobs Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "blobs",
+      "kraft",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-42.png",
+    "name": "Blobs Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "blobs",
+      "mint",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-43.png",
+    "name": "Blobs Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "blobs",
+      "blush",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-44.png",
+    "name": "Blobs Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "blobs",
+      "navy",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-45.png",
+    "name": "Blobs Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "blobs",
+      "sunset",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-46.png",
+    "name": "Blobs Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "blobs",
+      "ocean",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-47.png",
+    "name": "Blobs Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "blobs",
+      "forest",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-48.png",
+    "name": "Blobs Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "blobs",
+      "lavender",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-49.png",
+    "name": "Blobs Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "blobs",
+      "mono",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-organic-50.png",
+    "name": "Blobs Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "blobs",
+      "citrus",
+      "organic"
+    ],
+    "category": "Backgrounds: Organic"
+  },
+  {
+    "file": "bg-gradients-01.jpg",
+    "name": "Linear gradient Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "gradient",
+      "forest",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-02.jpg",
+    "name": "Linear gradient Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "gradient",
+      "lavender",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-03.jpg",
+    "name": "Linear gradient Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "gradient",
+      "mono",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-04.jpg",
+    "name": "Linear gradient Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "gradient",
+      "citrus",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-05.jpg",
+    "name": "Linear gradient Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "gradient",
+      "berry",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-06.jpg",
+    "name": "Linear gradient Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "gradient",
+      "sand",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-07.jpg",
+    "name": "Linear gradient Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "gradient",
+      "kraft",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-08.jpg",
+    "name": "Linear gradient Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "gradient",
+      "mint",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-09.jpg",
+    "name": "Linear gradient Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "gradient",
+      "blush",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-10.jpg",
+    "name": "Linear gradient Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "gradient",
+      "navy",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-11.jpg",
+    "name": "Radial glow Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "radial",
+      "mono",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-12.jpg",
+    "name": "Radial glow Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "radial",
+      "citrus",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-13.jpg",
+    "name": "Radial glow Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "radial",
+      "berry",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-14.jpg",
+    "name": "Radial glow Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "radial",
+      "sand",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-15.jpg",
+    "name": "Radial glow Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "radial",
+      "kraft",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-16.jpg",
+    "name": "Radial glow Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "radial",
+      "mint",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-17.jpg",
+    "name": "Radial glow Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "radial",
+      "blush",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-18.jpg",
+    "name": "Radial glow Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "radial",
+      "navy",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-19.jpg",
+    "name": "Radial glow Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "radial",
+      "sunset",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-20.jpg",
+    "name": "Radial glow Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "radial",
+      "ocean",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-21.jpg",
+    "name": "Diagonal blend Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "berry",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-22.jpg",
+    "name": "Diagonal blend Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "sand",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-23.jpg",
+    "name": "Diagonal blend Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "kraft",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-24.jpg",
+    "name": "Diagonal blend Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "mint",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-25.jpg",
+    "name": "Diagonal blend Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "blush",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-26.jpg",
+    "name": "Diagonal blend Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "navy",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-27.jpg",
+    "name": "Diagonal blend Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "sunset",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-28.jpg",
+    "name": "Diagonal blend Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "ocean",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-29.jpg",
+    "name": "Diagonal blend Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "forest",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-30.jpg",
+    "name": "Diagonal blend Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "diagonal",
+      "lavender",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-31.jpg",
+    "name": "Soft mesh Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "mesh",
+      "kraft",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-32.jpg",
+    "name": "Soft mesh Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "mesh",
+      "mint",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-33.jpg",
+    "name": "Soft mesh Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "mesh",
+      "blush",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-34.jpg",
+    "name": "Soft mesh Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "mesh",
+      "navy",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-35.jpg",
+    "name": "Soft mesh Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "mesh",
+      "sunset",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-36.jpg",
+    "name": "Soft mesh Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "mesh",
+      "ocean",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-37.jpg",
+    "name": "Soft mesh Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "mesh",
+      "forest",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-38.jpg",
+    "name": "Soft mesh Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "mesh",
+      "lavender",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-39.jpg",
+    "name": "Soft mesh Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "mesh",
+      "mono",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-40.jpg",
+    "name": "Soft mesh Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "mesh",
+      "citrus",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-41.jpg",
+    "name": "Horizon bands Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "horizon",
+      "blush",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-42.jpg",
+    "name": "Horizon bands Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "horizon",
+      "navy",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-43.jpg",
+    "name": "Horizon bands Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "horizon",
+      "sunset",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-44.jpg",
+    "name": "Horizon bands Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "horizon",
+      "ocean",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-45.jpg",
+    "name": "Horizon bands Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "horizon",
+      "forest",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-46.jpg",
+    "name": "Horizon bands Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "horizon",
+      "lavender",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-47.jpg",
+    "name": "Horizon bands Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "horizon",
+      "mono",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-48.jpg",
+    "name": "Horizon bands Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "horizon",
+      "citrus",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-49.jpg",
+    "name": "Horizon bands Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "horizon",
+      "berry",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-gradients-50.jpg",
+    "name": "Horizon bands Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "horizon",
+      "sand",
+      "gradients"
+    ],
+    "category": "Backgrounds: Gradients"
+  },
+  {
+    "file": "bg-paper-01.png",
+    "name": "Speckled kraft Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "speckle",
+      "mono",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-02.png",
+    "name": "Speckled kraft Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "speckle",
+      "citrus",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-03.png",
+    "name": "Speckled kraft Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "speckle",
+      "berry",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-04.png",
+    "name": "Speckled kraft Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "speckle",
+      "sand",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-05.png",
+    "name": "Speckled kraft Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "speckle",
+      "kraft",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-06.png",
+    "name": "Speckled kraft Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "speckle",
+      "mint",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-07.png",
+    "name": "Speckled kraft Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "speckle",
+      "blush",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-08.png",
+    "name": "Speckled kraft Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "speckle",
+      "navy",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-09.png",
+    "name": "Speckled kraft Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "speckle",
+      "sunset",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-10.png",
+    "name": "Speckled kraft Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "speckle",
+      "ocean",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-11.png",
+    "name": "Lined paper Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "lined",
+      "berry",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-12.png",
+    "name": "Lined paper Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "lined",
+      "sand",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-13.png",
+    "name": "Lined paper Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "lined",
+      "kraft",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-14.png",
+    "name": "Lined paper Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "lined",
+      "mint",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-15.png",
+    "name": "Lined paper Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "lined",
+      "blush",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-16.png",
+    "name": "Lined paper Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "lined",
+      "navy",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-17.png",
+    "name": "Lined paper Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "lined",
+      "sunset",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-18.png",
+    "name": "Lined paper Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "lined",
+      "ocean",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-19.png",
+    "name": "Lined paper Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "lined",
+      "forest",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-20.png",
+    "name": "Lined paper Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "lined",
+      "lavender",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-21.png",
+    "name": "Grid paper Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "grid",
+      "kraft",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-22.png",
+    "name": "Grid paper Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "grid",
+      "mint",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-23.png",
+    "name": "Grid paper Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "grid",
+      "blush",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-24.png",
+    "name": "Grid paper Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "grid",
+      "navy",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-25.png",
+    "name": "Grid paper Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "grid",
+      "sunset",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-26.png",
+    "name": "Grid paper Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "grid",
+      "ocean",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-27.png",
+    "name": "Grid paper Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "grid",
+      "forest",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-28.png",
+    "name": "Grid paper Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "grid",
+      "lavender",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-29.png",
+    "name": "Grid paper Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "grid",
+      "mono",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-30.png",
+    "name": "Grid paper Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "grid",
+      "citrus",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-31.png",
+    "name": "Dot grid Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "dotgrid",
+      "blush",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-32.png",
+    "name": "Dot grid Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "dotgrid",
+      "navy",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-33.png",
+    "name": "Dot grid Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "dotgrid",
+      "sunset",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-34.png",
+    "name": "Dot grid Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "dotgrid",
+      "ocean",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-35.png",
+    "name": "Dot grid Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "dotgrid",
+      "forest",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-36.png",
+    "name": "Dot grid Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "dotgrid",
+      "lavender",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-37.png",
+    "name": "Dot grid Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "dotgrid",
+      "mono",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-38.png",
+    "name": "Dot grid Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "dotgrid",
+      "citrus",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-39.png",
+    "name": "Dot grid Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "dotgrid",
+      "berry",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-40.png",
+    "name": "Dot grid Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "dotgrid",
+      "sand",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-41.png",
+    "name": "Corrugated Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "corrugated",
+      "sunset",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-42.png",
+    "name": "Corrugated Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "corrugated",
+      "ocean",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-43.png",
+    "name": "Corrugated Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "corrugated",
+      "forest",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-44.png",
+    "name": "Corrugated Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "corrugated",
+      "lavender",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-45.png",
+    "name": "Corrugated Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "corrugated",
+      "mono",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-46.png",
+    "name": "Corrugated Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "corrugated",
+      "citrus",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-47.png",
+    "name": "Corrugated Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "corrugated",
+      "berry",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-48.png",
+    "name": "Corrugated Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "corrugated",
+      "sand",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-49.png",
+    "name": "Corrugated Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "corrugated",
+      "kraft",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-paper-50.png",
+    "name": "Corrugated Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "corrugated",
+      "mint",
+      "paper"
+    ],
+    "category": "Backgrounds: Paper & Kraft"
+  },
+  {
+    "file": "bg-festive-01.png",
+    "name": "Confetti Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "confetti",
+      "berry",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-02.png",
+    "name": "Confetti Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "confetti",
+      "sand",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-03.png",
+    "name": "Confetti Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "confetti",
+      "kraft",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-04.png",
+    "name": "Confetti Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "confetti",
+      "mint",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-05.png",
+    "name": "Confetti Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "confetti",
+      "blush",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-06.png",
+    "name": "Confetti Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "confetti",
+      "navy",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-07.png",
+    "name": "Confetti Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "confetti",
+      "sunset",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-08.png",
+    "name": "Confetti Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "confetti",
+      "ocean",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-09.png",
+    "name": "Confetti Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "confetti",
+      "forest",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-10.png",
+    "name": "Confetti Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "confetti",
+      "lavender",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-11.png",
+    "name": "Stars Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "stars",
+      "kraft",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-12.png",
+    "name": "Stars Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "stars",
+      "mint",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-13.png",
+    "name": "Stars Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "stars",
+      "blush",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-14.png",
+    "name": "Stars Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "stars",
+      "navy",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-15.png",
+    "name": "Stars Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "stars",
+      "sunset",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-16.png",
+    "name": "Stars Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "stars",
+      "ocean",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-17.png",
+    "name": "Stars Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "stars",
+      "forest",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-18.png",
+    "name": "Stars Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "stars",
+      "lavender",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-19.png",
+    "name": "Stars Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "stars",
+      "mono",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-20.png",
+    "name": "Stars Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "stars",
+      "citrus",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-21.png",
+    "name": "Snowfall Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "snow",
+      "blush",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-22.png",
+    "name": "Snowfall Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "snow",
+      "navy",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-23.png",
+    "name": "Snowfall Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "snow",
+      "sunset",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-24.png",
+    "name": "Snowfall Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "snow",
+      "ocean",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-25.png",
+    "name": "Snowfall Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "snow",
+      "forest",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-26.png",
+    "name": "Snowfall Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "snow",
+      "lavender",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-27.png",
+    "name": "Snowfall Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "snow",
+      "mono",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-28.png",
+    "name": "Snowfall Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "snow",
+      "citrus",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-29.png",
+    "name": "Snowfall Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "snow",
+      "berry",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-30.png",
+    "name": "Snowfall Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "snow",
+      "sand",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-31.png",
+    "name": "Hearts Sunset",
+    "tags": [
+      "background",
+      "pattern",
+      "hearts",
+      "sunset",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-32.png",
+    "name": "Hearts Ocean",
+    "tags": [
+      "background",
+      "pattern",
+      "hearts",
+      "ocean",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-33.png",
+    "name": "Hearts Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "hearts",
+      "forest",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-34.png",
+    "name": "Hearts Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "hearts",
+      "lavender",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-35.png",
+    "name": "Hearts Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "hearts",
+      "mono",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-36.png",
+    "name": "Hearts Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "hearts",
+      "citrus",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-37.png",
+    "name": "Hearts Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "hearts",
+      "berry",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-38.png",
+    "name": "Hearts Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "hearts",
+      "sand",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-39.png",
+    "name": "Hearts Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "hearts",
+      "kraft",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-40.png",
+    "name": "Hearts Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "hearts",
+      "mint",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-41.png",
+    "name": "Sprinkles Forest",
+    "tags": [
+      "background",
+      "pattern",
+      "sprinkles",
+      "forest",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-42.png",
+    "name": "Sprinkles Lavender",
+    "tags": [
+      "background",
+      "pattern",
+      "sprinkles",
+      "lavender",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-43.png",
+    "name": "Sprinkles Mono",
+    "tags": [
+      "background",
+      "pattern",
+      "sprinkles",
+      "mono",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-44.png",
+    "name": "Sprinkles Citrus",
+    "tags": [
+      "background",
+      "pattern",
+      "sprinkles",
+      "citrus",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-45.png",
+    "name": "Sprinkles Berry",
+    "tags": [
+      "background",
+      "pattern",
+      "sprinkles",
+      "berry",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-46.png",
+    "name": "Sprinkles Sand",
+    "tags": [
+      "background",
+      "pattern",
+      "sprinkles",
+      "sand",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-47.png",
+    "name": "Sprinkles Kraft",
+    "tags": [
+      "background",
+      "pattern",
+      "sprinkles",
+      "kraft",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-48.png",
+    "name": "Sprinkles Mint",
+    "tags": [
+      "background",
+      "pattern",
+      "sprinkles",
+      "mint",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-49.png",
+    "name": "Sprinkles Blush",
+    "tags": [
+      "background",
+      "pattern",
+      "sprinkles",
+      "blush",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  },
+  {
+    "file": "bg-festive-50.png",
+    "name": "Sprinkles Navy and gold",
+    "tags": [
+      "background",
+      "pattern",
+      "sprinkles",
+      "navy",
+      "festive"
+    ],
+    "category": "Backgrounds: Festive"
+  }
+]

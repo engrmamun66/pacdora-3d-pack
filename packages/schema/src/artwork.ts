@@ -33,6 +33,8 @@ const base = {
   opacity: finite.min(0).max(1),
   visible: z.boolean(),
   locked: z.boolean(),
+  /** Objects with the same groupId move, resize and turn together (see the editor's Group command). Absent = not grouped. */
+  groupId: z.string().min(1).max(40).optional(),
 };
 
 const stroked = {
