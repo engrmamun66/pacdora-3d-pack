@@ -7,9 +7,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/80",
-        outline:
-          "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+        // Action buttons (default, outline, dark) are black with white text everywhere.
+        default: "border-black bg-black text-white hover:bg-neutral-800 aria-expanded:bg-neutral-800 aria-pressed:ring-2 aria-pressed:ring-neutral-400 aria-pressed:ring-offset-1 dark:border-white/20",
+        outline: "border-black bg-black text-white hover:bg-neutral-800 aria-expanded:bg-neutral-800 aria-pressed:ring-2 aria-pressed:ring-neutral-400 aria-pressed:ring-offset-1 dark:border-white/20",
+        dark: "border-black bg-black text-white hover:bg-neutral-800 aria-expanded:bg-neutral-800 aria-pressed:ring-2 aria-pressed:ring-neutral-400 aria-pressed:ring-offset-1 dark:border-white/20",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
         ghost:

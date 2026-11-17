@@ -147,7 +147,7 @@ export function CleanupEditor({
                         <p className="truncate font-medium">{s.label}</p>
                         <p className="text-xs text-muted-foreground">{s.ids.length} {s.ids.length === 1 ? "line" : "lines"}</p>
                       </div>
-                      <Button type="button" size="sm" variant={st === "all" ? "outline" : "default"} onClick={() => set(s.ids, st !== "all")}>
+                      <Button type="button" size="sm" variant={st === "all" ? "secondary" : "default"} onClick={() => set(s.ids, st !== "all")}>
                         {st === "all" ? "Undo" : "Leave out"}
                       </Button>
                     </div>

@@ -37,7 +37,7 @@ export function GridToggle({ viewRef, defaultOn = true, keepViewByDefault = fals
         setOn(next);
         viewRef.current?.setGridVisible(next);
       }}
-      className={`absolute top-2 left-2 z-10 grid size-8 place-items-center rounded-lg border shadow-xs backdrop-blur transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${on ? "bg-primary text-primary-foreground" : "bg-background/80 text-muted-foreground hover:text-foreground"}`}
+      className={`absolute top-2 left-2 z-10 grid size-8 place-items-center rounded-lg border shadow-xs backdrop-blur transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${on ? "bg-black text-white" : "bg-background/80 text-muted-foreground hover:text-foreground"}`}
     >
       <Grid3x3 className="size-4" aria-hidden />
     </button>
@@ -85,7 +85,7 @@ function KeepViewToggle({ viewRef, defaultOn }: { viewRef: RefObject<CartonViewH
         setOn(next);
         viewRef.current?.setKeepView(next);
       }}
-      className={`absolute top-12 left-2 z-10 grid size-8 place-items-center rounded-lg border shadow-xs backdrop-blur transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${on ? "bg-primary text-primary-foreground" : "bg-background/80 text-muted-foreground hover:text-foreground"}`}
+      className={`absolute top-12 left-2 z-10 grid size-8 place-items-center rounded-lg border shadow-xs backdrop-blur transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${on ? "bg-black text-white" : "bg-background/80 text-muted-foreground hover:text-foreground"}`}
     >
       {on ? <Lock className="size-4" aria-hidden /> : <LockOpen className="size-4" aria-hidden />}
     </button>

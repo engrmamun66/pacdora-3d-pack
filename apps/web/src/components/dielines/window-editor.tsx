@@ -547,7 +547,7 @@ export function WindowEditor({
                 aria-selected={sw.tab === id}
                 disabled={sw.switching}
                 onClick={() => sw.select(id)}
-                className={`rounded-md px-3 py-1 font-medium focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${sw.tab === id ? "bg-primary text-primary-foreground disabled:text-primary-foreground" : "text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:text-muted-foreground"} ${sw.switching ? "cursor-wait" : ""}`}
+                className={`rounded-md px-3 py-1 font-medium focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${sw.tab === id ? "bg-black text-white disabled:text-white" : "text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:text-muted-foreground"} ${sw.switching ? "cursor-wait" : ""}`}
               >
                 {text}
               </button>
@@ -562,7 +562,7 @@ export function WindowEditor({
             disabled={bad}
             title={bad ? "Fix the windows marked in red first" : "Keep these windows"}
             onClick={() => onDone(draft)}
-            className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-[13px] font-semibold text-primary-foreground shadow-sm hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-8 items-center rounded-lg bg-black px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Done
           </button>
@@ -617,7 +617,7 @@ export function WindowEditor({
                       e.dataTransfer.effectAllowed = "copy";
                     }}
                     title={`Click to add: ${WINDOW_SHAPE_LABELS[shape].toLowerCase()}. Or drag it onto a panel`}
-                    className="flex flex-col items-center gap-1 rounded-xl border bg-background p-2 text-center text-xs text-foreground/80 transition-colors enabled:hover:border-primary enabled:hover:bg-muted disabled:cursor-not-allowed"
+                    className="flex flex-col items-center gap-1 rounded-xl border bg-background p-2 text-center text-xs text-foreground/80 transition-colors enabled:hover:border-foreground enabled:hover:bg-muted disabled:cursor-not-allowed"
                   >
                     <ShapeIcon shape={shape} />
                     {WINDOW_SHAPE_LABELS[shape]}
@@ -635,7 +635,7 @@ export function WindowEditor({
           <div className={sw.mounted === "3d" ? "hidden" : "contents"}>
           <div
             ref={host}
-            className={`absolute inset-0 touch-none overflow-hidden ${dropping ? "ring-2 ring-inset ring-primary/60" : ""}`}
+            className={`absolute inset-0 touch-none overflow-hidden ${dropping ? "ring-2 ring-inset ring-foreground/40" : ""}`}
             tabIndex={0}
             onPointerMove={onMove}
             onPointerUp={onUp}
@@ -827,7 +827,7 @@ export function WindowEditor({
               <h3 className="text-sm font-semibold">Size and place</h3>
               <div role="radiogroup" aria-label="Unit" className="flex rounded-lg border p-0.5 text-xs">
                 {(["mm", "in"] as const).map((u) => (
-                  <button key={u} type="button" role="radio" aria-checked={unit === u} onClick={() => onUnit(u)} className={`rounded-md px-2 py-0.5 ${unit === u ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>{u}</button>
+                  <button key={u} type="button" role="radio" aria-checked={unit === u} onClick={() => onUnit(u)} className={`rounded-md px-2 py-0.5 ${unit === u ? "bg-black text-white" : "text-muted-foreground hover:bg-muted"}`}>{u}</button>
                 ))}
               </div>
             </div>

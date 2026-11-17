@@ -78,7 +78,7 @@ export function ShadowTool({ viewRef }: { viewRef: RefObject<CartonViewHandle | 
         title="Shadow controls"
         onClick={() => toggle(!open)}
         style={{ bottom }}
-        className={`absolute left-2 z-10 grid size-8 place-items-center rounded-lg border shadow-xs backdrop-blur transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${open ? "bg-primary text-primary-foreground" : "bg-background/80 text-muted-foreground hover:text-foreground"}`}
+        className={`absolute left-2 z-10 grid size-8 place-items-center rounded-lg border shadow-xs backdrop-blur transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${open ? "bg-black text-white" : "bg-background/80 text-muted-foreground hover:text-foreground"}`}
       >
         <Sun className="size-4" aria-hidden />
       </button>
@@ -91,7 +91,7 @@ export function ShadowTool({ viewRef }: { viewRef: RefObject<CartonViewHandle | 
             title={shadow.on ? "Hide shadow" : "Show shadow"}
             style={stripItem(open, 0, shadowPresets.length + 2).style}
             onClick={() => update({ on: !shadow.on })}
-            className={`${stripItem(open, 0, shadowPresets.length + 2).className} grid size-7 shrink-0 place-items-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${shadow.on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+            className={`${stripItem(open, 0, shadowPresets.length + 2).className} grid size-7 shrink-0 place-items-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${shadow.on ? "bg-black text-white" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
           >
             {shadow.on ? <Eye className="size-4" aria-hidden /> : <EyeOff className="size-4" aria-hidden />}
           </button>
@@ -107,7 +107,7 @@ export function ShadowTool({ viewRef }: { viewRef: RefObject<CartonViewHandle | 
                 title={preset.label}
                 style={motion.style}
                 onClick={() => update({ on: true, azimuthDeg: preset.azimuthDeg, elevationDeg: preset.elevationDeg })}
-                className={`${motion.className} grid size-7 shrink-0 place-items-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                className={`${motion.className} grid size-7 shrink-0 place-items-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${active ? "bg-black text-white" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
               >
                 <LightIcon azimuthDeg={preset.azimuthDeg} elevationDeg={preset.elevationDeg} />
               </button>
@@ -121,7 +121,7 @@ export function ShadowTool({ viewRef }: { viewRef: RefObject<CartonViewHandle | 
             title="Set the light by hand (angle, height, darkness, softness)"
             style={stripItem(open, shadowPresets.length + 1, shadowPresets.length + 2).style}
             onClick={() => setCustom((v) => !v)}
-            className={`${stripItem(open, shadowPresets.length + 1, shadowPresets.length + 2).className} grid size-7 shrink-0 place-items-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${custom ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+            className={`${stripItem(open, shadowPresets.length + 1, shadowPresets.length + 2).className} grid size-7 shrink-0 place-items-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${custom ? "bg-black text-white" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
           >
             <SlidersHorizontal className="size-4" aria-hidden />
           </button>
@@ -188,8 +188,8 @@ function GlobalLightPanel({ shadow, bottom, onChange }: { shadow: ShadowSettings
         >
           <span aria-hidden className="absolute top-1/2 left-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-sm border bg-background" />
           <svg aria-hidden viewBox="-24 -24 48 48" className="pointer-events-none absolute inset-0 size-full">
-            <line x1="0" y1="0" x2={Math.sin(az) * R} y2={Math.cos(az) * R} stroke="currentColor" strokeWidth="1.5" className="text-primary" />
-            <circle cx={Math.sin(az) * R} cy={Math.cos(az) * R} r="3.5" className="fill-primary" />
+            <line x1="0" y1="0" x2={Math.sin(az) * R} y2={Math.cos(az) * R} stroke="currentColor" strokeWidth="1.5" className="text-foreground" />
+            <circle cx={Math.sin(az) * R} cy={Math.cos(az) * R} r="3.5" className="fill-foreground" />
           </svg>
         </div>
         <label className="flex flex-1 items-center justify-between gap-2">

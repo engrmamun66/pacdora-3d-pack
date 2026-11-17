@@ -113,12 +113,12 @@ export function QuickSortBar({
           Preview 3D folding
         </label>
         <div className="flex shrink-0 items-center gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={onAddStep} title={`Open step ${step + 1}: the lines you click next join it`}>
+          <Button type="button" variant="dark" size="sm" onClick={onAddStep} title={`Open step ${step + 1}: the lines you click next join it`}>
             <Plus className="size-4" aria-hidden /> Add step
           </Button>
-          <Button type="button" variant="outline" size="sm" disabled={idle} onClick={onClear} title="Remove every line and step"><Trash2 className="size-4" aria-hidden /> Clear</Button>
-          <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
-          <Button type="button" size="sm" disabled={!items.length} onClick={onApply}>Apply</Button>
+          <Button type="button" variant="dark" size="sm" disabled={idle} onClick={onClear} title="Remove every line and step"><Trash2 className="size-4" aria-hidden /> Clear</Button>
+          <Button type="button" variant="dark" size="sm" onClick={onCancel}>Cancel</Button>
+          <Button type="button" variant="dark" size="sm" disabled={!items.length} onClick={onApply}>Apply</Button>
         </div>
       </div>
 

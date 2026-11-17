@@ -46,7 +46,7 @@ export function CameraViewTool({ viewRef }: { viewRef: RefObject<CartonViewHandl
         title="Camera view: quick angles"
         onClick={() => toggle(!open)}
         style={{ bottom }}
-        className={`absolute left-2 z-10 grid size-8 place-items-center rounded-lg border shadow-xs backdrop-blur transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${open ? "bg-primary text-primary-foreground" : "bg-background/80 text-muted-foreground hover:text-foreground"}`}
+        className={`absolute left-2 z-10 grid size-8 place-items-center rounded-lg border shadow-xs backdrop-blur transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${open ? "bg-black text-white" : "bg-background/80 text-muted-foreground hover:text-foreground"}`}
       >
         <Video className="size-4" aria-hidden />
       </button>
@@ -63,7 +63,7 @@ export function CameraViewTool({ viewRef }: { viewRef: RefObject<CartonViewHandl
                 title={v.label}
                 style={m.style}
                 onClick={() => go(v)}
-                className={`${m.className} grid size-7 shrink-0 place-items-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${current === v.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                className={`${m.className} grid size-7 shrink-0 place-items-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${current === v.id ? "bg-black text-white" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
               >
                 <CameraViewIcon view={v} className="size-5" />
               </button>

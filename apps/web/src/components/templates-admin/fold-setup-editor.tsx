@@ -232,7 +232,7 @@ export function FoldSetupEditor({
           This template is <strong>flat only</strong>: clients can resize it, add artwork and export it, but there is no 3D view.{" "}
           <InfoTip label="3D view">To give it a 3D view, we find the panels between your cut and fold lines, then you check how each fold goes.</InfoTip>
         </p>
-        <Button type="button" onClick={detect}><Wand2 className="size-4" aria-hidden /> Detect panels and folds</Button>
+        <Button type="button" variant="dark" onClick={detect}><Wand2 className="size-4" aria-hidden /> Detect panels and folds</Button>
       </div>
     );
   }
@@ -269,14 +269,14 @@ export function FoldSetupEditor({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant={quick ? "default" : "outline"} size="sm" aria-pressed={quick} onClick={() => (quick ? stopQuick() : (setQuick(true), setSel(null)))}><ListOrdered className="size-4" aria-hidden /> Quick sort</Button>
-          <Button type="button" variant="outline" size="sm" onClick={detect}><Wand2 className="size-4" aria-hidden /> Detect again</Button>
+          <Button type="button" variant="dark" size="sm" aria-pressed={quick} onClick={() => (quick ? stopQuick() : (setQuick(true), setSel(null)))}><ListOrdered className="size-4" aria-hidden /> Quick sort</Button>
+          <Button type="button" variant="dark" size="sm" onClick={detect}><Wand2 className="size-4" aria-hidden /> Detect again</Button>
           <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm select-none">
             <input type="checkbox" className="size-4 accent-primary" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} />
             Show labels on 3D view
           </label>
           {onWindows ? (
-            <Button type="button" variant="outline" size="sm" className="ml-auto" disabled={!geo.geo} title={geo.geo ? "Cut window holes that new projects start with" : "Set up the 3D fold first"} onClick={() => setWindowsOpen(true)}>
+            <Button type="button" variant="dark" size="sm" className="ml-auto" disabled={!geo.geo} title={geo.geo ? "Cut window holes that new projects start with" : "Set up the 3D fold first"} onClick={() => setWindowsOpen(true)}>
               <AppWindow className="size-4" aria-hidden /> Window holes{windows.length > 0 ? <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[10px] leading-4 font-semibold text-primary-foreground">{windows.length}</span> : null}
             </Button>
           ) : null}
@@ -360,7 +360,7 @@ export function FoldSetupEditor({
                   <g key={h.id} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); if (quick) toggleQueued(h.id); else setSel({ kind: "hinge", id: h.id }); }}>
                     <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={size / 40} />
                     <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={h.angleDeg < 0 ? "#ea580c" : "#0f766e"} strokeWidth={size / (on ? 90 : 170)} strokeLinecap="round" />
-                    <circle cx={mx} cy={my} r={size / (quick && at >= 0 ? 55 : 70)} fill={on ? "#2563eb" : quick ? "#71717a" : "#18181b"} />
+                    <circle cx={mx} cy={my} r={size / (quick && at >= 0 ? 55 : 70)} fill={on ? "#18181b" : quick ? "#71717a" : "#18181b"} />
                     <text x={mx} y={my + size / 190} textAnchor="middle" fontSize={size / 80} fill="#ffffff" pointerEvents="none">{quick ? (at >= 0 ? queue[at]!.step : "") : h.order}</text>
                   </g>
                 );
@@ -450,12 +450,12 @@ export function FoldSetupEditor({
             Size: <strong className="text-foreground tabular-nums">{panelSize(shownPanel.polygon).w.toFixed(1)} × {panelSize(shownPanel.polygon).h.toFixed(1)} mm</strong> at the imported size, {shownPanel.polygon.length / 2} corners.
           </p>
           <div className="flex basis-full flex-wrap items-center gap-2">
-            <Button type="button" variant={fold.groundId === shownPanel.id ? "default" : "outline"} size="sm" aria-pressed={fold.groundId === shownPanel.id} onClick={() => onChange(setGround(fold, fold.groundId === shownPanel.id ? null : shownPanel.id))}>{fold.groundId === shownPanel.id ? "On the ground (click to undo)" : "Put this on the ground"}</Button>
-            {roots.includes(shownPanel.id) ? <><p className="text-sm text-muted-foreground">{parts.length ? `This is the base panel of the ${pieceName(shownPanel.id).toLowerCase()}.` : "This is the base panel."}</p>{shownPanel.id === fold.rootId && fold.groundId !== shownPanel.id ? <Button type="button" variant="outline" size="sm" onClick={() => onChange(setGround(fold, shownPanel.id))}>Stand the box on this base</Button> : null}</> : <Button type="button" variant="outline" size="sm" onClick={() => onChange(makeBase(fold, shownPanel.id))}>{parts.length ? `Make this the base of its piece (${pieceName(roots[Math.max(0, pieceOf(fold, shownPanel.id))]!).toLowerCase()})` : "Make this the base (stays flat)"}</Button>}
+            <Button type="button" variant="dark" size="sm" aria-pressed={fold.groundId === shownPanel.id} onClick={() => onChange(setGround(fold, fold.groundId === shownPanel.id ? null : shownPanel.id))} title="In the 3D view the box stands on this panel, with its printed side down.">{fold.groundId === shownPanel.id ? "Bottom of the box ✓ (click to undo)" : "Set as bottom of the box"}</Button>
+            {roots.includes(shownPanel.id) ? <p className="text-sm text-muted-foreground">{parts.length ? `This is the base panel of the ${pieceName(shownPanel.id).toLowerCase()}.` : "This is the base panel."}</p> : <Button type="button" variant="dark" size="sm" onClick={() => onChange(makeBase(fold, shownPanel.id))}>{parts.length ? `Make this the base of its piece (${pieceName(roots[Math.max(0, pieceOf(fold, shownPanel.id))]!).toLowerCase()})` : "Make this the base (stays flat)"}</Button>}
           </div>
             </div>
             <div className="flex justify-end border-t px-5 py-3">
-              <Button type="submit">Done</Button>
+              <Button type="submit" variant="dark">Done</Button>
             </div>
           </form>
         ) : null}
@@ -516,7 +516,7 @@ export function FoldSetupEditor({
                     {pieceCount > 1 ? `${pieceName(roots[curTab.i]!)} has its own steps. ` : ""}Lines with the same step number fold together. Drag a row by its handle (or focus it and press the up / down arrow keys) to change which fold happens first. Type a step number to fold several lines together: give them the same number.
                   </InfoTip>
                 </p>
-                {curTab.i > 0 ? <Button type="button" variant="outline" size="xs" onClick={() => onChange(makeMain(fold, roots[curTab.i]!))}>Make main body</Button> : null}
+                {curTab.i > 0 ? <Button type="button" variant="dark" size="xs" onClick={() => onChange(makeMain(fold, roots[curTab.i]!))}>Make main body</Button> : null}
               </div>
               {sortedHinges(fold, curTab.i).length ? (
                 <HingeList hinges={sortedHinges(fold, curTab.i)} label={label} selectedId={sel?.kind === "hinge" ? sel.id : null} onSelect={(id) => setSel({ kind: "hinge", id })} onSetHinge={setHinge} onMove={(id, to) => onChange(moveHinge(fold, id, to))} />
@@ -530,8 +530,8 @@ export function FoldSetupEditor({
       {curTab.k === "piece" ? (
         <>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => onChange(compactOrders(fold))}>Tidy step numbers</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => onChange({ ...fold, hinges: fold.hinges.map((h) => ({ ...h, angleDeg: Math.sign(h.angleDeg || 1) * 90 })) })}>Set every angle to 90°</Button>
+          <Button type="button" variant="dark" size="sm" onClick={() => onChange(compactOrders(fold))}>Tidy step numbers</Button>
+          <Button type="button" variant="dark" size="sm" onClick={() => onChange({ ...fold, hinges: fold.hinges.map((h) => ({ ...h, angleDeg: Math.sign(h.angleDeg || 1) * 90 })) })}>Set every angle to 90°</Button>
         </div>
         </>
       ) : null}
