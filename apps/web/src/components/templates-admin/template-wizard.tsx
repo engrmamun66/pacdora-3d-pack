@@ -52,7 +52,7 @@ export interface WizardInitial {
   options: Options;
   /** How the template folds in 3D (imported templates), or null for flat only. */
   fold: FoldSetup | null;
-  /** Ignored line styles kept as an optional "Reference" picture for customers. */
+  /** Ignored line styles kept as an optional "Reference" picture for clients. */
   referenceStyles: string[];
   /** Built-in templates with a board thickness: the generator's limits (mm) and the saved default (null = the template's own). */
   material: { min: number; max: number; value: number | null } | null;
@@ -226,7 +226,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   }, [mode, builtin, dieline !== null]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasCut = Object.values(roles).includes("cut");
-  // Customers get a resizable sheet from the Cut lines, so some Cut shape must be closed.
+  // Clients get a resizable sheet from the Cut lines, so some Cut shape must be closed.
   const hasClosedCut = !dieline || dieline.paths.some((p) => p.closed && roles[p.style] === "cut");
   const slugOk = isValidSlug(slug);
   const nameOk = name.trim().length >= 2;
@@ -519,7 +519,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
                       {ROLE_ORDER.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
                     </select>
                   {roles[st.key] === "ignore" ? (
-                      <label className="flex basis-full items-center gap-1.5 pl-[46px] text-xs text-muted-foreground" title="Customers get an optional 'Reference' switch that draws these lines faint behind the dieline">
+                      <label className="flex basis-full items-center gap-1.5 pl-[46px] text-xs text-muted-foreground" title="Clients get an optional 'Reference' switch that draws these lines faint behind the dieline">
                         <input type="checkbox" checked={!noRef.includes(st.key)} onChange={(e) => setNoRef((r) => (e.target.checked ? r.filter((k) => k !== st.key) : [...r, st.key]))} />
                         Show as reference
                       </label>
@@ -538,7 +538,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
                 <span className="ml-auto text-xs text-muted-foreground">{dieline.widthMm.toFixed(1)} × {dieline.heightMm.toFixed(1)} mm</span>
               </div>
               <div className="relative rounded-xl border bg-white p-3">
-                <HelpTip label="About this sheet">Customers can resize this sheet, add artwork, and export it. The 3D fold is set up in its own step (create) or section (edit).</HelpTip>
+                <HelpTip label="About this sheet">Clients can resize this sheet, add artwork, and export it. The 3D fold is set up in its own step (create) or section (edit).</HelpTip>
                 <ImportedPreview dieline={dieline} roles={previewRoles} animate replayKey={replay} className="mx-auto max-h-[60vh] w-full" />
               </div>
               <Button type="button" variant="outline" onClick={() => setOverrides({})}><Wand2 className="size-4" aria-hidden /> Auto-detect again</Button>
@@ -563,7 +563,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
     <section aria-labelledby="s-win" className="flex flex-col gap-4">
       <div className="flex items-center gap-1.5">
         <h2 id="s-win" className="text-lg font-semibold">Window holes</h2>
-        <InfoTip label="Window holes">Optional. Cut-outs in a panel that every new project starts with, for example a window on a food box. Customers can change them.</InfoTip>
+        <InfoTip label="Window holes">Optional. Cut-outs in a panel that every new project starts with, for example a window on a food box. Clients can change them.</InfoTip>
       </div>
       <TemplateWindowsField
         geo={windowGeo.geo}
@@ -627,7 +627,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
                 {TEMPLATE_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </label>
-            {status !== "published" ? <p role="status" className="-mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">Not published: customers will not see this template in the library until its status is Published.</p> : null}
+            {status !== "published" ? <p role="status" className="-mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">Not published: clients will not see this template in the library until its status is Published.</p> : null}
             
     </>
   );
@@ -638,7 +638,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
                   Box background image
                   <InfoTip label="Box background image">
                     {builtin
-                      ? "A starting picture for the box: new projects from this template begin with it as their box background (customers can change or remove it). PNG or JPEG, up to 10 MB."
+                      ? "A starting picture for the box: new projects from this template begin with it as their box background (clients can change or remove it). PNG or JPEG, up to 10 MB."
                       : "A picture that fills the box on this template's page, inside the cut outline. PNG or JPEG, up to 10 MB."}
                   </InfoTip>
                 </span>
@@ -739,7 +739,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
               <section id="sec-view" aria-labelledby="s-view" className={card}>
                 <div className="mb-4 flex items-center gap-1.5">
                   <h2 id="s-view" className="text-lg font-semibold">Starting 3D view</h2>
-                  <InfoTip label="Starting 3D view">Set how the 3D preview looks when a customer opens this template. It is saved on its own, not with the Save button below.{!builtin && !foldOk ? " Save the 3D fold first." : ""}</InfoTip>
+                  <InfoTip label="Starting 3D view">Set how the 3D preview looks when a client opens this template. It is saved on its own, not with the Save button below.{!builtin && !foldOk ? " Save the 3D fold first." : ""}</InfoTip>
                 </div>
                 <ViewSettingsInline slug={initial.slug} windows={windows} reloadKey={savedCount} onSaved={setStartView} />
               </section>
@@ -756,7 +756,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
             {isPublicStatus(initial.status) ? (
               <Link href={`/template/dieline/${initial.slug}`} target="_blank" rel="noreferrer" className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">Open public page ↗</Link>
             ) : (
-              <span className="text-sm text-muted-foreground" title="Customers only see templates with the status Published">Not published</span>
+              <span className="text-sm text-muted-foreground" title="Clients only see templates with the status Published">Not published</span>
             )}
             <Button type="button" className="h-10" disabled={!canSave} onClick={() => void save()} title="Ctrl/Cmd + S">
               {saving ? "Saving…" : "Save changes"}

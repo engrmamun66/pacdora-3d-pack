@@ -273,7 +273,7 @@ export function CleanupEditor({
         </div>
         <p className="flex items-center gap-1 text-xs text-muted-foreground">
           About left out lines
-          <InfoTip label="About left out lines">Left out lines are removed for good: they are not drawn, not in the 3D box, and not counted in the sheet size. To keep lines only as a faint picture for customers, set them to <em>Ignore</em> in the next step instead.</InfoTip>
+          <InfoTip label="About left out lines">Left out lines are removed for good: they are not drawn, not in the 3D box, and not counted in the sheet size. To keep lines only as a faint picture for clients, set them to <em>Ignore</em> in the next step instead.</InfoTip>
         </p>
       </div>
     </div>

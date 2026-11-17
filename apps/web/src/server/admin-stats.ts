@@ -9,6 +9,8 @@ export interface OverviewStats {
   assets: { total: number; bytes: number };
   /** Exports and uploads come from rate-limit events, which are kept for 24 hours only. */
   last24h: { exports: number; uploads: number };
+  /** Orders and customers on Clients' portals. */
+  portal: { orders: number; orders7: number; newOrders: number; customers: number };
   aiRequests7: number;
   aiOutcomes: { outcome: string; count: number }[];
   signups14: { day: string; count: number }[];
@@ -22,7 +24,7 @@ export async function overviewStats(now = new Date()): Promise<OverviewStats> {
   // 14 UTC days including today.
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 13));
 
-  const [total, verified, banned, new7, new30, active7, projects, projects7, assets, exports, uploads, ai7, outcomes, signups] = await Promise.all([
+  const [total, verified, banned, new7, new30, active7, projects, projects7, assets, exports, uploads, ai7, outcomes, signups, orders, orders7, newOrders, customers] = await Promise.all([
     db.user.count(),
     db.user.count({ where: { emailVerified: true } }),
     db.user.count({ where: { banned: true } }),
@@ -37,6 +39,10 @@ export async function overviewStats(now = new Date()): Promise<OverviewStats> {
     db.aiRequest.count({ where: { createdAt: { gte: d7 } } }),
     db.aiRequest.groupBy({ by: ["outcome"], where: { createdAt: { gte: d7 } }, _count: true }),
     db.$queryRaw<{ d: Date; c: number }[]>`select date_trunc('day', "createdAt") as d, count(*)::int as c from "user" where "createdAt" >= ${start} group by 1`,
+    db.order.count(),
+    db.order.count({ where: { createdAt: { gte: d7 } } }),
+    db.order.count({ where: { status: "new" } }),
+    db.customer.count(),
   ]);
 
   const byDay = new Map(signups.map((r) => [new Date(r.d).toISOString().slice(0, 10), r.c]));
@@ -50,6 +56,7 @@ export async function overviewStats(now = new Date()): Promise<OverviewStats> {
     projects: { total: projects, new7: projects7 },
     assets: { total: assets._count, bytes: assets._sum.sizeBytes ?? 0 },
     last24h: { exports, uploads },
+    portal: { orders, orders7, newOrders, customers },
     aiRequests7: ai7,
     aiOutcomes: outcomes.map((o) => ({ outcome: o.outcome, count: o._count })),
     signups14,

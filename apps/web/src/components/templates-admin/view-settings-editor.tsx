@@ -12,7 +12,7 @@ import { GridToggle } from "@/components/viewer3d/grid-toggle";
 import { notify } from "@/lib/notify";
 import { STANDARD_VIEW, type ViewSettings } from "@/lib/view-settings";
 
-/** Dieline geometry of a template at its default size (what customers see first). */
+/** Dieline geometry of a template at its default size (what clients see first). */
 export function geometryForViewData(data: TemplateViewData, windows: readonly WindowSpec[] = data.windows): DielineGeometry {
   let geo: DielineGeometry;
   if (data.kind === "builtin") geo = generateDieline(data.generatorId, data.params);
@@ -20,7 +20,7 @@ export function geometryForViewData(data: TemplateViewData, windows: readonly Wi
     const flat = data.flat as FlatDieline;
     geo = createImportedGenerator(data.templateId, flat, data.fold).generate(importedStartParams(data.flat, data.fold));
   }
-  // The template's window holes are cut into the box too, as customers will see it (and as the product image is taken).
+  // The template's window holes are cut into the box too, as clients will see it (and as the product image is taken).
   return windows.length > 0 ? applyWindows(geo, windows).geo : geo;
 }
 
@@ -62,7 +62,7 @@ function PadGroup({ title, children }: { title: string; children: React.ReactNod
 
 /**
  * Set the view a template's 3D preview starts with. Turn, zoom and pan the box as a
- * customer would; or use the buttons, and "Save view"
+ * client would; or use the buttons, and "Save view"
  * stores exactly what is on screen, including how far the box is folded.
  */
 export function ViewSettingsEditor({ slug, data, windows, onSaved, onDone }: { slug: string; data: TemplateViewData; /** Window holes to show instead of the saved ones (the admin page may have unsaved changes). */ windows?: readonly WindowSpec[]; onSaved?: (v: ViewSettings | null) => void; /** Called after an action button (save / remove) succeeded, so the host can close the editor. */ onDone?: () => void }) {
@@ -254,7 +254,7 @@ export function ViewSettingsEditor({ slug, data, windows, onSaved, onDone }: { s
               <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => { move({ ...STANDARD_VIEW, progress }); }} title="Move the camera back to the standard position"><RotateCcw aria-hidden /> Standard view</Button>
               {saved ? <Button type="button" variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={busy} onClick={() => void clear()}><Trash2 aria-hidden /> Remove saved</Button> : null}
             </div>
-            {!saved ? <p className="flex items-center gap-1 text-xs text-muted-foreground">Not saved yet <InfoTip label="Not saved yet">Customers see the standard view until you save one.</InfoTip></p> : null}
+            {!saved ? <p className="flex items-center gap-1 text-xs text-muted-foreground">Not saved yet <InfoTip label="Not saved yet">Clients see the standard view until you save one.</InfoTip></p> : null}
           </div>
         </section>
 

@@ -7,7 +7,7 @@ import type { Unit } from "@/components/dielines/units";
 
 /**
  * The window hole editor as a full-screen modal that slides up when it opens and slides down when it closes
- * (the same motion as on the customer's page). Mounted only while it is open or sliding away.
+ * (the same motion as on the client's page). Mounted only while it is open or sliding away.
  */
 export function WindowEditorModal({
   open,

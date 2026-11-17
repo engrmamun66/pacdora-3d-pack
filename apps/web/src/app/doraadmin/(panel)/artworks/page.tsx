@@ -36,7 +36,7 @@ export default async function ArtworksPage({ searchParams }: PageProps<"/doraadm
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Artworks" description="Pictures customers can place on their design (PNG or JPEG, 10 MB max). Each one needs a name and tags; the category is optional and groups them in the artwork menu." actions={<AddArtworkButton categories={categories.map((c) => c.name)} />} />
+      <PageHeader title="Artworks" description="Pictures clients can place on their design (PNG or JPEG, 10 MB max). Each one needs a name and tags; the category is optional and groups them in the artwork menu." actions={<AddArtworkButton categories={categories.map((c) => c.name)} />} />
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 md:grid-cols-[208px_minmax(0,1fr)] md:items-start">
         <aside className="md:sticky md:top-24">
           <nav aria-label="Categories" className="flex gap-1 overflow-x-auto rounded-xl border bg-card p-1.5 shadow-xs md:max-h-[calc(100dvh-8rem)] md:flex-col md:overflow-x-visible md:overflow-y-auto">

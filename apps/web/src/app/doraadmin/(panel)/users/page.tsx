@@ -4,7 +4,7 @@ import { BanButton } from "@/components/admin/ban-button";
 import { db } from "@/server/db";
 import { SUPERADMIN, requireSuperAdmin } from "@/server/admin";
 
-export const metadata = { title: "All Customers" };
+export const metadata = { title: "All Clients" };
 
 const PAGE_SIZE = 25;
 const date = (d: Date) => d.toISOString().slice(0, 16).replace("T", " ");
@@ -14,7 +14,7 @@ export default async function AdminUsers({ searchParams }: PageProps<"/doraadmin
   const sp = await searchParams;
   const q = (typeof sp.q === "string" ? sp.q : "").trim().slice(0, 100);
   const page = Math.min(10_000, Math.max(1, Math.floor(Number(typeof sp.page === "string" ? sp.page : "1")) || 1));
-  // Customers are the people who signed up; super admins are staff and are not listed.
+  // Clients are the people who signed up and use the site; super admins are staff and are not listed.
   const where = {
     role: { not: SUPERADMIN },
     ...(q ? { OR: [{ email: { contains: q, mode: "insensitive" as const } }, { name: { contains: q, mode: "insensitive" as const } }] } : {}),
@@ -35,7 +35,7 @@ export default async function AdminUsers({ searchParams }: PageProps<"/doraadmin
         banned: true,
         banReason: true,
         createdAt: true,
-        _count: { select: { projects: true, assets: true } },
+        _count: { select: { projects: true, assets: true, clientOrders: true } },
         sessions: { orderBy: { updatedAt: "desc" }, take: 1, select: { updatedAt: true } },
       },
     }),
@@ -47,8 +47,8 @@ export default async function AdminUsers({ searchParams }: PageProps<"/doraadmin
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="All Customers"
-        description={`${total} ${total === 1 ? "customer" : "customers"}${q ? ` matching "${q}"` : ""}. Times are UTC.`}
+        title="All Clients"
+        description={`${total} ${total === 1 ? "client" : "clients"}${q ? ` matching "${q}"` : ""}. Times are UTC.`}
         actions={
           <form className="flex gap-2" role="search">
             <label className="sr-only" htmlFor="q">Search by name or email</label>
@@ -62,10 +62,11 @@ export default async function AdminUsers({ searchParams }: PageProps<"/doraadmin
         <table className="w-full text-left text-sm">
           <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
-              <th scope="col" className="px-4 py-2.5 font-medium">Customer</th>
+              <th scope="col" className="px-4 py-2.5 font-medium">Client</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Status</th>
-              <th scope="col" className="px-4 py-2.5 font-medium">Projects</th>
+              <th scope="col" className="px-4 py-2.5 font-medium">Templates</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Images</th>
+              <th scope="col" className="px-4 py-2.5 font-medium">Orders</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Joined</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Last active</th>
               <th scope="col" className="px-4 py-2.5 font-medium"><span className="sr-only">Actions</span></th>
@@ -75,7 +76,7 @@ export default async function AdminUsers({ searchParams }: PageProps<"/doraadmin
             {rows.map((u) => (
               <tr key={u.id} className="border-b transition-colors last:border-0 hover:bg-muted/40">
                 <td className="px-4 py-3">
-                  <p className="font-medium">{u.name}</p>
+                  <Link href={`/doraadmin/users/${u.id}`} className="font-medium underline-offset-4 hover:underline">{u.name}</Link>
                   <p className="text-xs text-muted-foreground">{u.email}</p>
                 </td>
                 <td className="px-4 py-3">
@@ -88,6 +89,7 @@ export default async function AdminUsers({ searchParams }: PageProps<"/doraadmin
                 </td>
                 <td className="px-3 py-2 tabular-nums">{u._count.projects}</td>
                 <td className="px-3 py-2 tabular-nums">{u._count.assets}</td>
+                <td className="px-3 py-2 tabular-nums">{u._count.clientOrders}</td>
                 <td className="px-4 py-3 whitespace-nowrap text-xs">{date(u.createdAt)}</td>
                 <td className="px-4 py-3 whitespace-nowrap text-xs">{u.sessions[0] ? date(u.sessions[0].updatedAt) : "never"}</td>
                 <td className="px-3 py-2 text-right">
@@ -97,7 +99,7 @@ export default async function AdminUsers({ searchParams }: PageProps<"/doraadmin
             ))}
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">No customers found.</td>
+                <td colSpan={8} className="px-3 py-8 text-center text-muted-foreground">No clients found.</td>
               </tr>
             ) : null}
           </tbody>

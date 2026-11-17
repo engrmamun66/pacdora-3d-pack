@@ -45,7 +45,7 @@ export function ViewSettingsButton({ slug, name, className }: { slug: string; na
           <div className="flex items-center justify-between border-b px-5 py-3">
             <div>
               <h2 id={`vs-title-${slug}`} className="font-semibold">Starting 3D view</h2>
-              <p className="text-xs text-muted-foreground">{name}: the view customers see first.</p>
+              <p className="text-xs text-muted-foreground">{name}: the view clients see first.</p>
             </div>
             <button type="button" aria-label="Close" className="rounded p-1 hover:bg-muted" onClick={() => ref.current?.close()}><X className="size-4" /></button>
           </div>

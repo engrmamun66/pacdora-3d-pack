@@ -13,7 +13,7 @@ export default async function WatermarkSettings() {
     <section aria-labelledby="h-wm">
       <SettingsHeading
         title="Watermark"
-        description={`A faint text repeated inside the cut area of the dieline sheet that customers see. It is not in downloaded files.${updatedAt ? ` Last saved ${updatedAt.toISOString().slice(0, 16).replace("T", " ")} UTC.` : ""}`}
+        description={`A faint text repeated inside the cut area of the dieline sheet that clients see. It is not in downloaded files.${updatedAt ? ` Last saved ${updatedAt.toISOString().slice(0, 16).replace("T", " ")} UTC.` : ""}`}
       />
       <WatermarkForm initial={settings} />
     </section>

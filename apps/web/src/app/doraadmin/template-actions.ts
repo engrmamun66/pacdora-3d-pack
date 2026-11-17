@@ -35,13 +35,13 @@ export async function setTemplateStatus(slug: string, status: string): Promise<A
   const r = await db.template.updateMany({ where: { id: s.data }, data: { status, published: isPublicStatus(status) } });
   if (r.count === 0) return { ok: false, message: "Template not found." };
   refresh(s.data);
-  return { ok: true, message: isPublicStatus(status) ? "Template is now published." : `Status set to ${templateStatusLabel(status)}. Customers do not see it.` };
+  return { ok: true, message: isPublicStatus(status) ? "Template is now published." : `Status set to ${templateStatusLabel(status)}. Clients do not see it.` };
 }
 
 /**
  * Delete an imported (SVG) template. Built-in templates come from code and would
  * return on the next seed, so they can only be hidden. Templates that already
- * have customer projects are kept (hide them instead).
+ * have client projects are kept (hide them instead).
  */
 export async function deleteTemplate(slug: string): Promise<ActionResult> {
   await requireSuperAdmin();
@@ -50,7 +50,7 @@ export async function deleteTemplate(slug: string): Promise<ActionResult> {
   const t = await db.template.findUnique({ where: { id: s.data }, select: { source: true, backgroundKey: true, productImageKey: true, _count: { select: { projects: true } } } });
   if (!t) return { ok: false, message: "Template not found." };
   if (t.source !== "svg") return { ok: false, message: "Built-in templates cannot be deleted. Hide it instead." };
-  if (t._count.projects > 0) return { ok: false, message: `${t._count.projects} customer project(s) use this template. Hide it instead of deleting.` };
+  if (t._count.projects > 0) return { ok: false, message: `${t._count.projects} client project(s) use this template. Hide it instead of deleting.` };
   await db.template.delete({ where: { id: s.data } });
   if (t.backgroundKey) await storage.delete(t.backgroundKey).catch(() => undefined); // the picture goes with the template
   if (t.productImageKey) await storage.delete(t.productImageKey).catch(() => undefined);
@@ -74,8 +74,8 @@ async function copyPicture(key: string | null): Promise<string | null> {
 
 /**
  * Copy an imported (SVG) template: same drawing, roles, 3D fold, window holes, starting 3D view, categories and pictures.
- * The copy gets a free address ("<slug>-copy", "-copy-2", ...) and starts as a Draft, so customers do not see it until
- * an admin publishes it. Customer projects are not copied. Built-in templates come from code and cannot be copied.
+ * The copy gets a free address ("<slug>-copy", "-copy-2", ...) and starts as a Draft, so clients do not see it until
+ * an admin publishes it. Client projects are not copied. Built-in templates come from code and cannot be copied.
  */
 export async function cloneTemplate(slug: string): Promise<SaveTemplateResult> {
   await requireSuperAdmin();
@@ -326,7 +326,7 @@ export async function saveTemplate(input: unknown): Promise<SaveTemplateResult> 
   if (v.mode === "edit" && !existing) return { ok: false, message: "Template not found." };
   const renamed = v.mode === "edit" && v.slug !== current;
   if (renamed) {
-    if (existing!._count.projects > 0) return { ok: false, message: "Customer projects use this template, so its address cannot change." };
+    if (existing!._count.projects > 0) return { ok: false, message: "Client projects use this template, so its address cannot change." };
     if (await db.template.findUnique({ where: { id: v.slug }, select: { id: true } })) return { ok: false, message: "A template with the new slug already exists. Choose another slug." };
   }
 
@@ -359,7 +359,7 @@ export async function saveTemplate(input: unknown): Promise<SaveTemplateResult> 
 
   const roles = finalRoles(dieline, v.roles);
   if (typeof roles === "string") return { ok: false, message: roles };
-  // Customers get a resizable sheet from the Cut lines, so they must form a closed outline.
+  // Clients get a resizable sheet from the Cut lines, so they must form a closed outline.
   try {
     assertImportable(toFlatDieline(dieline, roles) as FlatDieline);
   } catch (e) {

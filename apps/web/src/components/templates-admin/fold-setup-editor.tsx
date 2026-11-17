@@ -215,7 +215,7 @@ export function FoldSetupEditor({
     return (
       <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed p-6">
         <p className="text-sm">
-          This template is <strong>flat only</strong>: customers can resize it, add artwork and export it, but there is no 3D view.{" "}
+          This template is <strong>flat only</strong>: clients can resize it, add artwork and export it, but there is no 3D view.{" "}
           <InfoTip label="3D view">To give it a 3D view, we find the panels between your cut and fold lines, then you check how each fold goes.</InfoTip>
         </p>
         <Button type="button" onClick={detect}><Wand2 className="size-4" aria-hidden /> Detect panels and folds</Button>

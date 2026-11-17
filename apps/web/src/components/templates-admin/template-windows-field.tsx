@@ -12,7 +12,7 @@ import { WindowEditorModal } from "./window-editor-modal";
 const label = (w: WindowSpec) => WINDOW_SHAPE_LABELS[w.shape as WindowShape] ?? w.shape;
 
 /**
- * Window holes every new project from this template starts with. Customers see them on their dieline and can
+ * Window holes every new project from this template starts with. Clients see them on their dieline and can
  * move, resize or delete them (or add their own): this is only the starting point.
  * `geo` is the dieline at its starting size; null when the template cannot take windows yet (the reason is shown).
  */
@@ -51,7 +51,7 @@ export function TemplateWindowsField({
     <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_240px]">
       <div className="flex min-w-0 flex-col gap-3">
         {value.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No window holes. Customers start with a solid box and can add their own.</p>
+          <p className="text-sm text-muted-foreground">No window holes. Clients start with a solid box and can add their own.</p>
         ) : (
           <ul className="flex flex-col divide-y rounded-xl border text-sm" aria-label="Window holes">
             {value.map((w, i) => (
@@ -75,7 +75,7 @@ export function TemplateWindowsField({
             {value.length === 0 ? <><AppWindow className="size-4" aria-hidden /> Add window holes</> : <><Pencil className="size-4" aria-hidden /> Edit window holes</>}
           </Button>
           {value.length > 0 ? <Button type="button" variant="outline" className="text-destructive hover:text-destructive" onClick={() => onChange([])}><Trash2 className="size-4" aria-hidden /> Remove all</Button> : null}
-          <InfoTip label="Window holes">New projects start with these holes at the box&apos;s starting size. Customers can still move, resize or delete them on their dieline page. Each hole must stay inside one panel, away from folds and edges.</InfoTip>
+          <InfoTip label="Window holes">New projects start with these holes at the box&apos;s starting size. Clients can still move, resize or delete them on their dieline page. Each hole must stay inside one panel, away from folds and edges.</InfoTip>
         </div>
       </div>
 

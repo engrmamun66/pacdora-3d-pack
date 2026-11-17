@@ -3,12 +3,12 @@ import { PageHeader } from "@/components/admin/page-header";
 import { db } from "@/server/db";
 import { SUPERADMIN, requireSuperAdmin } from "@/server/admin";
 
-export const metadata = { title: "Customer Templates" };
+export const metadata = { title: "Client Templates" };
 
 const PAGE_SIZE = 25;
 const date = (d: Date) => d.toISOString().slice(0, 16).replace("T", " ");
 
-/** What customers made: each project is a customer's own copy of a template (with their sizes and artwork). Read only. */
+/** What clients made: each project is a client's own copy of a template (with their sizes and artwork). Read only. */
 export default async function AdminCustomerTemplates({ searchParams }: PageProps<"/doraadmin/users/templates">) {
   await requireSuperAdmin();
   const sp = await searchParams;
@@ -38,6 +38,7 @@ export default async function AdminCustomerTemplates({ searchParams }: PageProps
       select: {
         id: true,
         name: true,
+        userId: true,
         createdAt: true,
         updatedAt: true,
         user: { select: { name: true, email: true, banned: true } },
@@ -55,13 +56,13 @@ export default async function AdminCustomerTemplates({ searchParams }: PageProps
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Customer Templates"
-        description={`${total} ${total === 1 ? "design" : "designs"} made by customers${q ? ` matching "${q}"` : ""}. Each one is a customer's copy of a template. Times are UTC.`}
+        title="Client Templates"
+        description={`${total} ${total === 1 ? "design" : "designs"} made by clients${q ? ` matching "${q}"` : ""}. Each one is a client's copy of a template. Times are UTC.`}
       />
 
       <form className="flex flex-wrap gap-2" role="search">
-        <label className="sr-only" htmlFor="q">Search by design, customer name or email</label>
-        <input id="q" name="q" defaultValue={q} maxLength={100} placeholder="Search design or customer" className={`${select} w-64`} />
+        <label className="sr-only" htmlFor="q">Search by design, client name or email</label>
+        <input id="q" name="q" defaultValue={q} maxLength={100} placeholder="Search design or client" className={`${select} w-64`} />
         <label className="sr-only" htmlFor="template">Template</label>
         <select id="template" name="template" defaultValue={tpl} className={select}>
           <option value="">Any template</option>
@@ -75,7 +76,7 @@ export default async function AdminCustomerTemplates({ searchParams }: PageProps
           <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
               <th scope="col" className="px-4 py-2.5 font-medium">Design</th>
-              <th scope="col" className="px-4 py-2.5 font-medium">Customer</th>
+              <th scope="col" className="px-4 py-2.5 font-medium">Client</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Made from</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Images</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Created</th>
@@ -87,7 +88,7 @@ export default async function AdminCustomerTemplates({ searchParams }: PageProps
               <tr key={p.id} className="border-b transition-colors last:border-0 hover:bg-muted/40">
                 <td className="px-4 py-3 font-medium">{p.name}</td>
                 <td className="px-4 py-3">
-                  <p>{p.user.name}{p.user.banned ? <span className="ml-1.5 rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive">Suspended</span> : null}</p>
+                  <p><Link href={`/doraadmin/users/${p.userId}`} className="underline-offset-4 hover:underline">{p.user.name}</Link>{p.user.banned ? <span className="ml-1.5 rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive">Suspended</span> : null}</p>
                   <p className="text-xs text-muted-foreground">{p.user.email}</p>
                 </td>
                 <td className="px-4 py-3"><Link href={`/doraadmin/templates/${p.template.id}/edit`} className="underline-offset-4 hover:underline">{p.template.name}</Link></td>
@@ -96,7 +97,7 @@ export default async function AdminCustomerTemplates({ searchParams }: PageProps
                 <td className="px-4 py-3 whitespace-nowrap text-xs">{date(p.updatedAt)}</td>
               </tr>
             ))}
-            {rows.length === 0 ? <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">No customer designs match.</td></tr> : null}
+            {rows.length === 0 ? <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">No client designs match.</td></tr> : null}
           </tbody>
         </table>
       </div>

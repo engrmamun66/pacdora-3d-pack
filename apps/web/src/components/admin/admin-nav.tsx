@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ImagePlus, LayoutTemplate, Settings, Shapes, Tags, Users, type LucideIcon } from "lucide-react";
+import { ClipboardList, LayoutDashboard, ImagePlus, LayoutTemplate, Settings, Shapes, Tags, UserRound, Users, type LucideIcon } from "lucide-react";
 import { useAdminDrawer } from "./admin-shell";
 
 interface NavItem {
@@ -28,11 +28,13 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       {
         href: "/doraadmin/users",
-        label: "Users",
+        label: "Clients",
         icon: Users,
         children: [
-          { href: "/doraadmin/users", label: "All Customers", icon: Users },
-          { href: "/doraadmin/users/templates", label: "Customer Templates", icon: LayoutTemplate },
+          { href: "/doraadmin/users", label: "All Clients", icon: Users },
+          { href: "/doraadmin/users/templates", label: "Client Templates", icon: LayoutTemplate },
+          { href: "/doraadmin/users/orders", label: "Client Orders", icon: ClipboardList },
+          { href: "/doraadmin/users/customers", label: "Client Customers", icon: UserRound },
         ],
       },
     ],
@@ -43,7 +45,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
 export function AdminNav() {
   const path = usePathname();
   const { close } = useAdminDrawer();
-  // The most specific link wins, so "All Customers" is not lit up on the Customer Templates page.
+  // The most specific link wins, so "All Clients" is not lit up on the Client Templates page.
   const hrefs = GROUPS.flatMap((g) => g.items.flatMap((i) => (i.children ? i.children.map((c) => c.href) : [i.href])));
   const current = hrefs.filter((h) => (h === "/doraadmin" ? path === h : path === h || path.startsWith(`${h}/`))).sort((a, b) => b.length - a.length)[0];
   return (

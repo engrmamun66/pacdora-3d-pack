@@ -36,7 +36,7 @@ const banSchema = z.object({
 
 export type AdminActionResult = { ok: boolean; message: string };
 
-/** Suspend or restore a customer account. Super admins cannot be suspended here. */
+/** Suspend or restore a client account. Super admins cannot be suspended here. */
 export async function setBanned(formData: FormData): Promise<AdminActionResult> {
   const admin = await requireSuperAdmin();
   const parsed = banSchema.safeParse({

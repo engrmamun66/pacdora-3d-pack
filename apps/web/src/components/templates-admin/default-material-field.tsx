@@ -8,7 +8,7 @@ import { materialFor, materialsFor, type Unit } from "@/components/dielines/unit
 
 /**
  * Admin field: the board (material + thickness) new projects start with on a built-in template.
- * Same menu and list as the customer's "Choose material" (docs/thickness.md). Empty = the
+ * Same menu and list as the client's "Choose material" (docs/thickness.md). Empty = the
  * template's own default.
  */
 export function DefaultMaterialField({
@@ -18,7 +18,7 @@ export function DefaultMaterialField({
   onChange,
   alwaysShown = false,
   legend = "Default material",
-  hint = "New projects start with this board. Customers can change it.",
+  hint = "New projects start with this board. Clients can change it.",
   resetLabel = "Use the template's standard board",
   canReset = true,
 }: {
@@ -28,7 +28,7 @@ export function DefaultMaterialField({
   /** mm, or null for the template's own default. */
   value: number | null;
   onChange: (mm: number | null) => void;
-  /** Show the menu and thickness straight away (`value` is then the board in use), like the customer's page; no "Set a default material" step. */
+  /** Show the menu and thickness straight away (`value` is then the board in use), like the client's page; no "Set a default material" step. */
   alwaysShown?: boolean;
   legend?: string;
   hint?: string;

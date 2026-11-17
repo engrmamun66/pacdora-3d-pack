@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Activity, Download, FolderOpen, ImageUp, Sparkles, UserPlus, UserX, Users, type LucideIcon } from "lucide-react";
+import { Activity, ClipboardList, Download, FolderOpen, ImageUp, Sparkles, UserPlus, UserRound, UserX, Users, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import { overviewStats } from "@/server/admin-stats";
 import { requireSuperAdmin } from "@/server/admin";
@@ -53,16 +53,24 @@ export default async function AdminOverview() {
     <div className="flex flex-col gap-8">
       <PageHeader title="Overview" description="How the site is being used. Counts only; times are UTC." />
 
-      <Section id="h-users" title="Users">
+      <Section id="h-users" title="Clients">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Tile icon={Users} label="Total users" value={fmt.format(s.users.total)} sub={`${fmt.format(s.users.verified)} email-verified`} />
+          <Tile icon={Users} label="Total clients" value={fmt.format(s.users.total)} sub={`${fmt.format(s.users.verified)} email-verified`} />
           <Tile icon={UserPlus} tone="sky" label="New, last 7 days" value={fmt.format(s.users.new7)} sub={`${fmt.format(s.users.new30)} in 30 days`} />
-          <Tile icon={Activity} tone="emerald" label="Active, last 7 days" value={fmt.format(s.users.active7)} sub="users with a session touched" />
+          <Tile icon={Activity} tone="emerald" label="Active, last 7 days" value={fmt.format(s.users.active7)} sub="clients with a session touched" />
           <Tile icon={UserX} tone="rose" label="Suspended" value={fmt.format(s.users.banned)} />
         </div>
       </Section>
 
-      <Section id="h-signups" title="Sign-ups" note={`${fmt.format(total14)} in the last 14 days`}>
+      <Section id="h-portal" title="Client portals" note="Orders customers placed, and customers who signed up by mobile number.">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Tile icon={ClipboardList} tone="amber" label="Orders" value={fmt.format(s.portal.orders)} sub={`${fmt.format(s.portal.orders7)} in the last 7 days`} />
+          <Tile icon={ClipboardList} tone="sky" label="New orders" value={fmt.format(s.portal.newOrders)} sub="not yet looked at by the client" />
+          <Tile icon={UserRound} tone="emerald" label="Customers" value={fmt.format(s.portal.customers)} sub="signed up on portals" />
+        </div>
+      </Section>
+
+      <Section id="h-signups" title="Client sign-ups" note={`${fmt.format(total14)} in the last 14 days`}>
         <div className="rounded-xl border bg-card p-5 shadow-xs">
           <ul className="flex h-40 items-end gap-2" aria-label="Sign-ups per day">
             {s.signups14.map((d) => (

@@ -78,14 +78,14 @@ export function ConstructionEditor({ fold, onChange }: { fold: FoldSetup; onChan
         <div>
           <div className="flex items-center gap-1.5">
             <h3 className="text-base font-semibold">Material & Paper</h3>
-            <InfoTip label="Material & Paper">Box sizes and flaps are not available for this fold (the main body&apos;s base panel needs walls around it, and pieces must not overlap on the sheet). The board can still be chosen: customers see it as the material of the template.</InfoTip>
+            <InfoTip label="Material & Paper">Box sizes and flaps are not available for this fold (the main body&apos;s base panel needs walls around it, and pieces must not overlap on the sheet). The board can still be chosen: clients see it as the material of the template.</InfoTip>
           </div>
         </div>
         <DefaultMaterialField
           key={materialKey}
           alwaysShown
           legend="Material"
-          hint="The board customers start with on the dieline page. They can change it there."
+          hint="The board clients start with on the dieline page. They can change it there."
           resetLabel="Use the suggested board"
           canReset={c?.thickness !== undefined}
           min={THICKNESS_RANGE.min}
@@ -119,7 +119,7 @@ export function ConstructionEditor({ fold, onChange }: { fold: FoldSetup; onChan
           <div className="flex items-center gap-1.5">
             <h3 className="text-base font-semibold">Material & Paper</h3>
             <InfoTip label="Material & Paper">
-              Guessed from the file. Change what is not right: customers get these as options on the dieline page, like a built-in box.
+              Guessed from the file. Change what is not right: clients get these as options on the dieline page, like a built-in box.
               {plan.parts?.length ? ` The sizes here are for ${fold.mainName || "the main body"}. How the other pieces follow them is set in the "Piece links" tab.` : ""}
             </InfoTip>
           </div>
@@ -132,12 +132,12 @@ export function ConstructionEditor({ fold, onChange }: { fold: FoldSetup; onChan
       </div>
       {problems.length ? <ul role="alert" className="list-disc rounded-lg border border-destructive/30 bg-destructive/10 py-2 pl-7 pr-3 text-sm text-destructive">{problems.map((p) => <li key={p}>{p}</li>)}</ul> : null}
 
-      {/* The same material menu and thickness the customer sees on the dieline page: Type and grade, then the board thickness. */}
+      {/* The same material menu and thickness the client sees on the dieline page: Type and grade, then the board thickness. */}
       <DefaultMaterialField
         key={materialKey}
         alwaysShown
         legend="Material"
-        hint="The board customers start with on the dieline page. They can change it there."
+        hint="The board clients start with on the dieline page. They can change it there."
         resetLabel="Use the guessed board"
         canReset={c?.thickness !== undefined}
         min={THICKNESS_RANGE.min}
@@ -181,7 +181,7 @@ export function ConstructionEditor({ fold, onChange }: { fold: FoldSetup; onChan
                 <td className="px-2 py-1.5">
                   <label className="flex items-center gap-1.5 text-xs">
                     <input type="checkbox" checked={res.flaps.includes(key)} onChange={(e) => set({ flaps: e.target.checked ? [...res.flaps, key] : res.flaps.filter((k) => k !== key) })} />
-                    Let customers change it
+                    Let clients change it
                   </label>
                 </td>
                 <td className="px-2 py-1.5">
@@ -229,13 +229,13 @@ export function ConstructionEditor({ fold, onChange }: { fold: FoldSetup; onChan
 }
 
 const MODES: { mode: PartSizeMode; title: string; text: string }[] = [
-  { mode: "follow", title: "Follow the main body", text: "Gets bigger or smaller with it, keeping the gap it was drawn with. Customers set its height and fit gap." },
-  { mode: "own", title: "Own sizes", text: "Customers set its width, depth and height themselves, independent of the main body." },
+  { mode: "follow", title: "Follow the main body", text: "Gets bigger or smaller with it, keeping the gap it was drawn with. Clients set its height and fit gap." },
+  { mode: "own", title: "Own sizes", text: "Clients set its width, depth and height themselves, independent of the main body." },
   { mode: "fixed", title: "Fixed", text: "No size options. It only scales with the sheet width." },
 ];
 
 /**
- * Admin tab "Piece links": what happens to each extra piece (lid, insert) when a customer changes the
+ * Admin tab "Piece links": what happens to each extra piece (lid, insert) when a client changes the
  * size of the main body on the dieline page.
  */
 export function PieceLinksEditor({ fold, onChange }: { fold: FoldSetup; onChange: (f: FoldSetup) => void }) {
@@ -262,7 +262,7 @@ export function PieceLinksEditor({ fold, onChange }: { fold: FoldSetup; onChange
     <section aria-label="Piece links" className="flex flex-col gap-4">
       <div className="flex items-center gap-1.5">
         <h3 className="text-base font-semibold">Piece links</h3>
-        <InfoTip label="Piece links">On the dieline page customers can type the size of {mainName}. Choose what each other piece does when they do.</InfoTip>
+        <InfoTip label="Piece links">On the dieline page clients can type the size of {mainName}. Choose what each other piece does when they do.</InfoTip>
       </div>
       {(plan.parts ?? []).map((q: PartPlan, i) => {
         const mode: PartSizeMode = q.plan ? q.mode : "fixed";
