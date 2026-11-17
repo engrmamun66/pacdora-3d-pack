@@ -36,6 +36,20 @@ export const windowSchema = z.object({
   bar: z.number().finite().positive().max(50).optional(),
   /** Only for the custom shape (pen tool or traced picture): outlines as x, y, x, y... with both axes from -0.5 to 0.5. The engine checks them. */
   loops: z.array(z.array(z.number().finite().min(-0.51).max(0.51)).min(6).max(3000)).max(12).optional(),
+  /** Only for the custom shape: the anchors of the drawn path (so "Edit points" can open it again), in the window's box. */
+  path: z
+    .array(
+      z.object({
+        x: z.number().finite().min(-3).max(3),
+        y: z.number().finite().min(-3).max(3),
+        hin: z.tuple([z.number().finite().min(-6).max(6), z.number().finite().min(-6).max(6)]).nullable().optional(),
+        hout: z.tuple([z.number().finite().min(-6).max(6), z.number().finite().min(-6).max(6)]).nullable().optional(),
+        smooth: z.boolean().optional(),
+      }),
+    )
+    .min(3)
+    .max(400)
+    .optional(),
 }).refine((w) => (w.loops ?? []).reduce((n, l) => n + l.length, 0) <= 3000, "The outline has too many points.");
 export type WindowDoc = z.infer<typeof windowSchema>;
 

@@ -11,8 +11,6 @@ import {
   WINDOW_SHAPE_LABELS,
   applyWindows,
   area,
-  checkCustomLoops,
-  fitLoops,
   flattenOutline,
   gridParams,
   isGridShape,
@@ -35,7 +33,8 @@ import { MiniSheet, polyD } from "./mini-sheet";
 import { fromDisplay, toDisplay, type Unit } from "./units";
 import { boxOf, pointIn, snapMove, windowGaps, type Guide } from "@/lib/window-guides";
 import { CropImageError, traceCropFile } from "@/lib/window-crop-image";
-import { cornerAnchor, flattenPath, moveAnchor, pathData, setHandle, snap45, toggleSmooth, type Anchor, type Pt } from "@/lib/window-pen";
+import { cornerAnchor, insertAnchor, moveAnchor, nearestOnPath, pathData, setHandle, snap45, toggleSmooth, type Anchor, type Pt } from "@/lib/window-pen";
+import { anchorsOf, windowFromAnchors } from "@/lib/window-edit-points";
 
 /** Pixels per millimetre on screen, and the centre of what is shown (mm). */
 interface View {
@@ -198,9 +197,15 @@ export function WindowEditor({
   // The pen tool works like the one of a drawing program: click = corner, click and drag = smooth anchor with handles.
   // Closing the path (a click on its first point, or Enter) makes the window at once. Ctrl/Cmd + Z and Ctrl/Cmd + Y undo and redo points.
   const [pen, setPen] = useState<{ anchors: Anchor[]; hover: Pt | null; sel: number | null } | null>(null);
+  // "Edit points" (right click a window): its outline opened as a path. Click outside it (or Enter) to keep the change, Esc to drop it.
+  // Several points can be chosen (Shift / Ctrl / Cmd + click, a box drag, Ctrl/Cmd + A) and moved together, also with the arrow keys.
+  const [edit, setEdit] = useState<{ id: string; anchors: Anchor[]; sel: number[]; box: { x0: number; y0: number; x1: number; y1: number } | null } | null>(null);
+  /** Right-click menu of a chosen point of the shape being edited (px inside the sheet area). */
+  const [pointMenu, setPointMenu] = useState<{ x: number; y: number } | null>(null);
+  const pointMenuRef = useRef<HTMLDivElement>(null);
   const penPast = useRef<Anchor[][]>([]);
   const penFuture = useRef<Anchor[][]>([]);
-  const penDrag = useRef<{ kind: "new" | "anchor" | "hin" | "hout"; i: number; sx: number; sy: number; moved: boolean } | null>(null);
+  const penDrag = useRef<{ kind: "new" | "anchor" | "hin" | "hout" | "marquee"; i: number; sx: number; sy: number; moved: boolean; origin?: Anchor[] } | null>(null);
   /** Right-click menu: where it opens (px inside the sheet area) and for which window. */
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -453,25 +458,191 @@ export function WindowEditor({
       setNotice(`At most ${MAX_WINDOWS} windows.`);
       return;
     }
-    const use = fitLoops([flattenPath(anchors, true)]);
-    if (!use || use.width < WINDOW_MIN_SIZE || use.height < WINDOW_MIN_SIZE) {
-      setNotice(`Too small: each side must be at least ${WINDOW_MIN_SIZE} mm.`);
-      return;
-    }
-    const bad = checkCustomLoops(use.loops);
-    if (bad) {
+    const made = windowFromAnchors(anchors, WINDOW_MIN_SIZE);
+    if ("error" in made) {
       // The path stays, so the last point can be undone.
-      setNotice(bad);
+      setNotice(made.error);
       return;
     }
     const id = freshId(draft);
-    const w: WindowSpec = { id, shape: "custom", cx: round3(use.cx), cy: round3(use.cy), width: round3(use.width), height: round3(use.height), rotation: 0, loops: use.loops };
+    const w: WindowSpec = { id, ...made.window };
     commit([...draft, w]);
-    addCrop("Pen shape", use.loops, use.width / use.height);
+    addCrop("Pen shape", made.window.loops, made.window.width / made.window.height);
     setSelected(id);
     setLockRatio((l) => ({ ...l, [id]: true }));
     setPen(null);
     setNotice(null);
+  };
+  // ---- Edit points ----
+  const startEdit = (id: string) => {
+    const win = draft.find((x) => x.id === id);
+    const anchors = win ? anchorsOf(win) : null;
+    if (!anchors) {
+      setNotice("This shape is a grid or has several pieces: it has no single outline to edit.");
+      return;
+    }
+    penPast.current = [];
+    penFuture.current = [];
+    setPen(null);
+    setSelected(null);
+    setNotice(null);
+    setEdit({ id, anchors, sel: [], box: null });
+  };
+  /** Keep the edit: the window becomes a custom shape with the edited outline (nothing changes when nothing was edited). */
+  const finishEdit = (anchors: Anchor[]) => {
+    if (!edit) return;
+    if (penPast.current.length === 0) {
+      setEdit(null);
+      setSelected(edit.id);
+      return;
+    }
+    const made = windowFromAnchors(anchors, WINDOW_MIN_SIZE);
+    if ("error" in made) {
+      setNotice(made.error);
+      return;
+    }
+    commit(draft.map((x) => (x.id === edit.id ? { id: x.id, ...made.window } : x)));
+    setSelected(edit.id);
+    setEdit(null);
+    setNotice(null);
+  };
+  const editUndo = () => {
+    const prev = penPast.current[penPast.current.length - 1];
+    if (!edit || !prev) return;
+    penPast.current = penPast.current.slice(0, -1);
+    penFuture.current = [edit.anchors, ...penFuture.current];
+    setEdit({ ...edit, anchors: prev, sel: [], box: null });
+  };
+  const editRedo = () => {
+    const next = penFuture.current[0];
+    if (!edit || !next) return;
+    penFuture.current = penFuture.current.slice(1);
+    penPast.current = [...penPast.current, edit.anchors];
+    setEdit({ ...edit, anchors: next, sel: [], box: null });
+  };
+  /** Move the chosen points (and their handles) by a distance. */
+  const shiftPoints = (anchors: Anchor[], sel: number[], dx: number, dy: number): Anchor[] => {
+    const mv = (h: Pt | null) => (h ? { x: round3(h.x + dx), y: round3(h.y + dy) } : null);
+    return anchors.map((a, k) => (sel.includes(k) ? { ...a, x: round3(a.x + dx), y: round3(a.y + dy), hin: mv(a.hin), hout: mv(a.hout) } : a));
+  };
+  /** Take the chosen points out (at least three stay). */
+  const deletePoints = () => {
+    if (!edit || edit.sel.length === 0) return;
+    if (edit.anchors.length - edit.sel.length < 3) {
+      setNotice("A shape needs at least three points.");
+      return;
+    }
+    penRemember(edit.anchors);
+    setEdit({ ...edit, anchors: edit.anchors.filter((_, k) => !edit.sel.includes(k)), sel: [] });
+  };
+  const editDown = (e: React.PointerEvent) => {
+    if (!edit || e.button !== 0) return;
+    e.preventDefault();
+    host.current?.focus({ preventScroll: true });
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    setNotice(null);
+    setPointMenu(null);
+    const at = toMm(e);
+    const tol = 8 / v.s;
+    const near = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y) < tol;
+    const list = edit.anchors;
+    const n = list.length;
+    const grab = (kind: "anchor" | "hin" | "hout" | "marquee", i: number) => {
+      penDrag.current = { kind, i, sx: at.x, sy: at.y, moved: false, origin: list };
+    };
+    // The handles of the chosen points and of their neighbours come first, then the points.
+    const around = new Set(edit.sel.flatMap((i) => [i, (i + 1) % n, (i + n - 1) % n]));
+    for (const i of around) {
+      for (const which of ["hout", "hin"] as const) {
+        const h = list[i]![which];
+        if (h && near(h, at)) {
+          grab(which, i);
+          return;
+        }
+      }
+    }
+    const hit = list.findIndex((a) => near(a, at));
+    const more = e.shiftKey || e.ctrlKey || e.metaKey;
+    if (hit >= 0) {
+      if (e.altKey) {
+        // Alt + click: corner <-> smooth (for all chosen points when this one is among them).
+        penRemember(list);
+        const targets = edit.sel.includes(hit) ? edit.sel : [hit];
+        const flipped = targets.reduce((acc, i) => toggleSmooth(acc, true, i), list);
+        setEdit({ ...edit, anchors: flipped, sel: targets });
+      } else if (more) {
+        const has = edit.sel.includes(hit);
+        setEdit({ ...edit, sel: has ? edit.sel.filter((k) => k !== hit) : [...edit.sel, hit] });
+        if (!has) grab("anchor", hit);
+      } else {
+        // A click on a chosen point of a group keeps the group (so the group can be dragged); on any other point it chooses only that one.
+        if (!edit.sel.includes(hit)) setEdit({ ...edit, sel: [hit] });
+        grab("anchor", hit);
+      }
+      return;
+    }
+    // A click on the outline adds a point there.
+    const onPath = nearestOnPath(list, true, at);
+    if (onPath && onPath.distance < tol) {
+      penRemember(list);
+      const added = insertAnchor(list, true, onPath.seg, onPath.t);
+      const idx = onPath.seg === n - 1 ? added.length - 1 : onPath.seg + 1;
+      setEdit({ ...edit, anchors: added, sel: [idx] });
+      penDrag.current = { kind: "anchor", i: idx, sx: at.x, sy: at.y, moved: false, origin: added };
+      return;
+    }
+    // Empty space: drag draws a box that chooses the points in it; a plain click keeps the edit (see editUp).
+    grab("marquee", -1);
+  };
+  const editMove = (e: React.PointerEvent) => {
+    const d = penDrag.current;
+    if (!edit || !d) return;
+    const at = toMm(e);
+    if (!d.moved && Math.hypot(at.x - d.sx, at.y - d.sy) < 3 / v.s) return;
+    if (d.kind === "marquee") {
+      d.moved = true;
+      setEdit({ ...edit, box: { x0: d.sx, y0: d.sy, x1: at.x, y1: at.y } });
+      return;
+    }
+    const a = edit.anchors[d.i];
+    if (!a) return;
+    if (!d.moved) penRemember(edit.anchors);
+    d.moved = true;
+    if (d.kind === "anchor") {
+      // The whole group moves by how far the pointer went (from the points as they were when the drag began).
+      const start = d.origin ?? edit.anchors;
+      const dx = round3(at.x - d.sx);
+      const dy = round3(at.y - d.sy);
+      setEdit({ ...edit, anchors: start.map((p, k) => (edit.sel.includes(k) ? shiftPoints(start, [k], dx, dy)[k]! : p)) });
+    } else setEdit({ ...edit, anchors: setHandle(edit.anchors, d.i, d.kind as "hin" | "hout", e.shiftKey ? snap45(a, at) : at, e.altKey) });
+  };
+  const editUp = (e: React.PointerEvent) => {
+    const d = penDrag.current;
+    penDrag.current = null;
+    if (!edit || !d || d.kind !== "marquee") return;
+    if (!d.moved) {
+      finishEdit(edit.anchors); // a plain click on empty space keeps the edit
+      return;
+    }
+    const b = edit.box;
+    if (!b) return;
+    const inside = edit.anchors.flatMap((a, k) => (a.x >= Math.min(b.x0, b.x1) && a.x <= Math.max(b.x0, b.x1) && a.y >= Math.min(b.y0, b.y1) && a.y <= Math.max(b.y0, b.y1) ? [k] : []));
+    const more = e.shiftKey || e.ctrlKey || e.metaKey;
+    setEdit({ ...edit, sel: more ? [...new Set([...edit.sel, ...inside])] : inside, box: null });
+  };
+  /** Right click on a point of the shape being edited: choose it (unless it is in the chosen group) and open its menu. */
+  const editContext = (e: React.MouseEvent) => {
+    if (!edit) return;
+    e.preventDefault();
+    const at = toMm(e);
+    const hit = edit.anchors.findIndex((a) => Math.hypot(a.x - at.x, a.y - at.y) < 8 / v.s);
+    if (hit < 0) {
+      setPointMenu(null);
+      return;
+    }
+    if (!edit.sel.includes(hit)) setEdit({ ...edit, sel: [hit] });
+    const r = host.current!.getBoundingClientRect();
+    setPointMenu({ x: e.clientX - r.left, y: e.clientY - r.top });
   };
   const penDown = (e: React.PointerEvent) => {
     if (!pen || e.button !== 0) return;
@@ -689,6 +860,22 @@ export function WindowEditor({
       window.removeEventListener("resize", close);
     };
   }, [menu]);
+  // The menu of a chosen point closes on a click elsewhere, scrolling or zooming (Escape is handled with the other keys).
+  useEffect(() => {
+    if (!pointMenu) return;
+    const close = () => setPointMenu(null);
+    const away = (e: PointerEvent) => {
+      if (!pointMenuRef.current?.contains(e.target as Node)) close();
+    };
+    document.addEventListener("pointerdown", away, true);
+    window.addEventListener("wheel", close, { passive: true });
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("pointerdown", away, true);
+      window.removeEventListener("wheel", close);
+      window.removeEventListener("resize", close);
+    };
+  }, [pointMenu]);
   useEffect(() => () => cancelAnimationFrame(frame.current), []);
   const onUp = () => {
     // The last position counts even if its frame has not been drawn yet.
@@ -709,6 +896,41 @@ export function WindowEditor({
   // ---- keys ----
   const onKey = (e: React.KeyboardEvent) => {
     if ((e.target as HTMLElement).tagName === "INPUT") return;
+    if (edit) {
+      const key = e.key.toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && key === "z") {
+        e.preventDefault();
+        if (e.shiftKey) editRedo();
+        else editUndo();
+      } else if ((e.metaKey || e.ctrlKey) && key === "y") {
+        e.preventDefault();
+        editRedo();
+      } else if ((e.metaKey || e.ctrlKey) && key === "a") {
+        e.preventDefault();
+        setEdit({ ...edit, sel: edit.anchors.map((_, k) => k) });
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        finishEdit(edit.anchors);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (pointMenu) setPointMenu(null);
+        else {
+          setEdit(null);
+          setSelected(edit.id);
+        }
+      } else if ((e.key === "Backspace" || e.key === "Delete") && edit.sel.length > 0) {
+        e.preventDefault();
+        deletePoints();
+      } else if (e.key.startsWith("Arrow") && edit.sel.length > 0) {
+        // The chosen points move 1 mm (Shift: 5 mm, Alt: 0.1 mm).
+        e.preventDefault();
+        const step = e.shiftKey ? 5 : e.altKey ? 0.1 : 1;
+        penRemember(edit.anchors);
+        setEdit({ ...edit, anchors: shiftPoints(edit.anchors, edit.sel, e.key === "ArrowRight" ? step : e.key === "ArrowLeft" ? -step : 0, e.key === "ArrowDown" ? step : e.key === "ArrowUp" ? -step : 0) });
+      }
+      return;
+    }
     if (pen) {
       const key = e.key.toLowerCase();
       if ((e.metaKey || e.ctrlKey) && key === "z") {
@@ -756,6 +978,36 @@ export function WindowEditor({
       const step = e.shiftKey ? 5 : 1;
       patch(sel.id, { cx: round3(sel.cx + (e.key === "ArrowRight" ? step : e.key === "ArrowLeft" ? -step : 0)), cy: round3(sel.cy + (e.key === "ArrowDown" ? step : e.key === "ArrowUp" ? -step : 0)) });
     }
+  };
+
+  const anchorLayer = (anchors: Anchor[], closed: boolean, sel: number[], hover: Pt | null) => {
+    const n = anchors.length;
+    // Handles: the chosen points and their neighbours (a path still being drawn: its last point).
+    const showHandles = (i: number) => (sel.length > 0 ? sel.some((k) => i === k || i === (k + 1) % n || i === (k + n - 1) % n) : !closed && i === n - 1);
+    return (
+      <g pointerEvents="none">
+        <path d={pathData(anchors, closed, hover)} fill={closed ? "#111827" : "none"} fillOpacity={0.08} stroke="#111827" strokeWidth={1.8 / v.s} strokeLinejoin="round" strokeDasharray={closed ? undefined : `${6 / v.s} ${4 / v.s}`} />
+        {anchors.map((a, i) =>
+          showHandles(i) ? (
+            <g key={`h${i}`} stroke="#6b7280" strokeWidth={1.2 / v.s}>
+              {([a.hin, a.hout] as const).map((h, k) =>
+                h ? (
+                  <g key={k}>
+                    <line x1={a.x} y1={a.y} x2={h.x} y2={h.y} />
+                    <circle cx={h.x} cy={h.y} r={3.5 / v.s} fill="#fff" stroke="#111827" />
+                  </g>
+                ) : null,
+              )}
+            </g>
+          ) : null,
+        )}
+        {anchors.map((a, i) => {
+          const first = !closed && i === 0 && n >= 3;
+          const r = (first ? 6 : 4.5) / v.s;
+          return <rect key={i} x={a.x - r} y={a.y - r} width={2 * r} height={2 * r} fill={sel.includes(i) ? "#111827" : first ? "#16a34a" : "#fff"} stroke={first ? "#fff" : "#111827"} strokeWidth={1.5 / v.s} />;
+        })}
+      </g>
+    );
   };
 
   const bad = result.problems.length > 0;
@@ -927,16 +1179,23 @@ export function WindowEditor({
                 penMove(e);
                 return;
               }
+              if (edit) {
+                editMove(e);
+                return;
+              }
               onMove(e);
             }}
-            onPointerUp={() => {
+            onPointerUp={(e) => {
+              if (edit) editUp(e);
               penDrag.current = null;
               onUp();
             }}
             onPointerCancel={() => {
               penDrag.current = null;
+              if (edit) setEdit({ ...edit, box: null });
               onUp();
             }}
+            onContextMenu={edit ? editContext : undefined}
             onDragOver={(e) => {
               if (!e.dataTransfer.types.includes(SHAPE_MIME)) return;
               e.preventDefault();
@@ -963,6 +1222,10 @@ export function WindowEditor({
                 penDown(e);
                 return;
               }
+              if (edit) {
+                editDown(e);
+                return;
+              }
               if (e.target !== e.currentTarget && (e.target as Element).tagName !== "svg" && (e.target as Element).tagName !== "image") return;
               setSelected(null);
               (e.currentTarget as Element).setPointerCapture(e.pointerId);
@@ -981,7 +1244,8 @@ export function WindowEditor({
                 return (
                   <g
                     key={w.id}
-                    pointerEvents={pen ? "none" : undefined}
+                    pointerEvents={pen || edit ? "none" : undefined}
+                    opacity={edit?.id === w.id ? 0.2 : undefined}
                     transform={`translate(${w.cx} ${w.cy}) rotate(${w.rotation})`}
                     onContextMenu={(e) => {
                       // Right click anywhere on the window or its grips.
@@ -1067,37 +1331,11 @@ export function WindowEditor({
                   ) : null}
                 </g>
               ) : null}
-              {/* Pen tool: the path (dashed while it is open, with a rubber band to the pointer), square points, and the handles of the chosen point. */}
-              {pen && pen.anchors.length > 0 ? (
-                <g pointerEvents="none">
-                  <path
-                    d={pathData(pen.anchors, false, pen.hover)}
-                    fill="none"
-                    stroke="#111827"
-                    strokeWidth={1.8 / v.s}
-                    strokeLinejoin="round"
-                    strokeDasharray={`${6 / v.s} ${4 / v.s}`}
-                  />
-                  {pen.anchors.map((a, i) =>
-                    i === pen.sel || i === pen.anchors.length - 1 ? (
-                      <g key={`h${i}`} stroke="#6b7280" strokeWidth={1.2 / v.s}>
-                        {([a.hin, a.hout] as const).map((h, k) =>
-                          h ? (
-                            <g key={k}>
-                              <line x1={a.x} y1={a.y} x2={h.x} y2={h.y} />
-                              <circle cx={h.x} cy={h.y} r={3.5 / v.s} fill="#fff" stroke="#111827" />
-                            </g>
-                          ) : null,
-                        )}
-                      </g>
-                    ) : null,
-                  )}
-                  {pen.anchors.map((a, i) => {
-                    const first = i === 0 && pen.anchors.length >= 3;
-                    const r = (first ? 6 : 4.5) / v.s;
-                    return <rect key={i} x={a.x - r} y={a.y - r} width={2 * r} height={2 * r} fill={i === pen.sel ? "#111827" : first ? "#16a34a" : "#fff"} stroke={first ? "#fff" : "#111827"} strokeWidth={1.5 / v.s} />;
-                  })}
-                </g>
+              {/* Pen tool and Edit points: the path (dashed while it is still open, with a rubber band to the pointer), square points, and the handles of the chosen point. */}
+              {pen && pen.anchors.length > 0 ? anchorLayer(pen.anchors, false, pen.sel === null ? [] : [pen.sel], pen.hover) : null}
+              {edit ? anchorLayer(edit.anchors, true, edit.sel, null) : null}
+              {edit?.box ? (
+                <rect x={Math.min(edit.box.x0, edit.box.x1)} y={Math.min(edit.box.y0, edit.box.y1)} width={Math.abs(edit.box.x1 - edit.box.x0)} height={Math.abs(edit.box.y1 - edit.box.y0)} fill="#2563eb" fillOpacity={0.08} stroke="#2563eb" strokeWidth={1 / v.s} strokeDasharray={`${4 / v.s} ${3 / v.s}`} pointerEvents="none" />
               ) : null}
               {/* Alignment guides while a window is moved */}
               {guides.length > 0 ? (
@@ -1107,18 +1345,63 @@ export function WindowEditor({
               ) : null}
             </svg>
           </div>
+          {pointMenu && edit ? (
+            <div ref={pointMenuRef} role="menu" aria-label="Point actions" className="absolute z-30 w-48 rounded-xl border bg-background p-1 text-sm shadow-lg" style={{ left: Math.min(pointMenu.x, Math.max(0, size.w - 200)), top: Math.min(pointMenu.y, Math.max(0, size.h - 96)) }}>
+              <button
+                type="button"
+                role="menuitem"
+                autoFocus
+                onClick={() => {
+                  if (!edit) return;
+                  penRemember(edit.anchors);
+                  const flipped = edit.sel.reduce((acc, i) => toggleSmooth(acc, true, i), edit.anchors);
+                  setEdit({ ...edit, anchors: flipped });
+                  setPointMenu(null);
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+              >
+                <PenTool className="size-4" aria-hidden /> Corner / smooth
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={edit.anchors.length - edit.sel.length < 3}
+                title={edit.anchors.length - edit.sel.length < 3 ? "A shape needs at least three points" : undefined}
+                onClick={() => {
+                  deletePoints();
+                  setPointMenu(null);
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-destructive hover:bg-destructive/10 focus-visible:bg-destructive/10 focus-visible:outline-none disabled:opacity-40"
+              >
+                <Trash2 className="size-4" aria-hidden /> {edit.sel.length > 1 ? `Delete ${edit.sel.length} points` : "Delete"}
+              </button>
+            </div>
+          ) : null}
           {menu ? (
             <div
               ref={menuRef}
               role="menu"
               aria-label="Window actions"
               className="absolute z-30 w-44 rounded-xl border bg-background p-1 text-sm shadow-lg"
-              style={{ left: Math.min(menu.x, Math.max(0, size.w - 184)), top: Math.min(menu.y, Math.max(0, size.h - 92)) }}
+              style={{ left: Math.min(menu.x, Math.max(0, size.w - 184)), top: Math.min(menu.y, Math.max(0, size.h - 132)) }}
             >
               <button
                 type="button"
                 role="menuitem"
                 autoFocus
+                disabled={!draft.some((x) => x.id === menu.id && anchorsOf(x) !== null)}
+                title="Move the points and curve handles of this shape"
+                onClick={() => {
+                  startEdit(menu.id);
+                  setMenu(null);
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-40"
+              >
+                <PenTool className="size-4" aria-hidden /> Edit points
+              </button>
+              <button
+                type="button"
+                role="menuitem"
                 disabled={draft.length >= MAX_WINDOWS}
                 onClick={() => {
                   duplicate(menu.id);

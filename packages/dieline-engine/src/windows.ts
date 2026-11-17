@@ -29,6 +29,15 @@ export const WINDOW_MARGIN = 2;
 /** Distance (mm) between two windows. */
 export const WINDOW_GAP = 2;
 
+/** One point of a drawn path: its place, the handles of the curves on both sides, and whether the handles stay in one line. */
+export interface PathAnchor {
+  readonly x: number;
+  readonly y: number;
+  readonly hin?: readonly [number, number] | null;
+  readonly hout?: readonly [number, number] | null;
+  readonly smooth?: boolean;
+}
+
 export interface WindowSpec {
   readonly id: string;
   readonly shape: WindowShape;
@@ -43,6 +52,11 @@ export interface WindowSpec {
   readonly rows?: number;
   readonly cols?: number;
   readonly bar?: number;
+  /**
+   * Only for the "custom" shape made with the pen tool or "Edit points": the anchors of the path, in the window's box (both axes from
+   * about -0.5 to 0.5), so it can be edited again. The cut outline is `loops`; the engine only reads `loops`.
+   */
+  readonly path?: readonly PathAnchor[];
   /** Only for the "custom" shape: the outline(s), `x, y, x, y, ...` with both axes from -0.5 to 0.5 in the window's box. */
   readonly loops?: readonly (readonly number[])[];
 }
