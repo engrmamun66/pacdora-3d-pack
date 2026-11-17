@@ -9,7 +9,13 @@ import {
   area,
   bounds,
   flattenOutline,
+  checkCustomLoops,
+  fitLoops,
   generateDieline,
+  maskToLoops,
+  smoothLoop,
+  traceMask,
+  windowHoles,
   windowPolygon,
   type WindowSpec,
 } from "../src";
@@ -24,7 +30,7 @@ const win = (over: Partial<WindowSpec> = {}): WindowSpec => ({ id: "w1", shape: 
 
 describe("window shapes", () => {
   it("every shape fills its box exactly (before rotation) and stays one simple polygon", () => {
-    for (const shape of WINDOW_SHAPES) {
+    for (const shape of WINDOW_SHAPES.filter((x) => x !== "custom")) {
       const p = windowPolygon(win({ shape, cx: 0, cy: 0, width: 40, height: 24 }));
       const b = bounds(p);
       expect(b.max.x - b.min.x, shape).toBeCloseTo(40, 0);
@@ -141,16 +147,16 @@ describe("the shape library", () => {
     return true;
   };
 
-  it("has Basic Shapes and 50 More Shapes, each named once", () => {
-    expect(WINDOW_SHAPE_GROUPS.map((g) => [g.title, g.shapes.length])).toEqual([["Basic Shapes", 16], ["More Shapes", 50]]);
-    expect(WINDOW_SHAPES.length).toBe(66);
+  it("has 17 Basic Shapes and 50 More Shapes, each named once", () => {
+    expect(WINDOW_SHAPE_GROUPS.map((g) => [g.title, g.shapes.length])).toEqual([["Basic Shapes", 17], ["More Shapes", 50]]);
+    expect(WINDOW_SHAPES.length).toBe(68);
     const labels = WINDOW_SHAPES.map((s) => WINDOW_SHAPE_LABELS[s]);
     expect(new Set(labels).size).toBe(labels.length);
-    expect(new Set(WINDOW_SHAPES.flatMap((s) => (s.length <= 30 ? [s] : []))).size).toBe(66); // ids fit the stored form
+    expect(new Set(WINDOW_SHAPES.flatMap((s) => (s.length <= 30 ? [s] : []))).size).toBe(68); // ids fit the stored form
   });
 
   it("every shape is one simple polygon that fills its box, wide, tall and square", () => {
-    for (const shape of WINDOW_SHAPES) {
+    for (const shape of WINDOW_SHAPES.filter((x) => x !== "custom")) {
       for (const [w, h] of [[60, 30], [30, 60], [40, 40]] as const) {
         const p = windowPolygon(win({ shape, cx: 0, cy: 0, width: w, height: h }));
         const b = bounds(p);
@@ -163,12 +169,119 @@ describe("the shape library", () => {
   });
 
   it("every shape can be cut into a panel, and rotated", () => {
-    for (const shape of WINDOW_SHAPES) {
+    for (const shape of WINDOW_SHAPES.filter((x) => x !== "custom")) {
       for (const rotation of [0, 35]) {
         const r = applyWindows(geo, [win({ shape, width: 16, height: 16, rotation })]);
         expect(r.problems, `${shape} rotated ${rotation}`).toEqual([]);
         expect(r.applied).toEqual(["w1"]);
       }
     }
+  });
+});
+
+describe("grid window (mesh)", () => {
+  const grid = (over: Partial<WindowSpec> = {}) => win({ shape: "grid", width: 40, height: 30, rows: 3, cols: 4, bar: 2, ...over });
+
+  it("is rows x cols equal holes kept apart by bars, with a bar frame around them", () => {
+    const holes = windowHoles(grid({ cx: 0, cy: 0 }));
+    expect(holes).toHaveLength(12);
+    // Cell width (40 - 5 bars of 2) / 4 = 7.5, height (30 - 4 bars of 2) / 3 = 7.33...
+    const b = bounds(holes[0]!);
+    expect(b.max.x - b.min.x).toBeCloseTo(7.5, 6);
+    expect(b.max.y - b.min.y).toBeCloseTo(22 / 3, 6);
+    expect(b.min.x).toBeCloseTo(-20 + 2, 6);
+    expect(b.min.y).toBeCloseTo(-15 + 2, 6);
+    const all = bounds(holes.flat());
+    expect(all.max.x).toBeCloseTo(20 - 2, 6);
+    expect(all.max.y).toBeCloseTo(15 - 2, 6);
+    // The window outline is the whole box.
+    expect(area(windowPolygon(grid({ cx: 0, cy: 0 })))).toBeCloseTo(1200, 6);
+  });
+
+  it("cuts every hole of the window into its panel and into the cut loops", () => {
+    const r = applyWindows(geo, [grid()]);
+    expect(r.problems).toEqual([]);
+    expect(r.geo.cutLoops).toHaveLength(geo.cutLoops.length + 12);
+    expect(r.geo.foldTree.panels.find((p) => p.id === big.id)!.holes).toHaveLength(12);
+    // A turned grid keeps its hole count and area.
+    const turned = windowHoles(grid({ rotation: 30 }));
+    expect(turned).toHaveLength(12);
+    expect(turned.reduce((sum, h) => sum + area(h), 0)).toBeCloseTo(windowHoles(grid()).reduce((sum, h) => sum + area(h), 0), 6);
+  });
+
+  it("uses 4 x 4 holes with 2 mm bars when nothing is given", () => {
+    expect(windowHoles(win({ shape: "grid", width: 40, height: 40 }))).toHaveLength(16);
+  });
+
+  it("refuses numbers that leave no room for the holes", () => {
+    const bad = (over: Partial<WindowSpec>) => applyWindows(geo, [grid(over)]).problems[0]?.message ?? "";
+    expect(bad({ bar: 9 })).toMatch(/smaller than/);
+    expect(bad({ rows: 0 })).toMatch(/whole numbers/);
+    expect(bad({ cols: 2.5 })).toMatch(/whole numbers/);
+    expect(bad({ cols: 13 })).toMatch(/whole numbers/);
+    expect(bad({ bar: 0 })).toMatch(/bar/);
+    expect(applyWindows(geo, [grid({ bar: 9 })]).applied).toEqual([]);
+  });
+
+  it("other shapes are still one hole", () => {
+    expect(windowHoles(win())).toHaveLength(1);
+  });
+});
+
+describe("custom window shapes (dynamic crop)", () => {
+  /** A grid of cells from rows of text: "#" filled. */
+  const grid = (rows: string[]) => ({ mask: Uint8Array.from(rows.flatMap((r) => [...r].map((c) => (c === "#" ? 1 : 0)))), w: rows[0]!.length, h: rows.length });
+
+  it("finds the outline of a filled square", () => {
+    const g = grid(["....", ".##.", ".##.", "...."]);
+    const loops = maskToLoops(g.mask, g.w, g.h);
+    expect(loops).toHaveLength(1);
+    const b = bounds(loops[0]!);
+    expect([b.min.x, b.min.y, b.max.x, b.max.y]).toEqual([1, 1, 3, 3]);
+  });
+
+  it("keeps separate pieces apart, drops specks, and fills a hole inside a piece", () => {
+    const g = grid(["#####..#", "#...#..#", "#...#...", "#####..#", "........"]);
+    const loops = maskToLoops(g.mask, g.w, g.h, { minShare: 0.1 });
+    expect(loops).toHaveLength(1); // the ring (its hole is filled in); the thin bar on the right is too small
+    const b = bounds(loops[0]!);
+    expect(b.max.x - b.min.x).toBe(5);
+    expect(b.max.y - b.min.y).toBe(4);
+  });
+
+  it("makes a stored shape that is valid, touches the box and is cut as holes", () => {
+    const rows = Array.from({ length: 40 }, (_, y) => [...Array(60)].map((_, x) => (Math.hypot(x - 30, (y - 20) * 1.5) < 18 ? "#" : ".")).join(""));
+    const g = grid(rows);
+    const fitted = traceMask(g.mask, g.w, g.h)!;
+    expect(fitted).not.toBeNull();
+    expect(checkCustomLoops(fitted.loops)).toBeNull();
+    const xs = fitted.loops[0]!.filter((_, i) => i % 2 === 0);
+    expect(Math.min(...xs)).toBeCloseTo(-0.5, 3);
+    expect(Math.max(...xs)).toBeCloseTo(0.5, 3);
+    const w = win({ shape: "custom", width: 40, height: 30, loops: fitted.loops });
+    expect(windowHoles(w)).toHaveLength(1);
+    const r = applyWindows(geo, [w]);
+    expect(r.problems).toEqual([]);
+    expect(r.geo.foldTree.panels.find((p) => p.id === big.id)!.holes).toHaveLength(1);
+    // The outline is roughly an ellipse: area close to pi/4 of the box.
+    expect(area(windowHoles(win({ shape: "custom", cx: 0, cy: 0, width: 40, height: 30, loops: fitted.loops }))[0]!)).toBeGreaterThan(40 * 30 * 0.7);
+  });
+
+  it("refuses outlines that cross themselves, are empty, or have too few points", () => {
+    expect(checkCustomLoops([[-0.5, -0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5]])).toMatch(/crosses itself/);
+    expect(checkCustomLoops(undefined)).toMatch(/no outline/);
+    expect(checkCustomLoops([[0, 0, 1, 1]])).toMatch(/not valid/);
+    expect(applyWindows(geo, [win({ shape: "custom", loops: [[-0.5, -0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5]] })]).applied).toEqual([]);
+  });
+
+  it("fits loops of any size into the box and smoothing keeps the shape inside it", () => {
+    const fitted = fitLoops([[{ x: 10, y: 10 }, { x: 50, y: 10 }, { x: 50, y: 30 }, { x: 10, y: 30 }]])!;
+    expect([fitted.cx, fitted.cy, fitted.width, fitted.height]).toEqual([30, 20, 40, 20]);
+    expect(fitted.loops[0]).toEqual([-0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5]);
+    const smooth = smoothLoop([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }], 2);
+    expect(smooth).toHaveLength(16);
+    const b = bounds(smooth);
+    expect(b.min.x).toBeGreaterThanOrEqual(0);
+    expect(b.max.x).toBeLessThanOrEqual(10);
   });
 });

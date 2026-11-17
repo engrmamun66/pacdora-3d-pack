@@ -1,6 +1,6 @@
 "use client";
 
-import { windowPolygon, type WindowSpec } from "@packaging/dieline-engine";
+import { windowHoles, type WindowSpec } from "@packaging/dieline-engine";
 
 /** A closed polygon as an SVG path (mm). */
 export const polyD = (pts: readonly { x: number; y: number }[]) => `M${pts.map((p) => `${p.x.toFixed(3)} ${p.y.toFixed(3)}`).join("L")}Z`;
@@ -58,7 +58,7 @@ export function MiniSheet({
         return (
           <path
             key={w.id}
-            d={polyD(windowPolygon(w))}
+            d={windowHoles(w).map(polyD).join("")}
             fill={bad ? "#dc2626" : "#2563eb"}
             fillOpacity={0.25}
             stroke={bad ? "#dc2626" : "#2563eb"}

@@ -16,7 +16,7 @@ reference image the owner sent was only an idea of the feature, nothing of its l
 | Concern | File |
 |---|---|
 | Rules, `applyWindows` | `packages/dieline-engine/src/windows.ts` (tests: `test/windows.test.ts`) |
-| Shape library (66 shapes) | `packages/dieline-engine/src/window-shapes.ts`: one table `SHAPE_DEFS`, groups "Basic Shapes" (16) and "More Shapes" (50) |
+| Shape library (67 shapes) | `packages/dieline-engine/src/window-shapes.ts`: one table `SHAPE_DEFS`, groups "Basic Shapes" (17) and "More Shapes" (50) |
 | Result in the geometry | extra closed cut loops in `geo.cutLoops` (so SVG, PDF, DXF, thumbnails draw them as cut lines) + `Panel.holes` |
 | 3D | `packages/model3d`: `THREE.Shape.holes` per panel + edge walls around each hole (test in `model3d.test.ts`) |
 | Stored form | `packages/schema/src/index.ts` `windowSchema`, `ProjectDoc.windows` (optional, no migration) |
@@ -73,6 +73,15 @@ The editor is not swapped in: it slides up from the bottom over the page when it
 
 ## Smooth dragging (do not undo)
 Moving a window must not rebuild the 3D box on every pointer move: that costs seconds in a slow browser. So `window-editor.tsx` (1) handles pointer moves once per animation frame (`onMove` keeps the latest, `moveNow` runs in `requestAnimationFrame`; `onUp` applies the last one), (2) keeps the live check (`applyWindows`, about 1 ms) on the drawing, but (3) feeds the 3D preview from `boxDraft`, which only follows the drawing when no drag is running (`dragging`). Measured in headless Chrome: 60 moves, long tasks 72 (200 s) before, 0 after.
+
+## Grid (mesh) window
+The shape "Grid (mesh)" (Basic Shapes) is ONE window made of many holes: `rows` x `cols` equal rectangles kept apart by bars `bar` mm wide, with a bar frame around them (like a wire mesh). Its box is the outer rectangle (`windowPolygon`, used for the margin and gap checks, the frame and the grips); what is cut is `windowHoles(win)` (a list of polygons) and every one becomes a hole of the panel and a cut loop. Numbers are stored on the window as optional `rows`, `cols`, `bar` (defaults 4, 4, 2 mm; rows and columns 1 to 12; a hole must stay at least 1 mm: `checkGrid` in `window-shapes.ts`). The editor shows Rows, Columns and Bar fields for a chosen grid.
+
+## Dynamic Crop and the pen tool
+The palette's first section, "Dynamic Crop", makes custom shapes (`shape: "custom"`, not in the shape palette). Their outline is stored with the window as `loops`: one or more closed loops of `x, y, x, y, ...` with both axes from -0.5 to 0.5 inside the window's box, so the shape stretches with the box (`packages/dieline-engine/src/window-custom.ts`, validated by `checkCustomLoops`: at most 12 loops, 1500 points, no loop crossing itself).
+- **Upload PNG / SVG**: `lib/window-crop-image.ts` draws the picture on a 320 px grid (an SVG is loaded as a picture, so nothing in it runs; at most 5 MB), marks the filled cells (the picture's opaque pixels; a picture with no transparency counts its non-white pixels) and the engine's `traceMask` finds the outer outline of each filled piece (small specks are dropped; a hole inside a piece is filled in, because a cut-out cannot have an island). The result is added to the sheet and kept in the section for reuse (click or drag it onto a panel; kept while the editor is open).
+- **Pen tool** (`lib/window-pen.ts`, tests beside it): works like the pen of a drawing program, with no panel on screen. A click places a corner point; a click and drag places a smooth point and pulls out its two handles (the curve follows them); Shift keeps the line or handle at 45 degrees; Alt while dragging moves only one handle; Alt + click on a point switches it between corner and smooth. A click on the green first point (or Enter) closes the path, and the window is made at once, exactly where it was drawn. Ctrl/Cmd + Z undoes a point (or a drag), Ctrl/Cmd + Y (or Shift + Z) redoes, Backspace / Delete takes back the last point, Esc cancels. The curves are cut into short straight pieces (`flattenPath`, at most about 1200 points); a path that crosses itself is refused with a reason and stays open so the last point can be undone. The curve points are not stored: the window is a polygon afterwards (move, resize, turn).
+The palette sections (Dynamic Crop, Basic Shapes, More Shapes) fold and open by a click on their title bar; a search opens them all.
 
 ## Not done / ideas
 - Windows across several panels, film behind the window, window on a stacked flap in 3D layer logic (works, not tuned).

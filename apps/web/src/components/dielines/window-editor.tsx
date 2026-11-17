@@ -1,19 +1,25 @@
 "use client";
 
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Copy, Lock, LockOpen, Maximize, Minus, Plus, Redo2, Search, Trash2, Undo2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, Lock, LockOpen, Maximize, Minus, PenTool, Plus, Redo2, Search, Trash2, Undo2, Upload, X } from "lucide-react";
 import {
   MAX_WINDOWS,
   WINDOW_MIN_SIZE,
+  GRID_MAX_LINES,
   WINDOW_SHAPES,
   WINDOW_SHAPE_GROUPS,
   WINDOW_SHAPE_LABELS,
   applyWindows,
   area,
+  checkCustomLoops,
+  fitLoops,
   flattenOutline,
+  gridParams,
+  isGridShape,
   shapeKeepsRatio,
   shapeRatio,
   shapeStartSize,
+  windowHoles,
   windowPolygon,
   type DielineGeometry,
   type WatermarkSpec,
@@ -28,6 +34,8 @@ import { ViewSkeleton, useViewSwitch } from "./view-switch";
 import { MiniSheet, polyD } from "./mini-sheet";
 import { fromDisplay, toDisplay, type Unit } from "./units";
 import { boxOf, pointIn, snapMove, windowGaps, type Guide } from "@/lib/window-guides";
+import { CropImageError, traceCropFile } from "@/lib/window-crop-image";
+import { cornerAnchor, flattenPath, moveAnchor, pathData, setHandle, snap45, toggleSmooth, type Anchor, type Pt } from "@/lib/window-pen";
 
 /** Pixels per millimetre on screen, and the centre of what is shown (mm). */
 interface View {
@@ -76,16 +84,59 @@ const TURN_ARROW = (() => {
 /** Starting box of a shape, as a share of the panel it goes on (width, height). */
 const SHAPE_MIME = "application/x-dieline-window-shape";
 
+/** The mouse pointer while the pen tool is on: a pen whose tip (the top left corner, the hot spot) marks the point. */
+const PEN_CURSOR = (() => {
+  const shapes = '<path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="m2 2 7.586 7.586"/><circle cx="11" cy="11" r="2"/>';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><g stroke="#fff" stroke-width="4.2">${shapes}</g><g stroke="#111" stroke-width="1.8">${shapes}</g></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 2 2, crosshair`;
+})();
+
+/** A custom outline kept in the palette's "Dynamic Crop" section (from a picture or the pen tool): its outline and proportions. */
+interface Crop {
+  id: string;
+  name: string;
+  loops: number[][];
+  /** Width / height. */
+  ratio: number;
+}
+
+/** The bar above a palette section: click it to fold the section away or open it again. */
+function SectionTitle({ title, open, onToggle }: { title: string; open: boolean; onToggle: () => void }) {
+  return (
+    <h3 className="rounded-lg bg-muted text-xs font-semibold text-foreground">
+      <button type="button" aria-expanded={open} onClick={onToggle} className="flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+        {title}
+        {open ? <ChevronDown className="size-4 text-muted-foreground" aria-hidden /> : <ChevronRight className="size-4 text-muted-foreground" aria-hidden />}
+      </button>
+    </h3>
+  );
+}
+
+/** Small picture of a custom outline for the palette. */
+function CropIcon({ crop }: { crop: Crop }) {
+  const r = crop.ratio;
+  const w = r >= 1.27 ? 38 : Math.round(30 * r);
+  const h = r >= 1.27 ? Math.round(38 / r) : 30;
+  const d = crop.loops.map((l) => polyD(Array.from({ length: l.length / 2 }, (_, i) => ({ x: l[i * 2]! * w, y: l[i * 2 + 1]! * h })))).join("");
+  return (
+    <svg viewBox="-24 -20 48 40" className="h-10 w-12" aria-hidden>
+      <path d={d} fill="currentColor" fillOpacity="0.12" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 /** Small picture of a shape for the palette. */
 function ShapeIcon({ shape }: { shape: WindowShape }) {
   // The shape at its natural proportions, as big as the picture allows.
   const r = shapeRatio(shape);
   const w = r >= 1.27 ? 38 : Math.round(30 * r);
   const h = r >= 1.27 ? Math.round(38 / r) : 30;
-  const pts = windowPolygon({ shape, cx: 0, cy: 0, width: w, height: h, rotation: 0 });
+  // A grid is drawn as its holes (a 3 x 3 mesh); every other shape as one outline.
+  const holes = windowHoles({ shape, cx: 0, cy: 0, width: w, height: h, rotation: 0, rows: 3, cols: 3, bar: 3 });
   return (
     <svg viewBox="-24 -20 48 40" className="h-10 w-12" aria-hidden>
-      <path d={polyD(pts)} fill="currentColor" fillOpacity="0.12" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      {isGridShape(shape) ? <rect x={-w / 2} y={-h / 2} width={w} height={h} fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="1.6" /> : null}
+      <path d={holes.map(polyD).join("")} fill="currentColor" fillOpacity="0.12" stroke="currentColor" strokeWidth={isGridShape(shape) ? 1 : 1.6} strokeLinejoin="round" />
     </svg>
   );
 }
@@ -137,6 +188,19 @@ export function WindowEditor({
   const [guides, setGuides] = useState<Guide[]>([]);
   // Shape search: matches the name (or the id) of a shape; a group whose title matches shows all its shapes.
   const [query, setQuery] = useState("");
+  // Palette sections that are folded away (a section opens by itself while a search is on).
+  const [folded, setFolded] = useState<Record<string, boolean>>({});
+  // Dynamic Crop: outlines made from pictures or with the pen (kept while the editor is open), and the pen tool.
+  const [crops, setCrops] = useState<Crop[]>([]);
+  const [cropBusy, setCropBusy] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const cropSeq = useRef(0);
+  // The pen tool works like the one of a drawing program: click = corner, click and drag = smooth anchor with handles.
+  // Closing the path (a click on its first point, or Enter) makes the window at once. Ctrl/Cmd + Z and Ctrl/Cmd + Y undo and redo points.
+  const [pen, setPen] = useState<{ anchors: Anchor[]; hover: Pt | null; sel: number | null } | null>(null);
+  const penPast = useRef<Anchor[][]>([]);
+  const penFuture = useRef<Anchor[][]>([]);
+  const penDrag = useRef<{ kind: "new" | "anchor" | "hin" | "hout"; i: number; sx: number; sy: number; moved: boolean } | null>(null);
   /** Right-click menu: where it opens (px inside the sheet area) and for which window. */
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -249,15 +313,21 @@ export function WindowEditor({
 
   // ---- adding ----
   /** Size of a new window of this shape on a panel of this size (`k` shrinks it). Round shapes stay round. */
-  const sizeFor = (shape: WindowShape, pw: number, ph: number, k: number): [number, number] => {
+  const sizeFor = (shape: WindowShape, pw: number, ph: number, k: number, crop?: Crop): [number, number] => {
     let [width, height] = shapeStartSize(shape, pw, ph, k);
+    if (crop) {
+      // A custom outline keeps the proportions of the picture or drawing it came from.
+      const side = Math.min(pw, ph) * 0.42 * k;
+      const r = crop.ratio;
+      [width, height] = r >= 1 ? [side * Math.min(r, 1.6), (side * Math.min(r, 1.6)) / r] : [side * r, side];
+    }
     if (shapeKeepsRatio(shape)) width = height = Math.min(width, height);
     return [Math.max(WINDOW_MIN_SIZE, round3(width)), Math.max(WINDOW_MIN_SIZE, round3(height))];
   };
-  const isEven = shapeKeepsRatio;
+  const isEven = (shape: WindowShape, crop?: Crop) => Boolean(crop) || shapeKeepsRatio(shape);
 
   /** A shape dropped from the palette: centred on the drop point, as big as fits the panel under it. */
-  const addAt = (shape: WindowShape, at: { x: number; y: number }) => {
+  const addAt = (shape: WindowShape, at: { x: number; y: number }, crop?: Crop) => {
     if (draft.length >= MAX_WINDOWS) {
       setNotice(`At most ${MAX_WINDOWS} windows.`);
       return;
@@ -276,20 +346,20 @@ export function WindowEditor({
     const ph = Math.max(...ys) - Math.min(...ys);
     const id = freshId(draft);
     for (const k of [0.6, 0.45, 0.33, 0.24, 0.17, 0.12, 0.08, 0.05]) {
-      const [width, height] = sizeFor(shape, pw, ph, k);
-      const w: WindowSpec = { id, shape, cx: round3(at.x), cy: round3(at.y), width, height, rotation: 0 };
+      const [width, height] = sizeFor(shape, pw, ph, k, crop);
+      const w: WindowSpec = { id, shape, cx: round3(at.x), cy: round3(at.y), width, height, rotation: 0, ...(crop ? { loops: crop.loops } : {}) };
       if (applyWindows(geo, [...draft, w]).problems.every((q) => q.id !== id)) {
         commit([...draft, w]);
         setSelected(id);
         setNotice(null);
-        if (isEven(shape)) setLockRatio((l) => ({ ...l, [id]: true }));
+        if (isEven(shape, crop)) setLockRatio((l) => ({ ...l, [id]: true }));
         return;
       }
     }
     setNotice("It does not fit there: keep it away from folds, edges and other windows.");
   };
 
-  const add = (shape: WindowShape) => {
+  const add = (shape: WindowShape, crop?: Crop) => {
     if (draft.length >= MAX_WINDOWS) {
       setNotice(`At most ${MAX_WINDOWS} windows.`);
       return;
@@ -304,20 +374,20 @@ export function WindowEditor({
       })
       .sort((a, b) => Number(b.printable) - Number(a.printable) || b.a - a.a);
     const id = freshId(draft);
-    const even = isEven(shape);
+    const even = isEven(shape, crop);
     // Biggest panel first; on each, the biggest size that the engine accepts, in the middle first, then around it.
     for (const p of panels) {
       const pw = p.x1 - p.x0;
       const ph = p.y1 - p.y0;
       for (const k of [1, 0.75, 0.55, 0.4, 0.28]) {
-        const [width, height] = sizeFor(shape, pw, ph, k);
+        const [width, height] = sizeFor(shape, pw, ph, k, crop);
         if (Math.min(width, height) < 8) continue; // too small to be useful: try a bigger panel
         const mx = (p.x0 + p.x1) / 2;
         const my = (p.y0 + p.y1) / 2;
         const tries: [number, number][] = [[0, 0]];
         for (const f of [0.25, 0.4]) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]] as const) tries.push([dx * f * pw, dy * f * ph]);
         for (const [dx, dy] of tries) {
-          const w: WindowSpec = { id, shape, cx: round3(mx + dx), cy: round3(my + dy), width, height, rotation: 0 };
+          const w: WindowSpec = { id, shape, cx: round3(mx + dx), cy: round3(my + dy), width, height, rotation: 0, ...(crop ? { loops: crop.loops } : {}) };
           if (applyWindows(geo, [...draft, w]).problems.every((q) => q.id !== id)) {
             commit([...draft, w]);
             setSelected(id);
@@ -329,6 +399,146 @@ export function WindowEditor({
       }
     }
     setNotice("There is no free room for another window. Make one smaller or remove one.");
+  };
+
+  // ---- Dynamic Crop: a picture's filled part, or a drawing with the pen ----
+  const addCrop = (name: string, loops: number[][], ratio: number) => {
+    const crop: Crop = { id: `c${(cropSeq.current += 1)}`, name, loops, ratio };
+    setCrops((list) => [...list.slice(-11), crop]);
+    return crop;
+  };
+  const onCropFile = async (file: File | undefined) => {
+    if (!file) return;
+    setCropBusy(true);
+    try {
+      const traced = await traceCropFile(file);
+      const crop = addCrop(traced.name, traced.fitted.loops, traced.fitted.width / traced.fitted.height);
+      add("custom", crop);
+    } catch (e) {
+      setNotice(e instanceof CropImageError ? e.message : "This picture could not be used.");
+    } finally {
+      setCropBusy(false);
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  };
+  const startPen = () => {
+    setSelected(null);
+    setNotice(null);
+    penPast.current = [];
+    penFuture.current = [];
+    setPen({ anchors: [], hover: null, sel: null });
+  };
+  /** Remember the points as they are now, before a change (undo goes back to it). */
+  const penRemember = (anchors: Anchor[]) => {
+    penPast.current = [...penPast.current.slice(-100), anchors];
+    penFuture.current = [];
+  };
+  const penUndo = () => {
+    const prev = penPast.current[penPast.current.length - 1];
+    if (!pen || !prev) return;
+    penPast.current = penPast.current.slice(0, -1);
+    penFuture.current = [pen.anchors, ...penFuture.current];
+    setPen({ ...pen, anchors: prev, sel: null });
+  };
+  const penRedo = () => {
+    const next = penFuture.current[0];
+    if (!pen || !next) return;
+    penFuture.current = penFuture.current.slice(1);
+    penPast.current = [...penPast.current, pen.anchors];
+    setPen({ ...pen, anchors: next, sel: null });
+  };
+  /** The path is closed: it becomes a window where it was drawn. */
+  const finishPen = (anchors: Anchor[]) => {
+    if (draft.length >= MAX_WINDOWS) {
+      setNotice(`At most ${MAX_WINDOWS} windows.`);
+      return;
+    }
+    const use = fitLoops([flattenPath(anchors, true)]);
+    if (!use || use.width < WINDOW_MIN_SIZE || use.height < WINDOW_MIN_SIZE) {
+      setNotice(`Too small: each side must be at least ${WINDOW_MIN_SIZE} mm.`);
+      return;
+    }
+    const bad = checkCustomLoops(use.loops);
+    if (bad) {
+      // The path stays, so the last point can be undone.
+      setNotice(bad);
+      return;
+    }
+    const id = freshId(draft);
+    const w: WindowSpec = { id, shape: "custom", cx: round3(use.cx), cy: round3(use.cy), width: round3(use.width), height: round3(use.height), rotation: 0, loops: use.loops };
+    commit([...draft, w]);
+    addCrop("Pen shape", use.loops, use.width / use.height);
+    setSelected(id);
+    setLockRatio((l) => ({ ...l, [id]: true }));
+    setPen(null);
+    setNotice(null);
+  };
+  const penDown = (e: React.PointerEvent) => {
+    if (!pen || e.button !== 0) return;
+    e.preventDefault();
+    host.current?.focus({ preventScroll: true });
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    setNotice(null);
+    const at = toMm(e);
+    const tol = 8 / v.s;
+    const near = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y) < tol;
+    const list = pen.anchors;
+    const grab = (kind: "new" | "anchor" | "hin" | "hout", i: number) => {
+      penDrag.current = { kind, i, sx: at.x, sy: at.y, moved: false };
+    };
+    // The handles of the chosen point come first, then the points themselves.
+    const chosen = pen.sel !== null ? list[pen.sel] : undefined;
+    if (chosen && pen.sel !== null) {
+      for (const which of ["hout", "hin"] as const) {
+        const h = chosen[which];
+        if (h && near(h, at)) {
+          grab(which, pen.sel);
+          return;
+        }
+      }
+    }
+    const hit = list.findIndex((a) => near(a, at));
+    if (hit >= 0) {
+      if (hit === 0 && list.length >= 3) finishPen(list); // a click on the first point closes the path
+      else if (e.altKey) {
+        penRemember(list);
+        setPen({ ...pen, anchors: toggleSmooth(list, false, hit), sel: hit }); // Alt + click: corner <-> smooth
+      } else {
+        setPen({ ...pen, sel: hit });
+        grab("anchor", hit);
+      }
+      return;
+    }
+    const last = list[list.length - 1];
+    const p = e.shiftKey && last ? snap45(last, at) : at;
+    const anchors = [...list, cornerAnchor({ x: round3(p.x), y: round3(p.y) })];
+    penRemember(list);
+    setPen({ ...pen, anchors, sel: anchors.length - 1 });
+    grab("new", anchors.length - 1);
+  };
+  const penMove = (e: React.PointerEvent) => {
+    if (!pen) return;
+    const at = toMm(e);
+    const d = penDrag.current;
+    if (!d) {
+      setPen({ ...pen, hover: at });
+      return;
+    }
+    const a = pen.anchors[d.i];
+    if (!a) return;
+    if (!d.moved && Math.hypot(at.x - d.sx, at.y - d.sy) < 3 / v.s) return; // a click is not a drag
+    if (!d.moved && d.kind !== "new") penRemember(pen.anchors); // one undo step per drag (a new point was remembered when it was placed)
+    d.moved = true;
+    if (d.kind === "anchor") {
+      setPen({ ...pen, anchors: moveAnchor(pen.anchors, d.i, { x: round3(at.x), y: round3(at.y) }) });
+      return;
+    }
+    const to = e.shiftKey ? snap45(a, at) : at;
+    if (d.kind === "new") {
+      // Dragging out of a new point pulls out its two handles (Alt: only the forward one).
+      const back = { x: 2 * a.x - to.x, y: 2 * a.y - to.y };
+      setPen({ ...pen, anchors: pen.anchors.map((x, k) => (k === d.i ? { ...x, hout: to, hin: e.altKey ? x.hin : back, smooth: !e.altKey } : x)) });
+    } else setPen({ ...pen, anchors: setHandle(pen.anchors, d.i, d.kind, to, e.altKey) });
   };
 
   const patch = (id: string, change: Partial<WindowSpec>, push = true) => {
@@ -499,6 +709,29 @@ export function WindowEditor({
   // ---- keys ----
   const onKey = (e: React.KeyboardEvent) => {
     if ((e.target as HTMLElement).tagName === "INPUT") return;
+    if (pen) {
+      const key = e.key.toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && key === "z") {
+        e.preventDefault();
+        if (e.shiftKey) penRedo();
+        else penUndo();
+      } else if ((e.metaKey || e.ctrlKey) && key === "y") {
+        e.preventDefault();
+        penRedo();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (pen.anchors.length >= 3) finishPen(pen.anchors);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setPen(null);
+      } else if ((e.key === "Backspace" || e.key === "Delete") && pen.anchors.length > 0) {
+        e.preventDefault();
+        penRemember(pen.anchors);
+        setPen({ ...pen, anchors: pen.anchors.slice(0, -1), sel: null });
+      }
+      return;
+    }
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === "z") {
       e.preventDefault();
@@ -531,6 +764,8 @@ export function WindowEditor({
     ...g,
     shapes: !needle || g.title.toLowerCase().includes(needle) ? g.shapes : g.shapes.filter((s) => WINDOW_SHAPE_LABELS[s].toLowerCase().includes(needle) || s.includes(needle)),
   })).filter((g) => g.shapes.length > 0);
+  // The Dynamic Crop section stays while no search is on (or the search names it).
+  const showCrop = !needle || "dynamic crop upload pen tool".includes(needle);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" role="region" aria-label="Window editor" onKeyDown={onKey}>
@@ -600,10 +835,58 @@ export function WindowEditor({
               ) : null}
             </label>
           </div>
-          {shown.length === 0 ? <p role="status" className="rounded-xl border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">No shape matches &ldquo;{query.trim()}&rdquo;.</p> : null}
+          {shown.length === 0 && !showCrop ? <p role="status" className="rounded-xl border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">No shape matches &ldquo;{query.trim()}&rdquo;.</p> : null}
+          {showCrop ? (
+            <section aria-label="Dynamic Crop" className={`flex flex-col gap-2 transition-opacity ${sw.tab === "3d" ? "opacity-50" : ""}`}>
+              <SectionTitle title="Dynamic Crop" open={!folded.crop || Boolean(needle)} onToggle={() => setFolded((f) => ({ ...f, crop: !f.crop }))} />
+              {!folded.crop || needle ? (
+                <div className="flex flex-col gap-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input ref={fileInput} type="file" accept="image/png,image/svg+xml,.png,.svg" className="sr-only" tabIndex={-1} aria-label="Upload a PNG or SVG picture" onChange={(e) => void onCropFile(e.target.files?.[0])} />
+                    <button type="button" disabled={sw.tab === "3d" || cropBusy} onClick={() => fileInput.current?.click()} title="The filled part of a PNG or SVG picture becomes the hole" className="flex flex-col items-center gap-1 rounded-xl border bg-background p-2 text-center text-xs text-foreground/80 transition-colors enabled:hover:border-foreground enabled:hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60">
+                      <span className="grid h-10 place-items-center"><Upload className="size-6" aria-hidden /></span>
+                      {cropBusy ? "Reading..." : "Upload PNG / SVG"}
+                    </button>
+                    <button type="button" disabled={sw.tab === "3d"} aria-pressed={pen !== null} onClick={() => (pen ? setPen(null) : startPen())} title="Draw any shape on the dieline. Click for a corner, click and drag for a curve, click the first point to close. Ctrl/Cmd + Z undoes, Esc cancels." className={`flex flex-col items-center gap-1 rounded-xl border p-2 text-center text-xs transition-colors enabled:hover:border-foreground disabled:cursor-not-allowed disabled:opacity-60 ${pen ? "border-black bg-black text-white" : "bg-background text-foreground/80 enabled:hover:bg-muted"}`}>
+                      <span className="grid h-10 place-items-center"><PenTool className="size-6" aria-hidden /></span>
+                      Pen tool
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Upload a PNG or SVG: its filled part becomes the hole. Or draw a shape with the pen: click the first point to close it.</p>
+                  {crops.length > 0 ? (
+                    <div className="grid grid-cols-3 gap-2 lg:grid-cols-2">
+                      {crops.map((crop) => (
+                        <div key={crop.id} className="group relative">
+                          <button
+                            type="button"
+                            onClick={() => add("custom", crop)}
+                            disabled={sw.tab === "3d"}
+                            draggable={sw.tab !== "3d"}
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData(SHAPE_MIME, `crop:${crop.id}`);
+                              e.dataTransfer.effectAllowed = "copy";
+                            }}
+                            title={`Click to add: ${crop.name}. Or drag it onto a panel`}
+                            className="flex w-full flex-col items-center gap-1 rounded-xl border bg-background p-2 text-center text-xs text-foreground/80 transition-colors enabled:hover:border-foreground enabled:hover:bg-muted disabled:cursor-not-allowed"
+                          >
+                            <CropIcon crop={crop} />
+                            <span className="max-w-full truncate">{crop.name}</span>
+                          </button>
+                          <button type="button" aria-label={`Remove ${crop.name} from the list`} onClick={() => setCrops((list) => list.filter((c) => c.id !== crop.id))} className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-background/90 text-muted-foreground opacity-0 shadow-xs group-focus-within:opacity-100 group-hover:opacity-100 hover:text-foreground">
+                            <X className="size-3" aria-hidden />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
           {shown.map((group) => (
             <section key={group.id} aria-label={group.title} className={`flex flex-col gap-2 transition-opacity ${sw.tab === "3d" ? "opacity-50" : ""}`}>
-              <h3 className="rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-foreground">{group.title}</h3>
+              <SectionTitle title={group.title} open={!folded[group.id] || Boolean(needle)} onToggle={() => setFolded((f) => ({ ...f, [group.id]: !f[group.id] }))} />
+              {!folded[group.id] || needle ? (
               <div className="grid grid-cols-3 gap-2 lg:grid-cols-2">
                 {group.shapes.map((shape) => (
                   <button
@@ -624,6 +907,7 @@ export function WindowEditor({
                   </button>
                 ))}
               </div>
+              ) : null}
             </section>
           ))}
           <p className="text-xs text-muted-foreground">{draft.length} of {MAX_WINDOWS} windows. Drag a shape onto a panel to place it where you drop it. Delete removes the chosen one; the arrow keys nudge it (Shift = 5 mm). Moving snaps to other windows and the panel middle; hold Alt to move freely.</p>
@@ -636,10 +920,23 @@ export function WindowEditor({
           <div
             ref={host}
             className={`absolute inset-0 touch-none overflow-hidden ${dropping ? "ring-2 ring-inset ring-foreground/40" : ""}`}
+            style={pen ? { cursor: PEN_CURSOR } : undefined}
             tabIndex={0}
-            onPointerMove={onMove}
-            onPointerUp={onUp}
-            onPointerCancel={onUp}
+            onPointerMove={(e) => {
+              if (pen) {
+                penMove(e);
+                return;
+              }
+              onMove(e);
+            }}
+            onPointerUp={() => {
+              penDrag.current = null;
+              onUp();
+            }}
+            onPointerCancel={() => {
+              penDrag.current = null;
+              onUp();
+            }}
             onDragOver={(e) => {
               if (!e.dataTransfer.types.includes(SHAPE_MIME)) return;
               e.preventDefault();
@@ -650,11 +947,22 @@ export function WindowEditor({
             onDrop={(e) => {
               setDropping(false);
               const shape = e.dataTransfer.getData(SHAPE_MIME);
-              if (!(WINDOW_SHAPES as readonly string[]).includes(shape)) return;
+              if (shape.startsWith("crop:")) {
+                const crop = crops.find((c) => c.id === shape.slice(5));
+                if (!crop) return;
+                e.preventDefault();
+                addAt("custom", toMm(e), crop);
+                return;
+              }
+              if (!(WINDOW_SHAPES as readonly string[]).includes(shape) || shape === "custom") return;
               e.preventDefault();
               addAt(shape as WindowShape, toMm(e));
             }}
             onPointerDown={(e) => {
+              if (pen) {
+                penDown(e);
+                return;
+              }
               if (e.target !== e.currentTarget && (e.target as Element).tagName !== "svg" && (e.target as Element).tagName !== "image") return;
               setSelected(null);
               (e.currentTarget as Element).setPointerCapture(e.pointerId);
@@ -668,9 +976,12 @@ export function WindowEditor({
                 const on = w.id === selected;
                 const problem = problemOf.get(w.id);
                 const local = windowPolygon({ ...w, cx: 0, cy: 0, rotation: 0 });
+                const cuts = windowHoles({ ...w, cx: 0, cy: 0, rotation: 0 });
+                const grid = isGridShape(w.shape);
                 return (
                   <g
                     key={w.id}
+                    pointerEvents={pen ? "none" : undefined}
                     transform={`translate(${w.cx} ${w.cy}) rotate(${w.rotation})`}
                     onContextMenu={(e) => {
                       // Right click anywhere on the window or its grips.
@@ -680,8 +991,12 @@ export function WindowEditor({
                       setMenu({ x: e.clientX - r.left, y: e.clientY - r.top, id: w.id });
                     }}
                   >
+                    {/* A grid: the whole box takes the pointer (its bars too); only the holes are filled. */}
+                    {grid ? (
+                      <path d={polyD(local)} fill="transparent" stroke={problem ? "#dc2626" : "#2563eb"} strokeOpacity={0.55} strokeDasharray={`${4 / v.s} ${3 / v.s}`} strokeWidth={1 / v.s} className="cursor-move" onPointerDown={(e) => begin(e, { kind: "move" }, w)} />
+                    ) : null}
                     <path
-                      d={polyD(local)}
+                      d={cuts.map(polyD).join("")}
                       fill={problem ? "#dc2626" : "#2563eb"}
                       fillOpacity={problem ? 0.22 : 0.16}
                       stroke={problem ? "#dc2626" : "#2563eb"}
@@ -750,6 +1065,38 @@ export function WindowEditor({
                       <text x={gaps.top.x + 5 / v.s} y={(gaps.top.from + gaps.top.to) / 2 + 4 / v.s} textAnchor="start" stroke="#fff" strokeWidth={3.5 / v.s} paintOrder="stroke" strokeLinejoin="round">{toDisplay(String(gaps.top.to - gaps.top.from), unit)}</text>
                     </g>
                   ) : null}
+                </g>
+              ) : null}
+              {/* Pen tool: the path (dashed while it is open, with a rubber band to the pointer), square points, and the handles of the chosen point. */}
+              {pen && pen.anchors.length > 0 ? (
+                <g pointerEvents="none">
+                  <path
+                    d={pathData(pen.anchors, false, pen.hover)}
+                    fill="none"
+                    stroke="#111827"
+                    strokeWidth={1.8 / v.s}
+                    strokeLinejoin="round"
+                    strokeDasharray={`${6 / v.s} ${4 / v.s}`}
+                  />
+                  {pen.anchors.map((a, i) =>
+                    i === pen.sel || i === pen.anchors.length - 1 ? (
+                      <g key={`h${i}`} stroke="#6b7280" strokeWidth={1.2 / v.s}>
+                        {([a.hin, a.hout] as const).map((h, k) =>
+                          h ? (
+                            <g key={k}>
+                              <line x1={a.x} y1={a.y} x2={h.x} y2={h.y} />
+                              <circle cx={h.x} cy={h.y} r={3.5 / v.s} fill="#fff" stroke="#111827" />
+                            </g>
+                          ) : null,
+                        )}
+                      </g>
+                    ) : null,
+                  )}
+                  {pen.anchors.map((a, i) => {
+                    const first = i === 0 && pen.anchors.length >= 3;
+                    const r = (first ? 6 : 4.5) / v.s;
+                    return <rect key={i} x={a.x - r} y={a.y - r} width={2 * r} height={2 * r} fill={i === pen.sel ? "#111827" : first ? "#16a34a" : "#fff"} stroke={first ? "#fff" : "#111827"} strokeWidth={1.5 / v.s} />;
+                  })}
                 </g>
               ) : null}
               {/* Alignment guides while a window is moved */}
@@ -902,6 +1249,16 @@ function Fields({
         {num("Turn (°)", win.rotation, (n) => onChange({ rotation: Math.max(-360, Math.min(360, n)) }), { angle: true })}
       </div>
       <p className="text-[11px] text-muted-foreground">X and Y are the middle of the window, from the top left corner of the sheet.</p>
+      {isGridShape(win.shape) ? (
+        <div className="flex flex-col gap-2 border-t pt-3">
+          <div className="grid grid-cols-3 gap-2">
+            <NumberBox label="Rows" value={String(gridParams(win).rows)} onCommit={(t) => { const n = Math.round(Number(t)); if (Number.isFinite(n) && n >= 1 && n <= GRID_MAX_LINES) onChange({ rows: n }); }} />
+            <NumberBox label="Columns" value={String(gridParams(win).cols)} onCommit={(t) => { const n = Math.round(Number(t)); if (Number.isFinite(n) && n >= 1 && n <= GRID_MAX_LINES) onChange({ cols: n }); }} />
+            {num("Bar", gridParams(win).bar, (n) => onChange({ bar: n }), { min: 0.1 })}
+          </div>
+          <p className="text-[11px] text-muted-foreground">The holes are equal squares or rectangles. The bar is the strip between them and around them.</p>
+        </div>
+      ) : null}
       <div className="flex items-center gap-2 border-t pt-3">
         <button type="button" onClick={onDuplicate} className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[13px] hover:bg-muted"><Copy className="size-3.5" aria-hidden /> Duplicate</button>
         <button type="button" onClick={onRemove} className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[13px] text-destructive hover:bg-destructive/10"><Trash2 className="size-3.5" aria-hidden /> Delete</button>

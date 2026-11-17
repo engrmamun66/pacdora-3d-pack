@@ -107,7 +107,7 @@ function lobedHeart(d: number, r: number, c: number, tip: number): Vec2[] {
 
 export interface ShapeDef {
   readonly label: string;
-  readonly group: "basic" | "more";
+  readonly group: "basic" | "more" | "custom";
   /** Width / height a new window of this shape starts with. */
   readonly ratio: number;
   /** New windows keep their proportions until the person unlocks them (round and regular shapes). */
@@ -126,10 +126,60 @@ const roundedRect = (w: number, h: number, r: number): Vec2[] => [
 
 const def = (d: ShapeDef): ShapeDef => d;
 
+/**
+ * The "grid" window: a mesh of equal rectangular holes, `rows` x `cols`, kept apart by bars `bar` mm wide (the frame
+ * around the holes is a bar too). Its box is the outer rectangle; the holes are what is cut.
+ */
+export const GRID_DEFAULTS = { rows: 4, cols: 4, bar: 2 } as const;
+export const GRID_MAX_LINES = 12;
+export const GRID_MAX_BAR = 50;
+/** Smallest side (mm) of one hole of a grid. */
+export const GRID_MIN_CELL = 1;
+export interface GridParams {
+  readonly rows: number;
+  readonly cols: number;
+  readonly bar: number;
+}
+export const isGridShape = (shape: string): boolean => shape === "grid";
+/** The grid numbers of a window, with the defaults for what is missing. */
+export const gridParams = (win: { rows?: number; cols?: number; bar?: number }): GridParams => ({
+  rows: win.rows ?? GRID_DEFAULTS.rows,
+  cols: win.cols ?? GRID_DEFAULTS.cols,
+  bar: win.bar ?? GRID_DEFAULTS.bar,
+});
+/** What is wrong with a grid of this size and numbers, or null. */
+export function checkGrid(w: number, h: number, g: GridParams): string | null {
+  const whole = (n: number) => Number.isInteger(n) && n >= 1 && n <= GRID_MAX_LINES;
+  if (!whole(g.rows) || !whole(g.cols)) return `Rows and columns must be whole numbers from 1 to ${GRID_MAX_LINES}.`;
+  if (!Number.isFinite(g.bar) || g.bar <= 0 || g.bar > GRID_MAX_BAR) return `The bar must be more than 0 and at most ${GRID_MAX_BAR} mm wide.`;
+  const cw = (w - (g.cols + 1) * g.bar) / g.cols;
+  const ch = (h - (g.rows + 1) * g.bar) / g.rows;
+  if (cw < GRID_MIN_CELL || ch < GRID_MIN_CELL) return `The holes would be smaller than ${GRID_MIN_CELL} mm: use fewer rows or columns, a thinner bar, or a bigger window.`;
+  return null;
+}
+/** The holes of a grid in a box of `w` x `h` centred on the origin (before the rotation); empty when the numbers do not fit. */
+export function gridHoles(w: number, h: number, g: GridParams): Vec2[][] {
+  if (checkGrid(w, h, g)) return [];
+  const cw = (w - (g.cols + 1) * g.bar) / g.cols;
+  const ch = (h - (g.rows + 1) * g.bar) / g.rows;
+  const out: Vec2[][] = [];
+  for (let r = 0; r < g.rows; r++) {
+    for (let c = 0; c < g.cols; c++) {
+      const x0 = -w / 2 + g.bar + c * (cw + g.bar);
+      const y0 = -h / 2 + g.bar + r * (ch + g.bar);
+      out.push([vec(x0, y0), vec(x0 + cw, y0), vec(x0 + cw, y0 + ch), vec(x0, y0 + ch)]);
+    }
+  }
+  return out;
+}
+
 /** Every shape. The order is the order of the palette (basic first, then the rest). */
 export const SHAPE_DEFS = {
   // ---------------------------------------------------------------- Basic Shapes
   rectangle: def({ label: "Rectangle", group: "basic", ratio: 1.39, start: [0.5, 0.36], build: (w, h) => [vec(-w / 2, -h / 2), vec(w / 2, -h / 2), vec(w / 2, h / 2), vec(-w / 2, h / 2)] }),
+  grid: def({ label: "Grid (mesh)", group: "basic", ratio: 1, start: [0.5, 0.5], build: (w, h) => [vec(-w / 2, -h / 2), vec(w / 2, -h / 2), vec(w / 2, h / 2), vec(-w / 2, h / 2)] }),
+  // Not in the palette: made with the pen tool or by tracing a picture (see window-custom.ts); its holes are stored with the window.
+  custom: def({ label: "Custom shape", group: "custom", ratio: 1, build: (w, h) => [vec(-w / 2, -h / 2), vec(w / 2, -h / 2), vec(w / 2, h / 2), vec(-w / 2, h / 2)] }),
   "rounded-rectangle": def({ label: "Rounded rectangle", group: "basic", ratio: 1.39, start: [0.5, 0.36], build: (w, h) => roundedRect(w, h, Math.min(w, h) * 0.2) }),
   circle: def({ label: "Circle", group: "basic", ratio: 1, lock: true, start: [0.34, 0.34], build: (w, h) => arc(0, 0, w / 2, h / 2, 0, TAU, 72).slice(0, -1) }),
   ellipse: def({ label: "Ellipse", group: "basic", ratio: 1.47, start: [0.5, 0.34], build: (w, h) => arc(0, 0, w / 2, h / 2, 0, TAU, 72).slice(0, -1) }),

@@ -30,7 +30,13 @@ export const windowSchema = z.object({
   width: z.number().finite().positive(),
   height: z.number().finite().positive(),
   rotation: z.number().finite().min(-360).max(360),
-});
+  /** Only for the grid shape: rows and columns of holes, and the bar between them (mm). The engine checks that they fit. */
+  rows: z.number().int().min(1).max(12).optional(),
+  cols: z.number().int().min(1).max(12).optional(),
+  bar: z.number().finite().positive().max(50).optional(),
+  /** Only for the custom shape (pen tool or traced picture): outlines as x, y, x, y... with both axes from -0.5 to 0.5. The engine checks them. */
+  loops: z.array(z.array(z.number().finite().min(-0.51).max(0.51)).min(6).max(3000)).max(12).optional(),
+}).refine((w) => (w.loops ?? []).reduce((n, l) => n + l.length, 0) <= 3000, "The outline has too many points.");
 export type WindowDoc = z.infer<typeof windowSchema>;
 
 export const projectDocV1 = z.object({
