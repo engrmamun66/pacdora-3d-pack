@@ -3,7 +3,7 @@
 import { toast } from "sonner";
 
 /**
- * One place for pop-up messages (bottom-right Toaster, mounted in the root layout).
+ * One place for pop-up messages (bottom-centre Toaster, mounted in the root layout).
  * Errors and warnings stay longer than successes. Pass `id` to replace an earlier
  * toast of the same kind instead of stacking duplicates.
  */

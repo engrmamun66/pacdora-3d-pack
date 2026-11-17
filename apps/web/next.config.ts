@@ -31,6 +31,8 @@ const nextConfig: NextConfig = {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
   cacheComponents: true,
+  // Development only: hosts other than localhost that may load /_next assets and HMR (ngrok tunnels).
+  allowedDevOrigins: ["*.ngrok-free.app", "*.ngrok-free.dev", "*.ngrok.app", "*.ngrok.io"],
   // The template import sends an SVG (up to 3 MB of text) to a server action.
   experimental: { serverActions: { bodySizeLimit: "4mb" } },
   partialPrefetching: true,

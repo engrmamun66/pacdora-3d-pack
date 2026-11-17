@@ -5,9 +5,8 @@ import { AppWindow, ListOrdered, Play, RotateCcw, Wand2, X } from "lucide-react"
 import { applyWindows, createImportedGenerator, detectFoldSetup, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldHingeSpec, type FoldSetup, type PanelRole, type WindowSpec, partFits } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
-import { BlinkToggle } from "@/components/viewer3d/blink-toggle";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
-import { applyFoldSequence, compactOrders, depthOf, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootAt, rootsOf, setGround, sortedHinges, stepsOf, updateHinge, updatePanel } from "@/lib/fold-edit";
+import { applyFoldSteps, compactOrders, depthOf, makeBase, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootsOf, setGround, sortedHinges, stepsOf, updateHinge, updatePanel } from "@/lib/fold-edit";
 import { ConstructionEditor, PieceLinksEditor } from "./construction-editor";
 import { HelpTip, InfoTip } from "./help-tip";
 import { PiecesEditor } from "./pieces-editor";
@@ -91,7 +90,8 @@ export function FoldSetupEditor({
 }) {
   const [sel, setSel] = useState<Sel>(null);
   /** "Blink mode": hovering a panel on the flat sheet makes the same panel blink softly on the 3D box. */
-  const [blinkMode, setBlinkMode] = useState(false);
+  // Blink Mode is always on: the panel under the mouse blinks on the 3D box. (No switch is shown for it.)
+  const blinkMode = true;
   const [hoverId, setHoverId] = useState<string | null>(null);
   // Which piece's fold list is shown (one tab per piece). Selecting something in the picture switches to its piece.
   const [tab, setTab] = useState(() => (memoryKey ? (openTabs.get(memoryKey) ?? 0) : 0));
@@ -107,9 +107,13 @@ export function FoldSetupEditor({
       if (piece !== undefined && piece !== tab) setTab(piece);
     }
   }
-  // Quick sort: while on, a click on a fold line (or the panel it swings) adds it to `queue`.
+  // Quick sort: while on, a click on a fold line (or the panel it swings) adds it to `queue` with the step now chosen
+  // (1 at first; "Add step" moves on to the next one, and the lines clicked from then on take that step).
   const [quick, setQuick] = useState(false);
-  const [queue, setQueue] = useState<string[]>([]);
+  const [queue, setQueue] = useState<{ id: string; step: number }[]>([]);
+  const [quickStep, setQuickStep] = useState(1);
+  // "Preview 3D folding" in the Quick sort bar: while on, the 3D box folds in the order being sorted (steps of the clicked lines first).
+  const [previewSort, setPreviewSort] = useState(true);
   const [warnings, setWarnings] = useState<readonly string[]>([]);
   const [progress, setProgress] = useState(startView?.progress ?? 1);
   const view = useRef<CartonViewHandle>(null);
@@ -135,6 +139,7 @@ export function FoldSetupEditor({
     setSel(null);
     setQuick(false);
     setQueue([]);
+    setQuickStep(1);
     onChange(r.setup);
   };
 
@@ -144,11 +149,12 @@ export function FoldSetupEditor({
     try {
       const f = flat as FlatDieline;
       const params = importedStartParams(flat, fold);
-      return { geo: createImportedGenerator("preview", f, fold).generate(params), error: null, thickness: params.thickness };
+      const shown = quick && previewSort && queue.length > 0 ? applyFoldSteps(fold, queue) : fold;
+      return { geo: createImportedGenerator("preview", f, shown).generate(params), error: null, thickness: params.thickness };
     } catch (e) {
       return { geo: null, error: e instanceof Error ? e.message : "The 3D preview could not be built." };
     }
-  }, [fold, problems, stale, flat]);
+  }, [fold, problems, stale, flat, quick, previewSort, queue]);
 
   // Panel settings open in a dialog that slides down from the top; the last panel stays in it while it slides back up.
   const panelDialog = useRef<HTMLDialogElement>(null);
@@ -179,6 +185,12 @@ export function FoldSetupEditor({
   useEffect(() => {
     view.current?.focusPanel(blinkTarget);
   }, [blinkTarget, shownGeo]);
+  // "Show labels on 3D view": the name of each panel is written on it in the 3D box (the names are the ones on the flat sheet).
+  const [showLabels, setShowLabels] = useState(true);
+  const labelNames = useMemo(() => (showLabels && fold ? Object.fromEntries(fold.panels.map((p) => [p.id, p.label || p.id])) : null), [showLabels, fold]);
+  useEffect(() => {
+    view.current?.setPanelLabels(labelNames);
+  }, [labelNames, shownGeo]);
   const fits = useMemo(() => (geo.geo ? partFits(geo.geo.foldTree) : []), [geo.geo]);
 
   const bounds = useMemo(() => {
@@ -231,11 +243,18 @@ export function FoldSetupEditor({
   const curTab = tabKinds[tabNow]!;
   const hingeName = (id: string) => {
     const h = fold.hinges.find((x) => x.id === id);
-    return h ? `${label(h.parentId)} → ${label(h.childId)}` : id;
+    return h ? label(h.childId) : id;
   };
-  const liveQueue = queue.filter((id) => fold.hinges.some((h) => h.id === id));
-  const toggleQueued = (id: string) => setQueue((q) => (q.includes(id) ? q.filter((x) => x !== id) : [...q, id]));
-  const stopQuick = () => { setQuick(false); setQueue([]); };
+  const liveQueue = queue.filter((it) => fold.hinges.some((h) => h.id === it.id));
+  const toggleQueued = (id: string) => setQueue((q) => (q.some((x) => x.id === id) ? q.filter((x) => x.id !== id) : [...q, { id, step: quickStep }]));
+  const stopQuick = () => { setQuick(false); setQueue([]); setQuickStep(1); setPreviewSort(true); };
+  // Give a queued line another step (dragged into it, or moved with the keys); the list stays in step order.
+  const setQueuedStep = (id: string, step: number) => setQueue((q) => q.map((x) => (x.id === id ? { ...x, step: Math.max(1, step) } : x)).sort((a, b) => a.step - b.step));
+  // Drop a step and its lines; later steps move up one. The open step follows, and never goes below 1.
+  const removeQueuedStep = (n: number) => {
+    setQueue((q) => q.filter((x) => x.step !== n).map((x) => (x.step > n ? { ...x, step: x.step - 1 } : x)));
+    setQuickStep((cur) => (cur >= n ? Math.max(1, cur - 1) : cur));
+  };
   const selHinge = sel?.kind === "hinge" ? fold.hinges.find((h) => h.id === sel.id) : undefined;
   const setHinge = (id: string, patch: Partial<Pick<FoldHingeSpec, "angleDeg" | "order">>) => onChange(updateHinge(fold, id, patch));
   const steps = stepsOf(fold);
@@ -250,6 +269,10 @@ export function FoldSetupEditor({
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant={quick ? "default" : "outline"} size="sm" aria-pressed={quick} onClick={() => (quick ? stopQuick() : (setQuick(true), setSel(null)))}><ListOrdered className="size-4" aria-hidden /> Quick sort</Button>
           <Button type="button" variant="outline" size="sm" onClick={detect}><Wand2 className="size-4" aria-hidden /> Detect again</Button>
+          <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm select-none">
+            <input type="checkbox" className="size-4 accent-primary" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} />
+            Show labels on 3D view
+          </label>
           {onWindows ? (
             <Button type="button" variant="outline" size="sm" className="ml-auto" disabled={!geo.geo} title={geo.geo ? "Cut window holes that new projects start with" : "Set up the 3D fold first"} onClick={() => setWindowsOpen(true)}>
               <AppWindow className="size-4" aria-hidden /> Window holes{windows.length > 0 ? <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[10px] leading-4 font-semibold text-primary-foreground">{windows.length}</span> : null}
@@ -325,7 +348,7 @@ export function FoldSetupEditor({
                 <path d={flat.crease.map((p) => pathData(p.pts, p.closed)).join("")} stroke="#00a0e9" strokeWidth={size / 450} strokeDasharray={`${size / 120} ${size / 240}`} />
               </g>
               {fold.hinges.map((h) => {
-                const at = queue.indexOf(h.id);
+                const at = queue.findIndex((x) => x.id === h.id);
                 const on = quick ? at >= 0 : sel?.kind === "hinge" && sel.id === h.id;
                 const [x1, y1, x2, y2] = h.line;
                 const mx = (x1 + x2) / 2;
@@ -335,7 +358,7 @@ export function FoldSetupEditor({
                     <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={size / 40} />
                     <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={h.angleDeg < 0 ? "#ea580c" : "#0f766e"} strokeWidth={size / (on ? 90 : 170)} strokeLinecap="round" />
                     <circle cx={mx} cy={my} r={size / (quick && at >= 0 ? 55 : 70)} fill={on ? "#2563eb" : quick ? "#71717a" : "#18181b"} />
-                    <text x={mx} y={my + size / 190} textAnchor="middle" fontSize={size / 80} fill="#ffffff" pointerEvents="none">{quick ? (at >= 0 ? at + 1 : "") : h.order}</text>
+                    <text x={mx} y={my + size / 190} textAnchor="middle" fontSize={size / 80} fill="#ffffff" pointerEvents="none">{quick ? (at >= 0 ? queue[at]!.step : "") : h.order}</text>
                   </g>
                 );
               })}
@@ -356,7 +379,6 @@ export function FoldSetupEditor({
 
         {/* 3D preview */}
         <div className="flex min-w-0 flex-col gap-2">
-          <BlinkToggle checked={blinkMode} onChange={(on) => { setBlinkMode(on); if (!on) setHoverId(null); }} />
           <div className="relative overflow-hidden rounded-xl border bg-muted/40">
             {geo.geo ? (
               <CartonView ref={view} className="h-[min(420px,50vh)] w-full" geo={shownGeo ?? geo.geo} texture={null} textureRect={null} progress={progress} outsideColor="#ffffff" insideColor="#c8a97e" initialView={startView} />
@@ -372,7 +394,7 @@ export function FoldSetupEditor({
               <button type="button" aria-label="Play the fold step by step" className="grid size-7 place-items-center rounded-md border hover:bg-muted" onClick={play}><Play className="size-3.5" /></button>
               <button type="button" aria-label="Reset camera" className="grid size-7 place-items-center rounded-md border hover:bg-muted" onClick={() => view.current?.resetView()}><RotateCcw className="size-3.5" /></button>
             </div>
-            {geo.geo ? <><GridToggle viewRef={view} /><RotationControls viewRef={view} /></> : null}
+            {geo.geo ? <><GridToggle viewRef={view} keepViewByDefault /><RotationControls viewRef={view} /></> : null}
           </div>
         </div>
       </div>
@@ -427,7 +449,7 @@ export function FoldSetupEditor({
           </p>
           <div className="flex basis-full flex-wrap items-center gap-2">
             <Button type="button" variant={fold.groundId === shownPanel.id ? "default" : "outline"} size="sm" aria-pressed={fold.groundId === shownPanel.id} onClick={() => onChange(setGround(fold, fold.groundId === shownPanel.id ? null : shownPanel.id))}>{fold.groundId === shownPanel.id ? "On the ground (click to undo)" : "Put this on the ground"}</Button>
-            {roots.includes(shownPanel.id) ? <p className="text-sm text-muted-foreground">{parts.length ? `This is the base panel of the ${pieceName(shownPanel.id).toLowerCase()}.` : "This is the base panel."}</p> : <Button type="button" variant="outline" size="sm" onClick={() => onChange(rootAt(fold, shownPanel.id))}>{parts.length ? `Make this the base of its piece (${pieceName(roots[Math.max(0, pieceOf(fold, shownPanel.id))]!).toLowerCase()})` : "Make this the base (stays flat)"}</Button>}
+            {roots.includes(shownPanel.id) ? <><p className="text-sm text-muted-foreground">{parts.length ? `This is the base panel of the ${pieceName(shownPanel.id).toLowerCase()}.` : "This is the base panel."}</p>{shownPanel.id === fold.rootId && fold.groundId !== shownPanel.id ? <Button type="button" variant="outline" size="sm" onClick={() => onChange(setGround(fold, shownPanel.id))}>Stand the box on this base</Button> : null}</> : <Button type="button" variant="outline" size="sm" onClick={() => onChange(makeBase(fold, shownPanel.id))}>{parts.length ? `Make this the base of its piece (${pieceName(roots[Math.max(0, pieceOf(fold, shownPanel.id))]!).toLowerCase()})` : "Make this the base (stays flat)"}</Button>}
           </div>
             </div>
             <div className="flex justify-end border-t px-5 py-3">
@@ -514,12 +536,17 @@ export function FoldSetupEditor({
       {quick ? (
         <QuickSortBar
           bottom={barBottom}
-          items={liveQueue.map((id) => ({ id, label: hingeName(id) }))}
-          onReorder={setQueue}
-          onRemove={(id) => setQueue((q) => q.filter((x) => x !== id))}
-          onClear={() => setQueue([])}
+          items={liveQueue.map((it) => ({ id: it.id, label: hingeName(it.id), step: it.step }))}
+          step={quickStep}
+          preview={previewSort}
+          onPreviewChange={setPreviewSort}
+          onAddStep={() => setQuickStep((n) => n + 1)}
+          onSetStep={setQueuedStep}
+          onRemoveStep={removeQueuedStep}
+          onRemove={(id) => setQueue((q) => q.filter((x) => x.id !== id))}
+          onClear={() => { setQueue([]); setQuickStep(1); }}
           onCancel={stopQuick}
-          onApply={() => { onChange(applyFoldSequence(fold, liveQueue)); stopQuick(); }}
+          onApply={() => { onChange(applyFoldSteps(fold, liveQueue)); stopQuick(); }}
         />
       ) : null}
       {onWindows && geo.geo ? (

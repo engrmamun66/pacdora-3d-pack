@@ -193,6 +193,11 @@ export interface CartonViewHandle {
   /** Blink one panel softly (by its panel id) so it can be found on the box; null stops it. Kept when the box is rebuilt. */
   highlightPanel(id: string | null): void;
   /**
+   * Write a name on each panel the camera can see (panel id -> text); null removes the names. The names follow the
+   * panels while the box turns or folds, and stay when the box is rebuilt.
+   */
+  setPanelLabels(labels: Readonly<Record<string, string>> | null): void;
+  /**
    * Make a panel findable (null = stop). It blinks; if only its thickness side (or nothing) can be seen from the camera, then
    * with the view kept ("locked") an arrow points at where the panel is, otherwise the camera turns smoothly until its face is
    * seen, and returns when the panel is let go.
@@ -250,6 +255,12 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   const blinkMats = useRef<{ front: THREE.MeshBasicMaterial; through: THREE.MeshBasicMaterial } | null>(null);
   /** Called every frame by the animation loop (moves the arrow that points at a hidden panel). */
   const arrowTick = useRef<() => void>(() => {});
+  /** Called every frame: moves the panel names written over the picture. */
+  const labelTick = useRef<() => void>(() => {});
+  const labelsRef = useRef<Readonly<Record<string, string>> | null>(null);
+  const labelBox = useRef<HTMLDivElement | null>(null);
+  const labelEls = useRef(new Map<string, HTMLDivElement>());
+  const labelFrame = useRef(0);
   const shadowCfg = useRef<ShadowSettings>({ on: shadows, ...DEFAULT_SHADOW });
   const gridObj = useRef<THREE.GridHelper | null>(null);
   const gridOn = useRef(false);
@@ -608,6 +619,60 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   };
   arrowTick.current = followArrow;
 
+  /** Names written on the panels: a small tag at the middle of each panel the camera can see (made once, moved every frame). */
+  const syncLabels = () => {
+    const el = host.current;
+    const names = labelsRef.current;
+    if (!el) return;
+    if (!names) {
+      labelBox.current?.remove();
+      labelBox.current = null;
+      labelEls.current.clear();
+      return;
+    }
+    if (!labelBox.current) {
+      if (getComputedStyle(el).position === "static") el.style.position = "relative";
+      const box = document.createElement("div");
+      box.setAttribute("aria-hidden", "true");
+      box.style.cssText = "position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:14";
+      el.appendChild(box);
+      labelBox.current = box;
+    }
+    const box = labelBox.current;
+    for (const [id, tag] of labelEls.current) {
+      if (names[id] === undefined) {
+        tag.remove();
+        labelEls.current.delete(id);
+      }
+    }
+    for (const [id, text] of Object.entries(names)) {
+      let tag = labelEls.current.get(id);
+      if (!tag) {
+        tag = document.createElement("div");
+        tag.style.cssText = "position:absolute;left:0;top:0;display:none;white-space:nowrap;padding:1px 7px;border-radius:9999px;background:rgba(255,255,255,.92);color:#18181b;border:1px solid rgba(24,24,27,.25);font:600 11px/16px system-ui,sans-serif;box-shadow:0 1px 3px rgba(0,0,0,.18)";
+        box.appendChild(tag);
+        labelEls.current.set(id, tag);
+      }
+      if (tag.textContent !== text) tag.textContent = text;
+    }
+  };
+  const followLabels = () => {
+    if (!labelsRef.current || !labelBox.current) return;
+    // Seeing which panels are in view takes ray casts, so it is done on every other frame.
+    labelFrame.current = (labelFrame.current + 1) % 2;
+    if (labelFrame.current !== 0) return;
+    for (const [id, tag] of labelEls.current) {
+      const info = panelInfo(id);
+      if (!info || !info.visible || !info.front) {
+        tag.style.display = "none";
+        continue;
+      }
+      tag.style.display = "block";
+      tag.style.transform = `translate(${Math.round(info.x)}px, ${Math.round(info.y)}px) translate(-50%, -50%)`;
+    }
+  };
+  labelTick.current = followLabels;
+
   const focusPanel = (id: string | null) => {
     blinkId.current = id;
     applyBlink();
@@ -635,6 +700,11 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
 
   useImperativeHandle(ref, () => ({
     focusPanel,
+    setPanelLabels: (labels) => {
+      labelsRef.current = labels;
+      labelFrame.current = 1; // draw on the next frame
+      syncLabels();
+    },
     highlightPanel: (id) => {
       blinkId.current = id;
       applyBlink();
@@ -831,6 +901,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     renderer.setAnimationLoop((now: number) => {
       controls.update();
       arrowTick.current();
+      labelTick.current();
       const mats = blinkMats.current;
       if (mats && blinkMeshes.current.length > 0) {
         // Soft blink: a slow breathing glow, not a flash.

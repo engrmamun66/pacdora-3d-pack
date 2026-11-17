@@ -70,6 +70,15 @@ export function rootAt(setup: FoldSetup, newRootId: string): FoldSetup {
   return { ...setup, hinges, parts: (setup.parts ?? []).map((p, i) => (i === piece - 1 ? { ...p, rootId: newRootId } : p)) };
 }
 
+/**
+ * Make a panel the base of its piece AND, for the main body, the panel that lies on the ground in 3D, so
+ * the box stands on the base with that whole side touching the floor. An extra part keeps the ground as it was.
+ */
+export function makeBase(setup: FoldSetup, newRootId: string): FoldSetup {
+  const next = rootAt(setup, newRootId);
+  return next.rootId === newRootId ? setGround(next, newRootId) : next;
+}
+
 /** Change how an extra part is placed in 3D. */
 export function updatePart(setup: FoldSetup, rootId: string, placement: PartPlacement): FoldSetup {
   return { ...setup, parts: (setup.parts ?? []).map((p) => (p.rootId === rootId ? { ...p, placement } : p)) };
@@ -210,19 +219,31 @@ export function moveHinge(setup: FoldSetup, id: string, toIndex: number): FoldSe
  * a piece's listed lines are its first steps, in the order they were listed.
  */
 export function applyFoldSequence(setup: FoldSetup, ids: readonly string[]): FoldSetup {
+  const seen = new Set<string>();
+  return applyFoldSteps(setup, ids.filter((id) => !seen.has(id) && (seen.add(id), true)).map((id, i) => ({ id, step: i + 1 })));
+}
+
+/**
+ * Quick sort with steps: every listed line gets the step it was given, and lines given the same step fold together.
+ * Within each piece the steps used are numbered 1, 2, 3... in order (so 1, 3, 3 becomes 1, 2, 2). Lines that are not listed
+ * come after them and keep their current order and any steps they share. Unknown and repeated ids are skipped.
+ */
+export function applyFoldSteps(setup: FoldSetup, items: readonly { readonly id: string; readonly step: number }[]): FoldSetup {
   const known = new Set(setup.hinges.map((h) => h.id));
-  const chosen = [...new Set(ids)].filter((id) => known.has(id));
+  const seen = new Set<string>();
+  const chosen = items.filter((it) => known.has(it.id) && Number.isFinite(it.step) && !seen.has(it.id) && (seen.add(it.id), true));
   if (!chosen.length) return setup;
   const map = pieceMap(setup);
   const pieceOfHinge = (id: string) => map.get(setup.hinges.find((h) => h.id === id)!.childId) ?? 0;
   const order = new Map<string, number>();
   for (let piece = 0; piece <= (setup.parts?.length ?? 0); piece++) {
-    const mine = chosen.filter((id) => pieceOfHinge(id) === piece);
+    const mine = chosen.filter((it) => pieceOfHinge(it.id) === piece);
     if (!mine.length) continue;
-    const picked = new Set(mine);
-    mine.forEach((id, i) => order.set(id, i + 1));
+    const used = [...new Set(mine.map((it) => it.step))].sort((a, b) => a - b);
+    for (const it of mine) order.set(it.id, used.indexOf(it.step) + 1);
+    const picked = new Set(mine.map((it) => it.id));
     // The rest keep their relative steps: lines with the same old step still share one new step.
-    let n = mine.length;
+    let n = used.length;
     let last: number | null = null;
     for (const h of sortedHinges(setup, piece).filter((x) => !picked.has(x.id))) {
       if (h.order !== last) n += 1;

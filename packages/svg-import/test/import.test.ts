@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { excludePaths, groupPathIds, importSvg, suggestExclusions, suggestRoles } from "../src";
+import { excludePaths, groupPathIds, importSvg, stripAppLayers, suggestExclusions, suggestRoles } from "../src";
 
 const NS = 'xmlns="http://www.w3.org/2000/svg"';
 /** Wraps content in an svg whose user units are millimetres. */
@@ -589,5 +589,17 @@ describe("clean-up: groups, suggestions, exclusion", () => {
     const plain = importSvg(mm(body.replace(/<g id="[^"]*">/g, "<g>"), 200, 100));
     expect(plain.groups).toBeUndefined();
     expect(plain.paths.map((p) => p.pts)).toEqual(d.paths.map((p) => p.pts));
+  });
+});
+
+describe("an SVG exported by this app", () => {
+  it("leaves out the watermark layer, even when it is huge", () => {
+    const huge = `M0 0${"L1 1".repeat(1_000_000)}`;
+    const svg = `<svg ${NS} width="100mm" height="50mm" viewBox="0 0 100 50"><g id="layer-cut" inkscape:groupmode="layer" inkscape:label="Cut"><path d="M0 0L80 0L80 40L0 40Z" fill="none" stroke="#e6007e"/></g><g id="layer-watermark" inkscape:groupmode="layer" inkscape:label="Watermark"><path d="${huge}" fill="#e0e0e0"/></g></svg>`;
+    expect(svg.length).toBeGreaterThan(3_000_000);
+    const d = importSvg(svg);
+    expect(d.paths).toHaveLength(1);
+    expect(d.widthMm).toBe(80);
+    expect(stripAppLayers(svg)).not.toContain("watermark");
   });
 });

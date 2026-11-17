@@ -3,14 +3,14 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, FileUp, ImagePlus, RotateCcw, Trash2, Wand2 } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, FileUp, ImagePlus, RotateCcw, Trash2, Wand2 } from "lucide-react";
 import { applyWindows, createImportedGenerator, generateDieline, getPreset, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldSetup, type WindowSpec } from "@packaging/dieline-engine";
-import { SvgImportError, excludePaths, importSvg, suggestRoles, toFlatDieline, type ImportedDieline, type Role } from "@packaging/svg-import";
+import { SvgImportError, excludePaths, importSvg, stripAppLayers, suggestRoles, toFlatDieline, type ImportedDieline, type Role } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { saveTemplate } from "@/app/doraadmin/template-actions";
 import { notify } from "@/lib/notify";
 import { isValidSlug, slugify } from "@/lib/slug";
-import { MAX_SVG_CHARS, ROLE_COLOR, ROLE_HINTS, ROLE_LABELS, ROLE_ORDER } from "@/lib/template-import";
+import { MAX_SVG_CHARS, MAX_SVG_FILE_BYTES, ROLE_COLOR, ROLE_HINTS, ROLE_LABELS, ROLE_ORDER } from "@/lib/template-import";
 import { DefaultMaterialField } from "./default-material-field";
 import { HelpTip, InfoTip } from "./help-tip";
 import { ImportedPreview } from "./imported-preview";
@@ -85,7 +85,7 @@ const mmToIn = (mm: number) => (mm / 25.4).toFixed(2);
  * Add or edit a template in steps: categories, SVG file, customise, details.
  * Built-in (parametric) templates only have categories and details to edit.
  */
-export function TemplateWizard({ mode, categories, initial, svgColors }: { mode: "create" | "edit"; categories: WizardCategory[]; initial: WizardInitial; svgColors: SvgColorSettings }) {
+export function TemplateWizard({ mode, categories, initial, svgColors, onCreated }: { mode: "create" | "edit"; categories: WizardCategory[]; initial: WizardInitial; svgColors: SvgColorSettings; /** Called once a new template is saved, so the page can start the next one with an empty form. */ onCreated?: () => void }) {
   const router = useRouter();
   const builtin = initial.source === "builtin";
   const steps = builtin ? ["Categories", "Details"] : ["Categories", "SVG file", "Clean up", "Customize", "3D fold", "Details & publish"];
@@ -209,6 +209,9 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
   const dirty = mode === "create" || snapshot !== baseline;
 
   const [activeSection, setActiveSection] = useState("sec-details");
+  // The section menu on the left can fold into a thin strip (wide screens).
+  const [navShut, setNavShut] = useState(false);
+  const toggleNav = () => setNavShut((v) => !v);
   useEffect(() => {
     if (mode !== "edit") return;
     const ids = ["sec-details", "sec-categories", "sec-lines", "sec-fold", "sec-windows", "sec-view"];
@@ -250,9 +253,11 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
 
   async function onFile(file: File | undefined) {
     if (!file) return;
-    if (file.size > MAX_SVG_CHARS) return notify.error("That file is too large", { description: "SVG files up to 3 MB are accepted." });
     if (!/\.svg$/i.test(file.name) && file.type !== "image/svg+xml") return notify.error("Please choose an .svg file");
-    const t = await file.text();
+    // An SVG exported by this app carries a watermark layer that can be many MB; it is left out before the size check.
+    if (file.size > MAX_SVG_FILE_BYTES) return notify.error("That file is too large", { description: "SVG files up to 3 MB are accepted." });
+    const t = stripAppLayers(await file.text());
+    if (t.length > MAX_SVG_CHARS) return notify.error("That file is too large", { description: "SVG files up to 3 MB are accepted." });
     setText(t);
     setFileName(file.name);
     setOverrides({});
@@ -315,6 +320,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
         const bgOk = await syncBackground(finalSlug);
         if (bgOk) notify.success(r.message);
         if (mode === "create") {
+          onCreated?.();
           // On a failed picture upload go to the edit page of the saved template so it can be retried.
           router.push(bgOk ? "/doraadmin/templates" : `/doraadmin/templates/${finalSlug}/edit`);
         } else if (finalSlug !== initial.slug) {
@@ -702,9 +708,19 @@ export function TemplateWizard({ mode, categories, initial, svgColors }: { mode:
     const card = "scroll-mt-24 rounded-2xl border bg-card p-5 shadow-xs";
     return (
       <div className="flex flex-col gap-4">
-        <div className="grid gap-6 lg:grid-cols-[190px_minmax(0,1fr)]">
+        <div className={`grid gap-6 ${navShut ? "lg:grid-cols-[2.25rem_minmax(0,1fr)]" : "lg:grid-cols-[190px_minmax(0,1fr)]"}`}>
           <nav aria-label="Sections" className="lg:sticky lg:top-20 lg:self-start">
-            <ul className="flex gap-1 overflow-x-auto lg:flex-col">
+            <button
+              type="button"
+              onClick={toggleNav}
+              aria-expanded={!navShut}
+              aria-label={navShut ? "Show the section menu" : "Hide the section menu"}
+              title={navShut ? "Show the section menu" : "Hide the section menu"}
+              className={`mb-1 hidden size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none lg:grid ${navShut ? "" : "ml-auto"}`}
+            >
+              {navShut ? <ChevronRight className="size-4" aria-hidden /> : <ChevronLeft className="size-4" aria-hidden />}
+            </button>
+            <ul className={`flex gap-1 overflow-x-auto lg:flex-col ${navShut ? "lg:hidden" : ""}`}>
               {sections.map((x) => (
                 <li key={x.id} className="shrink-0">
                   <a

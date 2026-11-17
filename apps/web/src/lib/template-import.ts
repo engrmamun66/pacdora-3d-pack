@@ -1,6 +1,8 @@
 import type { ImportedDieline, Role } from "@packaging/svg-import";
 
 export const MAX_SVG_CHARS = 3_000_000;
+/** The biggest file read in the browser; the watermark of an exported file is dropped before MAX_SVG_CHARS applies. */
+export const MAX_SVG_FILE_BYTES = 40_000_000;
 
 export const ROLE_LABELS: Record<Role, string> = { cut: "Cut", crease: "Fold", bleed: "Bleed", guide: "Guide", ignore: "Ignore" };
 export const ROLE_HINTS: Record<Role, string> = {

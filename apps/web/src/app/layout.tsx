@@ -56,7 +56,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         {children}
         {/* All pop-up messages (success, error, info, warning) appear here. See lib/notify.ts. */}
-        <Toaster position="bottom-right" richColors closeButton />
+        <Toaster position="bottom-center" richColors closeButton />
       </body>
     </html>
   );

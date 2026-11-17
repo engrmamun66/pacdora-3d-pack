@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FoldSetup } from "@packaging/dieline-engine";
-import { applyFoldSequence, compactOrders, depthOf, linesKey, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootAt, rootsOf, setGround, setMainName, sortedHinges, stepsOf, updateHinge, updatePanel, updatePartMeta } from "./fold-edit";
+import { applyFoldSequence, applyFoldSteps, compactOrders, depthOf, linesKey, makeBase, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootAt, rootsOf, setGround, setMainName, sortedHinges, stepsOf, updateHinge, updatePanel, updatePartMeta } from "./fold-edit";
 
 const sq = [0, 0, 10, 0, 10, 10, 0, 10];
 const setup: FoldSetup = {
@@ -185,5 +185,41 @@ describe("two pieces, each with its own steps", () => {
     expect(back.rootId).toBe("a");
     expect(back.mainName).toBe("Box");
     expect(back.parts![0]).toMatchObject({ rootId: "x", name: "Lid", placement: { mode: "beside", side: "back", gap: 12, offset: { z: 5 } } });
+  });
+});
+
+describe("makeBase", () => {
+  const setup = { panels: [{ id: "a" }, { id: "b" }, { id: "c" }], rootId: "a", hinges: [{ id: "h1", parentId: "a", childId: "b" }, { id: "h2", parentId: "b", childId: "c" }] } as unknown as Parameters<typeof rootAt>[0];
+  it("makes the main base the ground too", () => {
+    const r = makeBase(setup, "c");
+    expect(r.rootId).toBe("c");
+    expect(r.groundId).toBe("c");
+  });
+  it("leaves the ground alone when the panel is not made a base", () => {
+    expect(makeBase(setup, "zzz")).toBe(setup);
+  });
+});
+
+describe("applyFoldSteps", () => {
+  const four = {
+    panels: [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }, { id: "e" }],
+    rootId: "a",
+    hinges: [
+      { id: "h1", parentId: "a", childId: "b", line: [0, 0, 1, 0], angleDeg: 90, order: 1 },
+      { id: "h2", parentId: "a", childId: "c", line: [0, 0, 1, 0], angleDeg: 90, order: 2 },
+      { id: "h3", parentId: "a", childId: "d", line: [0, 0, 1, 0], angleDeg: 90, order: 3 },
+      { id: "h4", parentId: "a", childId: "e", line: [0, 0, 1, 0], angleDeg: 90, order: 4 },
+    ],
+  } as unknown as Parameters<typeof applyFoldSteps>[0];
+  const orders = (s: ReturnType<typeof applyFoldSteps>) => Object.fromEntries(s.hinges.map((h) => [h.id, h.order]));
+  it("lines given the same step fold together", () => {
+    expect(orders(applyFoldSteps(four, [{ id: "h3", step: 1 }, { id: "h1", step: 1 }, { id: "h4", step: 2 }]))).toEqual({ h1: 1, h3: 1, h4: 2, h2: 3 });
+  });
+  it("numbers the steps used 1, 2, 3 without gaps", () => {
+    expect(orders(applyFoldSteps(four, [{ id: "h2", step: 1 }, { id: "h4", step: 3 }, { id: "h1", step: 3 }]))).toEqual({ h2: 1, h4: 2, h1: 2, h3: 3 });
+  });
+  it("skips unknown and repeated lines, and changes nothing without any", () => {
+    expect(applyFoldSteps(four, [{ id: "zzz", step: 1 }])).toBe(four);
+    expect(orders(applyFoldSteps(four, [{ id: "h2", step: 1 }, { id: "h2", step: 2 }]))).toEqual({ h2: 1, h1: 2, h3: 3, h4: 4 });
   });
 });

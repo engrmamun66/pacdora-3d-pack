@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { ChevronDown, ChevronUp, GripVertical } from "lucide-react";
 import type { FoldHingeSpec } from "@packaging/dieline-engine";
 
 const field = "h-9 rounded-lg border border-input bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 const COLS = "grid grid-cols-[2.25rem_minmax(9rem,1fr)_6.5rem_6rem_minmax(12rem,1.2fr)] items-center";
 const SETTLE_MS = 180;
+/** How long a row takes to glide to its new place when the order changes (arrows, typed step, keys). */
+const GLIDE_MS = 320;
 
 type Drag = {
   id: string;
@@ -86,6 +88,29 @@ export function HingeList({
   const rows = useRef(new Map<string, HTMLElement>());
   const startY = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Where each row was after the last render, and whether the next change of place was already shown by a drag. */
+  const lastTops = useRef(new Map<string, number>());
+  const dragShown = useRef(false);
+
+  // When the order changes (a step arrow, a typed step, the arrow keys), every row that moved glides from where it was
+  // to where it is now, instead of jumping. A drag already animated its own move, so that one is only noted.
+  useLayoutEffect(() => {
+    if (drag) return;
+    const calm = dragShown.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    dragShown.current = false;
+    const next = new Map<string, number>();
+    for (const h of hinges) {
+      const el = rows.current.get(h.id);
+      if (!el) continue;
+      const top = el.offsetTop;
+      next.set(h.id, top);
+      const was = lastTops.current.get(h.id);
+      if (!calm && was !== undefined && was !== top && typeof el.animate === "function") {
+        el.animate([{ transform: `translateY(${was - top}px)`, zIndex: 1 }, { transform: "translateY(0)", zIndex: 1 }], { duration: GLIDE_MS, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
+      }
+    }
+    lastTops.current = next;
+  });
 
   useEffect(
     () => () => {
@@ -132,6 +157,7 @@ export function HingeList({
     setDrag({ ...drag, dy: slot, settling: true });
     timer.current = setTimeout(() => {
       timer.current = null;
+      dragShown.current = true;
       setDrag(null);
       if (over !== from) onMove(id, over);
     }, SETTLE_MS);
@@ -159,7 +185,7 @@ export function HingeList({
         <div className={`${COLS} gap-x-1 border-b bg-muted/40 px-1 py-2 text-xs font-medium text-muted-foreground`}>
           <span className="sr-only">Drag to reorder</span>
           <span aria-hidden />
-          <span className="px-1">Fold (stays → swings)</span>
+          <span className="px-1">Fold</span>
           <span className="px-1">Step</span>
           <span className="px-1">Angle</span>
           <span className="px-1">Direction</span>
@@ -195,7 +221,7 @@ export function HingeList({
                   <GripVertical className="size-4" aria-hidden />
                 </button>
                 <button type="button" className="px-1 text-left text-sm hover:underline" onClick={() => onSelect(h.id)}>
-                  {label(h.parentId)} <span className="text-muted-foreground">→</span> {label(h.childId)}
+                  {label(h.childId)}
                 </button>
                 <span className="flex items-center gap-1 px-1">
                   <button type="button" aria-label={`Fold ${label(h.childId)} earlier`} className="grid size-6 place-items-center rounded border hover:bg-muted disabled:opacity-40" disabled={h.order <= 1} onClick={() => onSetHinge(h.id, { order: h.order - 1 })}><ChevronUp className="size-3.5" /></button>

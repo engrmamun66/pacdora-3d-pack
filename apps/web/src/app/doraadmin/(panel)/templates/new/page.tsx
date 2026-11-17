@@ -1,4 +1,4 @@
-import { TemplateWizard } from "@/components/templates-admin/template-wizard";
+import { NewTemplate } from "@/components/templates-admin/new-template";
 import { db } from "@/server/db";
 import { requireSuperAdmin } from "@/server/admin";
 import { readSvgColors } from "@/server/site-settings";
@@ -11,9 +11,8 @@ export default async function NewTemplatePage() {
   const { settings: svgColors } = await readSvgColors();
   return (
     <div className="flex flex-col gap-6">
-      <TemplateWizard
+      <NewTemplate
         svgColors={svgColors}
-        mode="create"
         categories={categories.map((c) => ({ id: c.id, kind: c.kind as "use" | "model", name: c.name }))}
         initial={{ slug: "", name: "", description: "", status: "draft", sortOrder: 0, backgroundUrl: null, categoryIds: [], source: null, dieline: null, excluded: [], roles: {}, options: { unit: "px", scale: 1, pxPerInch: 96 }, fold: null, referenceStyles: [], material: null, view: null, windows: [] }}
       />

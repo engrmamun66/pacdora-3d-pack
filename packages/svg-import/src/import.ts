@@ -113,8 +113,19 @@ function ignoredWarning(name: string, count: number): string {
 
 const round = (v: number, p: number) => Math.round(v * p) / p;
 
-export function importSvg(text: string, opts: ImportOptions = {}): ImportedDieline {
-  if (typeof text !== "string") throw new SvgImportError("This file is not an SVG.");
+/**
+ * Takes the watermark layer this app adds on export out of an SVG it made before. It is not part
+ * of the dieline, and its text is outlined letter by letter, which can make a file many megabytes.
+ * A layer is a plain <g> group without inner groups.
+ */
+export function stripAppLayers(text: string): string {
+  if (typeof text !== "string" || !text.includes("layer-watermark")) return text;
+  return text.replace(/<g\s[^>]*\bid="layer-watermark"[^>]*>[\s\S]*?<\/g>/g, "");
+}
+
+export function importSvg(rawText: string, opts: ImportOptions = {}): ImportedDieline {
+  if (typeof rawText !== "string") throw new SvgImportError("This file is not an SVG.");
+  const text = stripAppLayers(rawText);
   if (text.length > MAX_TEXT_CHARS) throw new SvgImportError(`This SVG file is too large (more than ${MAX_TEXT_CHARS.toLocaleString("en-US")} characters).`);
   const pxPerInch = opts.pxPerInch ?? 96;
   const userScale = opts.scale ?? 1;

@@ -9,8 +9,9 @@ import { ShadowTool } from "./shadow-menu";
 /**
  * Icon button in the top left corner of a 3D view: shows or hides a floor grid behind the carton. Under it: keep the view. The camera views tool sits in the bottom left corner.
  * The parent must be `relative`. On from the start; pass `defaultOn={false}` to start with the grid hidden.
+ * Pass `keepViewByDefault` to start with the view kept (the lock button selected).
  */
-export function GridToggle({ viewRef, defaultOn = true }: { viewRef: RefObject<CartonViewHandle | null>; defaultOn?: boolean }) {
+export function GridToggle({ viewRef, defaultOn = true, keepViewByDefault = false }: { viewRef: RefObject<CartonViewHandle | null>; defaultOn?: boolean; keepViewByDefault?: boolean }) {
   const [on, setOn] = useState(defaultOn);
 
   // A view that was created earlier may already have its grid on; with `defaultOn` a view without one gets it now.
@@ -40,7 +41,7 @@ export function GridToggle({ viewRef, defaultOn = true }: { viewRef: RefObject<C
     >
       <Grid3x3 className="size-4" aria-hidden />
     </button>
-    <KeepViewToggle viewRef={viewRef} />
+    <KeepViewToggle viewRef={viewRef} defaultOn={keepViewByDefault} />
     <ShadowTool viewRef={viewRef} />
     <CameraViewTool viewRef={viewRef} />
     </>
@@ -51,7 +52,7 @@ export function GridToggle({ viewRef, defaultOn = true }: { viewRef: RefObject<C
  * Icon button under the grid button. When on, the camera (tilt x, turn y, roll z, zoom, position) stays where
  * it is while the 3D object is rebuilt, so an edit changes only the box, not your view.
  */
-function KeepViewToggle({ viewRef }: { viewRef: RefObject<CartonViewHandle | null> }) {
+function KeepViewToggle({ viewRef, defaultOn }: { viewRef: RefObject<CartonViewHandle | null>; defaultOn: boolean }) {
   const [on, setOn] = useState(false);
   const [values, setValues] = useState<{ x: number; y: number; z: number } | null>(null);
 
@@ -61,6 +62,7 @@ function KeepViewToggle({ viewRef }: { viewRef: RefObject<CartonViewHandle | nul
     const id = requestAnimationFrame(() => {
       const view = viewRef.current;
       if (!view) return;
+      if (defaultOn && !view.isKeepView()) view.setKeepView(true);
       setOn(view.isKeepView());
       setValues(view.getRotation());
       off = view.onRotation((r) => setValues(r));
@@ -69,7 +71,7 @@ function KeepViewToggle({ viewRef }: { viewRef: RefObject<CartonViewHandle | nul
       cancelAnimationFrame(id);
       off();
     };
-  }, [viewRef]);
+  }, [viewRef, defaultOn]);
 
   const numbers = values ? `x ${Math.round(values.x)}°, y ${Math.round(values.y)}°, z ${Math.round(values.z)}°` : "";
   return (
