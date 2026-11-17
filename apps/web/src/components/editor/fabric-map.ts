@@ -21,7 +21,12 @@ export interface ObjectMeta {
 const metas = new WeakMap<FabricObject, ObjectMeta>();
 export const metaOf = (o: FabricObject): ObjectMeta | undefined => metas.get(o);
 
-export const assetUrl = (assetId: string) => `/api/assets/${encodeURIComponent(assetId)}`;
+let assetUrlBase = "/api/assets";
+/** Where pictures are fetched from. The editor reads the owner's own pictures; a shared page points this at its public route (and resets it when it goes away). */
+export const setAssetUrlBase = (base: string) => {
+  assetUrlBase = base;
+};
+export const assetUrl = (assetId: string) => `${assetUrlBase}/${encodeURIComponent(assetId)}`;
 
 const LOCK_KEYS = ["lockMovementX", "lockMovementY", "lockRotation", "lockScalingX", "lockScalingY"] as const;
 

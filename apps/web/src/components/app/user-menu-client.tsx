@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -34,9 +35,10 @@ export function UserMenuClient({ name, email, image }: { name: string; email: st
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => router.push("/my-dashboard")}>My dashboard</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => router.push("/projects")}>My projects</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => router.push("/my-dashboard?tab=profile")}>Profile settings</DropdownMenuItem>
+        {/* Real links, so Ctrl/Cmd+click or the middle button opens them in a new tab. */}
+        <DropdownMenuItem nativeButton={false} render={<Link href="/my-dashboard" />}>My dashboard</DropdownMenuItem>
+        <DropdownMenuItem nativeButton={false} render={<Link href="/projects" />}>My projects</DropdownMenuItem>
+        <DropdownMenuItem nativeButton={false} render={<Link href="/my-dashboard?tab=profile" />}>Profile settings</DropdownMenuItem>
         <DropdownMenuItem
           onClick={async () => {
             await authClient.signOut();

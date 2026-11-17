@@ -17,8 +17,10 @@ import {
   ArrowUpToLine,
   ChevronDown,
   ChevronUp,
+  Check,
   ImagePlus,
   Maximize,
+  Move,
   Minus,
   Plus,
   Redo2,
@@ -40,6 +42,8 @@ import { EditorController, type OverlayOptions, type Viewport } from "./editor-c
 import { AutoSaver, type SaveState } from "@/lib/autosave";
 import { ExportDialog } from "./export-dialog";
 import { LayerList } from "./layer-list";
+import { UserMenuClient } from "@/components/app/user-menu-client";
+import { EditorSkeletonOverlay } from "./editor-skeleton";
 import { ArtworkPicker, canDrop, readDragged, type Dragged, type PickerLibraryItem } from "./artwork-picker";
 import { PropertiesPanel } from "./properties-panel";
 import { RULER_SIZE, Ruler } from "./rulers";
@@ -83,6 +87,7 @@ const OVERLAY_TOGGLES = [
   { key: "showGrid", label: "Grid" },
   { key: "showBleed", label: "Bleed" },
   { key: "showSafe", label: "Safe area" },
+  { key: "showDimensions", label: "Dimensions" },
 ] as const;
 
 /** Bottom bar over the dieline: zoom (minus, plus, percentage, fit) and what to show on the sheet (grid, bleed, safe area). */
@@ -164,6 +169,7 @@ export function ArtworkEditor({
   favoriteIds = [],
   threeD: initialThreeD,
   watermark = null,
+  viewer = null,
 }: {
   projectId: string;
   name: string;
@@ -181,6 +187,8 @@ export function ArtworkEditor({
   library?: PickerLibraryItem[];
   /** Library pictures this customer starred, newest first (the "Favorites" tab). */
   favoriteIds?: string[];
+  /** The signed-in user (their profile icon is shown at the right of the top bar). */
+  viewer?: { name: string; email: string; image: string | null } | null;
   threeD: ThreeDSettings;
   /** Put into the PNG and 3D downloads (the server adds it to the other files); null = none. */
   watermark?: WatermarkSpec | null;
@@ -214,11 +222,13 @@ export function ArtworkEditor({
   /** File names of the private copies made from library backgrounds (the layer list shows them). */
   const [libNames, setLibNames] = useState<Record<string, string>>({});
   const [bgEditing, setBgEditing] = useState(false);
+  /** The editor is drawn: until then a skeleton of the page covers it. */
+  const [loaded, setLoaded] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [selectedData, setSelectedData] = useState<ArtworkObject | null>(null);
   const [history, setHistory] = useState({ canUndo: false, canRedo: false });
   const [viewport, setViewport] = useState<Viewport | null>(null);
-  const [overlay, setOverlay] = useState<OverlayOptions>({ showGrid: true, showBleed: true, showSafe: true });
+  const [overlay, setOverlay] = useState<OverlayOptions>({ showGrid: true, showBleed: true, showSafe: true, showDimensions: false });
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [assets, setAssets] = useState<Asset[]>(initialAssets);
   const [uploading, setUploading] = useState(false);
@@ -273,6 +283,18 @@ export function ArtworkEditor({
   const maxThreeW = () => Math.max(MIN_3D, (gridEl.current?.clientWidth ?? 1200) - LEFT_W - RIGHT_W - MIN_CANVAS);
   const clampThreeW = (w: number) => Math.round(Math.min(maxThreeW(), Math.max(MIN_3D, w)));
   const [menu, setMenu] = useState<{ x: number; y: number; atTop: boolean; atBottom: boolean } | null>(null);
+  /** What a choice in the background picture's right-click menu does. */
+  const bgAction = (what: "edit" | "done" | "up" | "down" | "remove", index: number) => {
+    const k = ctl.current;
+    if (!k) return;
+    if (what === "edit") k.setBackgroundEdit(true);
+    else if (what === "done") k.setBackgroundEdit(false);
+    else if (what === "up") k.moveBackground(index, 1);
+    else if (what === "down") k.moveBackground(index, -1);
+    else void k.removeBackground(index);
+  };
+  /** Right-click menu of a background picture: where, and which picture of the stack. */
+  const [bgMenu, setBgMenu] = useState<{ x: number; y: number; index: number } | null>(null);
   const [show3d, setShow3d] = useState(true);
   const [showExport, setShowExport] = useState(false);
   const [threeD, setThreeD] = useState<ThreeDSettings>(initialThreeD);
@@ -326,14 +348,20 @@ export function ArtworkEditor({
       },
       onSelection: (ids) => {
         setMenu(null);
+        setBgMenu(null);
         refreshSelection(ids);
       },
       onViewport: (v) => {
         setMenu(null);
+        setBgMenu(null);
         setViewport(v);
       },
       // Keep the menu (about 150 x 90 px) inside the dieline area.
       onContextMenu: (at) => setMenu({ ...c.stackState(), x: Math.max(0, Math.min(at.x, (hostEl.current?.clientWidth ?? 0) - 190)), y: Math.max(0, Math.min(at.y, (hostEl.current?.clientHeight ?? 0) - 270)) }),
+      onBackgroundContextMenu: (at) => {
+        setMenu(null);
+        setBgMenu({ index: at.index, x: Math.max(0, Math.min(at.x, (hostEl.current?.clientWidth ?? 0) - 230)), y: Math.max(0, Math.min(at.y, (hostEl.current?.clientHeight ?? 0) - 170)) });
+      },
       onHistory: setHistory,
       onError: (text) => notify.error(text),
       onBackgroundEdit: setBgEditing,
@@ -343,10 +371,13 @@ export function ArtworkEditor({
     if (process.env.NODE_ENV !== "production") Object.assign(window, { __editor: c });
     const host = hostEl.current;
     c.resize(host.clientWidth, host.clientHeight);
-    void c.init(initialArtwork);
+    let alive = true;
+    // The page keeps its skeleton until the sheet, its pictures and the background are drawn.
+    void c.init(initialArtwork).finally(() => alive && setLoaded(true));
     const ro = new ResizeObserver(([e]) => e && c.resize(Math.floor(e.contentRect.width), Math.floor(e.contentRect.height)));
     ro.observe(host);
     return () => {
+      alive = false;
       ro.disconnect();
       c.dispose();
       ctl.current = null;
@@ -356,20 +387,27 @@ export function ArtworkEditor({
 
   useEffect(() => ctl.current?.setOverlay(overlay), [overlay]);
 
-  // The right-click menu closes on any press outside it, and on Escape.
+  // The right-click menus close on any press outside them, and on Escape.
   useEffect(() => {
-    if (!menu) return;
+    if (!menu && !bgMenu) return;
     const away = (e: PointerEvent) => {
-      if (!(e.target instanceof Element) || !e.target.closest("[role=menu]")) setMenu(null);
+      if (!(e.target instanceof Element) || !e.target.closest("[role=menu]")) {
+        setMenu(null);
+        setBgMenu(null);
+      }
     };
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setMenu(null); };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setMenu(null);
+      setBgMenu(null);
+    };
     document.addEventListener("pointerdown", away, true);
     document.addEventListener("keydown", esc);
     return () => {
       document.removeEventListener("pointerdown", away, true);
       document.removeEventListener("keydown", esc);
     };
-  }, [menu]);
+  }, [menu, bgMenu]);
 
   // ------------------------------------------------------------ keyboard
   useEffect(() => {
@@ -561,10 +599,12 @@ export function ArtworkEditor({
   const chosen = objects.filter((o) => selected.includes(o.id));
   const canGroup = chosen.length > 1 && new Set(chosen.map((o) => o.groupId ?? `single:${o.id}`)).size > 1;
   const canUngroup = chosen.some((o) => o.groupId);
-  const saveLabel = { saved: "All changes saved", dirty: "Unsaved changes", saving: "Saving…", error: "Not saved" }[saveState];
+  // Nothing is said when all is saved; only unsaved, saving and failed states show a note.
+  const saveLabel = { saved: "", dirty: "Unsaved changes", saving: "Saving…", error: "Not saved" }[saveState];
 
   return (
     <div className="grid h-screen grid-rows-[48px_1fr] overflow-hidden bg-background">
+      <EditorSkeletonOverlay show={!loaded} />
       {/* Top bar */}
       <header className="flex items-center gap-1 border-b px-2">
         <Link href={`/projects/${projectId}`} title={`Back to the dieline page of ${name}`} className="mr-2 rounded-md px-2 py-1 text-sm hover:bg-muted">
@@ -620,8 +660,10 @@ export function ArtworkEditor({
           <button type="button" onClick={() => setShowExport(true)} className="flex h-8 items-center gap-1 rounded-md border px-3 text-xs font-medium hover:bg-muted">
             <Download className="size-3.5" /> Export
           </button>
-          <span className={`text-xs ${saveState === "error" ? "text-destructive" : "text-muted-foreground"}`} aria-live="polite">{saveLabel}</span>
+          {/* Empty when all is saved: then it is out of the row (sr-only), so Export, Save and the profile icon keep the same gaps. */}
+          <span className={saveLabel ? `text-xs ${saveState === "error" ? "text-destructive" : "text-muted-foreground"}` : "sr-only"} aria-live="polite">{saveLabel}</span>
           <button type="button" onClick={saveNow} className="h-8 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/80">Save</button>
+          {viewer ? <UserMenuClient name={viewer.name} email={viewer.email} image={viewer.image} /> : null}
         </div>
       </header>
 
@@ -762,6 +804,32 @@ export function ArtworkEditor({
                 </button>
               </div>
             ) : null}
+            {bgMenu && backgrounds[bgMenu.index] ? (
+              <div
+                role="menu"
+                aria-label="Background picture options"
+                className="absolute z-20 min-w-48 whitespace-nowrap rounded-lg border bg-background p-1 text-sm shadow-lg"
+                style={{ left: bgMenu.x, top: bgMenu.y }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onKeyDown={(e) => { if (e.key === "Escape") setBgMenu(null); }}
+              >
+                {(
+                  [
+                    // While the picture is being moved and resized, "Done" comes first (it ends that); otherwise the way in.
+                    bgEditing ? (["Done", Check, false, "done"] as const) : (["Move and resize", Move, false, "edit"] as const),
+                    ["Bring forward", ChevronUp, bgMenu.index >= backgrounds.length - 1, "up"],
+                    ["Send backward", ChevronDown, bgMenu.index <= 0, "down"],
+                  ] as const
+                ).map(([label, Icon, off, what], i) => (
+                  <button key={label} type="button" role="menuitem" autoFocus={i === 0} disabled={off} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-40 disabled:hover:bg-transparent" onClick={() => { setBgMenu(null); bgAction(what, bgMenu.index); }}>
+                    <Icon className="size-4" aria-hidden /> {label}
+                  </button>
+                ))}
+                <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-destructive hover:bg-destructive/10 focus-visible:bg-destructive/10 focus-visible:outline-none" onClick={() => { setBgMenu(null); bgAction("remove", bgMenu.index); }}>
+                  <Trash2 className="size-4" aria-hidden /> Remove background image
+                </button>
+              </div>
+            ) : null}
             <CanvasBar viewport={viewport} overlay={overlay} onOverlay={setOverlay} onBy={(f) => c?.zoomBy(f)} onFit={() => c?.zoomFit()} />
           </div>
         </div>
@@ -857,6 +925,7 @@ export function ArtworkEditor({
       </div>
       {showExport ? (
         <ExportDialog
+          overlay={overlay}
           projectId={projectId}
           name={name}
           geo={geo}

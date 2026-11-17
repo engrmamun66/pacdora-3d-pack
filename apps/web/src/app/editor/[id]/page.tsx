@@ -5,6 +5,7 @@ import { db } from "@/server/db";
 import { getProject } from "@/server/projects";
 import { requireUser } from "@/server/session";
 import { EditorLoader } from "@/components/editor/editor-loader";
+import { EditorSkeleton } from "@/components/editor/editor-skeleton";
 import { IMPORTED_GENERATOR_ID, type WindowSpec } from "@packaging/dieline-engine";
 import { loadImportedSource } from "@/server/imported-templates";
 import { readViewSettings } from "@/lib/view-settings";
@@ -39,6 +40,7 @@ async function EditorView({ params }: { params: PageProps<"/editor/[id]">["param
   return (
     <EditorLoader
       projectId={project.id}
+      viewer={{ name: user.name, email: user.email, image: user.image ?? null }}
       name={project.name}
       generatorId={project.doc.template.generatorId}
       {...(imported ? { imported: { templateId: imported.templateId, flat: imported.flat, fold: imported.fold } } : {})}
@@ -57,7 +59,7 @@ async function EditorView({ params }: { params: PageProps<"/editor/[id]">["param
 
 export default function EditorPage({ params }: PageProps<"/editor/[id]">) {
   return (
-    <Suspense fallback={<div className="h-screen animate-pulse bg-muted" />}>
+    <Suspense fallback={<EditorSkeleton />}>
       <EditorView params={params} />
     </Suspense>
   );

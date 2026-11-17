@@ -54,8 +54,11 @@ export function ExportDialog({
   flushSave,
   getGlb,
   watermark = null,
+  overlay,
   onClose,
 }: {
+  /** What the view options of the dieline show now: the guides and dimensions start on or off the same in the export. */
+  overlay: { showBleed: boolean; showSafe: boolean; showDimensions: boolean };
   projectId: string;
   name: string;
   geo: DielineGeometry;
@@ -69,7 +72,7 @@ export function ExportDialog({
 }) {
   const [format, setFormat] = useState<Format>("pdf");
   const [profile, setProfile] = useState("cc");
-  const [opts, setOpts] = useState({ artwork: true, dieline: true, bleed: false, safe: false, dimensions: false });
+  const [opts, setOpts] = useState({ artwork: true, dieline: true, bleed: overlay.showBleed, safe: overlay.showSafe, dimensions: overlay.showDimensions });
   const [cutSpot, setCutSpot] = useState("CutContour");
   const [creaseSpot, setCreaseSpot] = useState("Crease");
   const [more, setMore] = useState(false);
@@ -213,7 +216,7 @@ export function ExportDialog({
           </div>
         ) : null}
 
-        {more && format !== "json" && format !== "glb" ? (
+        {(more || opts.bleed || opts.safe || opts.dimensions) && format !== "json" && format !== "glb" ? (
           <fieldset className="grid grid-cols-2 gap-2">
             <legend className="mb-1 text-sm">Include</legend>
             {check("artwork", "Artwork", format === "dxf")}

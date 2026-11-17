@@ -23,6 +23,8 @@ export interface EditorCallbacks {
   onError(message: string): void;
   /** A right click (no drag) on artwork: where to show its menu (px from the canvas top-left); the artwork is selected. */
   onContextMenu?(at: { x: number; y: number }): void;
+  /** A right click (no drag) on a background picture, with no artwork under it: where to show its menu, and which picture (it is chosen). */
+  onBackgroundContextMenu?(at: { x: number; y: number; index: number }): void;
   /** The chosen background picture changed (index into the stack, -1 = none). */
   onBackgroundSelect?(index: number): void;
   /** The "adjust the background on the dieline" mode was switched on or off (also by the editor itself, e.g. when the background is removed). */
@@ -33,6 +35,8 @@ export interface OverlayOptions {
   showGrid: boolean;
   showBleed: boolean;
   showSafe: boolean;
+  /** Width and height of the sheet, written along dimension lines. */
+  showDimensions: boolean;
 }
 
 export type NewObjectKind = "text" | "rect" | "ellipse" | "line";
@@ -71,7 +75,7 @@ export class EditorController {
   readonly canvas: Canvas;
   private idx: AnchorIndex;
   private paths!: { cut: Path2D; crease: Path2D; bleed: Path2D; safe: Path2D; sheet: Path2D; glue: Path2D };
-  private overlay: OverlayOptions = { showGrid: true, showBleed: true, showSafe: true };
+  private overlay: OverlayOptions = { showGrid: true, showBleed: true, showSafe: true, showDimensions: false };
   private history: string[] = [];
   private hpos = -1;
   private busy = false;
@@ -208,6 +212,15 @@ export class EditorController {
         this.canvas.requestRenderAll();
         const box = host.getBoundingClientRect();
         this.cb.onContextMenu?.({ x: e.clientX - box.left, y: e.clientY - box.top });
+      } else if (e.type === "pointerup" && !this.panMode && !onSelection && !(r.target && metaOf(r.target))) {
+        // No artwork under the pointer (something that is not artwork, like a guide, may be): maybe a background picture.
+        const index = this.bgAt(this.pointerScene(e));
+        if (index >= 0) {
+          this.canvas.discardActiveObject();
+          this.selectBackground(index);
+          const box = host.getBoundingClientRect();
+          this.cb.onBackgroundContextMenu?.({ x: e.clientX - box.left, y: e.clientY - box.top, index });
+        }
       }
     };
     host.addEventListener("pointerdown", down);
@@ -336,8 +349,51 @@ export class EditorController {
     ctx.lineWidth = 1.25 / z;
     ctx.strokeStyle = STYLE.cut.stroke;
     ctx.stroke(this.paths.cut);
+    if (this.overlay.showDimensions) this.drawDimensions(ctx, z);
     this.drawGuides(ctx, z);
     this.drawBackgroundFrame(ctx, z);
+    ctx.restore();
+  }
+
+  /** Dimension lines with end ticks under and left of the sheet (cut bounds), each with its length in mm. Sizes are screen pixels. */
+  private drawDimensions(ctx: CanvasRenderingContext2D, z: number) {
+    const { min, max } = this.geo.cutBounds;
+    const gap = 22 / z;
+    const tick = 5 / z;
+    const label = (n: number) => `${Math.round(n * 100) / 100} mm`;
+    ctx.save();
+    ctx.setLineDash([]);
+    ctx.lineWidth = 1 / z;
+    ctx.strokeStyle = "#475569";
+    ctx.fillStyle = "#334155";
+    ctx.font = `${11 / z}px system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    // Width: below the sheet.
+    const y = max.y + gap;
+    ctx.beginPath();
+    ctx.moveTo(min.x, y);
+    ctx.lineTo(max.x, y);
+    ctx.moveTo(min.x, y - tick);
+    ctx.lineTo(min.x, y + tick);
+    ctx.moveTo(max.x, y - tick);
+    ctx.lineTo(max.x, y + tick);
+    ctx.stroke();
+    ctx.textBaseline = "top";
+    ctx.fillText(label(max.x - min.x), (min.x + max.x) / 2, y + 4 / z);
+    // Height: left of the sheet, its text turned to read from below.
+    const x = min.x - gap;
+    ctx.beginPath();
+    ctx.moveTo(x, min.y);
+    ctx.lineTo(x, max.y);
+    ctx.moveTo(x - tick, min.y);
+    ctx.lineTo(x + tick, min.y);
+    ctx.moveTo(x - tick, max.y);
+    ctx.lineTo(x + tick, max.y);
+    ctx.stroke();
+    ctx.translate(x - 4 / z, (min.y + max.y) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textBaseline = "bottom";
+    ctx.fillText(label(max.y - min.y), 0, 0);
     ctx.restore();
   }
 
