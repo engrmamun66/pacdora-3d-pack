@@ -2,7 +2,7 @@
 
 import { InfoTip } from "./help-tip";
 import { useRef, useState } from "react";
-import { GripVertical, Plus, X } from "lucide-react";
+import { GripVertical, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const MIN_H = 150;
@@ -116,7 +116,7 @@ export function QuickSortBar({
           <Button type="button" variant="outline" size="sm" onClick={onAddStep} title={`Open step ${step + 1}: the lines you click next join it`}>
             <Plus className="size-4" aria-hidden /> Add step
           </Button>
-          <Button type="button" variant="ghost" size="sm" disabled={idle} onClick={onClear}>Clear</Button>
+          <Button type="button" variant="outline" size="sm" disabled={idle} onClick={onClear} title="Remove every line and step"><Trash2 className="size-4" aria-hidden /> Clear</Button>
           <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
           <Button type="button" size="sm" disabled={!items.length} onClick={onApply}>Apply</Button>
         </div>
