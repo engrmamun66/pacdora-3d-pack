@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, LayoutDashboard, ImagePlus, LayoutTemplate, Settings, Shapes, Tags, UserRound, Users, type LucideIcon } from "lucide-react";
+import { ClipboardList, FileText, LayoutDashboard, ImagePlus, LayoutTemplate, Settings, Shapes, Tags, UserRound, Users, type LucideIcon } from "lucide-react";
 import { useAdminDrawer } from "./admin-shell";
 
 interface NavItem {
@@ -21,6 +21,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/doraadmin/templates", label: "Templates", icon: Shapes },
       { href: "/doraadmin/template-categories", label: "Categories", icon: Tags },
       { href: "/doraadmin/artworks", label: "Artworks", icon: ImagePlus },
+      { href: "/doraadmin/pages", label: "Pages", icon: FileText },
     ],
   },
   {

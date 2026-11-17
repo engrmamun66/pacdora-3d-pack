@@ -10,9 +10,12 @@ const LABELS: Record<string, string> = {
   "template-categories": "Categories",
   artworks: "Artworks",
   settings: "Settings",
+  pages: "Pages",
   profile: "Profile",
 };
-const LAST: Record<string, string> = { new: "Add template", edit: "Edit", templates: "Client Templates", orders: "Client Orders", customers: "Client Customers" };
+const LAST: Record<string, string> = { new: "Add template", edit: "Edit", templates: "Client Templates", orders: "Client Orders", customers: "Client Customers", "header-footer": "Header and footer", seo: "Search engines" };
+/** Last parts that mean something else under Pages. */
+const PAGES_LAST: Record<string, string> = { templates: "Templates page", "header-footer": "Header and footer", seo: "Search engines" };
 
 /** Where you are, in the top bar: Admin / Section / (Add template | Edit). */
 export function AdminCrumbs() {
@@ -22,7 +25,7 @@ export function AdminCrumbs() {
   const trail = [
     { label: "Admin", href: "/doraadmin" },
     ...(section && LABELS[section] ? [{ label: LABELS[section], href: `/doraadmin/${section}` }] : []),
-    ...(parts.length > 1 && last && LAST[last] ? [{ label: LAST[last], href: null }] : section === "users" && parts.length === 2 ? [{ label: "Client details", href: null }] : []),
+    ...(section === "pages" && parts.length > 1 && last && PAGES_LAST[last] ? [{ label: PAGES_LAST[last], href: null }] : parts.length > 1 && last && LAST[last] ? [{ label: LAST[last], href: null }] : section === "users" && parts.length === 2 ? [{ label: "Client details", href: null }] : []),
   ];
   return (
     <nav aria-label="Breadcrumb">

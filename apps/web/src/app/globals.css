@@ -516,3 +516,133 @@ dialog.drop-dialog[open]::backdrop {
   .pack-box { animation: none; }
   .flap > .flap-corner, .cta, .marks-hover::before, .marks-hover::after { transition: none; }
 }
+
+/*
+ * ---------- Public site (home, templates, sign-in): layout pieces and motion ----------
+ * All of it sits inside .studio and is switched off for people who ask for less motion.
+ */
+
+/* In a dark hero (an admin chose a dark colour) the main button turns light. */
+.dark .cta { background: var(--foreground); color: var(--background); }
+
+/* Reveal on scroll (components/marketing/reveal.tsx): a panel folds up from the sheet, or simply rises. */
+[data-reveal] {
+  opacity: 0;
+  transition: opacity 0.7s cubic-bezier(0.2, 0.7, 0.2, 1), transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+[data-reveal="fold"] { transform: perspective(900px) rotateX(42deg) translateY(30px); transform-origin: 50% 100%; }
+[data-reveal="rise"] { transform: translateY(22px); }
+[data-reveal][data-in] { opacity: 1; transform: none; }
+
+/* Headline: each word rises out of its own line. */
+.word-rise { display: inline-block; overflow: hidden; vertical-align: bottom; padding-bottom: 0.14em; margin-bottom: -0.14em; }
+.word-rise > span { display: inline-block; transform: translateY(110%); animation: word-rise 0.85s cubic-bezier(0.2, 0.7, 0.2, 1) forwards; animation-delay: calc(var(--i) * 55ms + 120ms); }
+@keyframes word-rise { to { transform: none; } }
+.hero-in { opacity: 0; transform: translateY(14px); animation: hero-in 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) forwards; animation-delay: var(--d, 0ms); }
+@keyframes hero-in { to { opacity: 1; transform: none; } }
+
+/* A ruler along the bottom of the hero: a tick every 8px, a long one every 40px. */
+.ruler {
+  height: 14px;
+  background-image:
+    linear-gradient(90deg, color-mix(in oklab, var(--foreground) 45%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--foreground) 28%, transparent) 1px, transparent 1px);
+  background-size: 40px 14px, 8px 7px;
+  background-repeat: repeat-x;
+  background-position: 0 100%, 0 100%;
+}
+
+/* Packing tape: a kraft band of words that never stops. */
+.tape {
+  background:
+    repeating-linear-gradient(90deg, transparent 0 46px, oklch(0.22 0.045 258 / 0.035) 46px 47px),
+    var(--board);
+  border-block: 1.5px solid color-mix(in oklab, var(--board-deep) 75%, transparent);
+  box-shadow: 0 14px 30px -18px oklch(0.22 0.045 258 / 0.45);
+  transform: rotate(-1.4deg) scale(1.03);
+  overflow: hidden;
+}
+.tape-track { display: flex; width: max-content; animation: tape-run 42s linear infinite; }
+.tape:hover .tape-track { animation-play-state: paused; }
+@keyframes tape-run { to { transform: translateX(-50%); } }
+
+/* Feature cards: a soft light follows the pointer (components/marketing/spotlight.tsx sets --mx / --my). */
+.spot {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s;
+  background: radial-gradient(380px circle at var(--mx, 50%) var(--my, 50%), color-mix(in oklab, var(--crease) 18%, transparent), transparent 70%);
+}
+.bento-card:hover .spot { opacity: 1; }
+
+/* Feature pictures. */
+.fv-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: fv-draw 7s ease-in-out infinite; }
+@keyframes fv-draw { 0% { stroke-dashoffset: 1; } 38%, 82% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 1; } }
+.fv-fade { opacity: 0; animation: fv-fade 7s ease-in-out infinite; }
+@keyframes fv-fade { 0%, 34% { opacity: 0; } 46%, 82% { opacity: 1; } 100% { opacity: 0; } }
+.fv-layer { animation: fv-layer 6s ease-in-out infinite; }
+@keyframes fv-layer { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(var(--lift, -10px)); } }
+.fv-type { display: inline-block; overflow: hidden; white-space: nowrap; width: 0; border-right: 2px solid var(--cut); animation: fv-type 8s steps(var(--n, 28)) infinite, fv-caret 0.9s step-end infinite; }
+@keyframes fv-type { 0% { width: 0; } 40%, 85% { width: calc(var(--n, 28) * 1ch); } 100% { width: 0; } }
+@keyframes fv-caret { 50% { border-color: transparent; } }
+.fv-answer { opacity: 0; animation: fv-answer 8s ease-in-out infinite; }
+@keyframes fv-answer { 0%, 44% { opacity: 0; transform: translateY(6px); } 52%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+.fv-file { transition: transform 0.4s cubic-bezier(0.2, 0.7, 0.2, 1); transform: rotate(calc(var(--r) * 0.55)) translateY(calc(var(--y) * 0.5)); }
+.bento-card:hover .fv-file { transform: rotate(var(--r)) translateY(var(--y)); }
+.fv-tick { stroke-dasharray: 1; stroke-dashoffset: 1; animation: fv-tick 6s ease-out infinite; animation-delay: var(--d, 0s); }
+@keyframes fv-tick { 0% { stroke-dashoffset: 1; } 14%, 86% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 1; } }
+
+/* The dark band: ink with a light grid. */
+.ink-band {
+  background-color: var(--ink);
+  color: oklch(0.985 0.004 250);
+  background-image:
+    linear-gradient(oklch(1 0 0 / 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(1 0 0 / 0.07) 1px, transparent 1px),
+    linear-gradient(oklch(1 0 0 / 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(1 0 0 / 0.03) 1px, transparent 1px);
+  background-size: 80px 80px, 80px 80px, 16px 16px, 16px 16px;
+}
+
+/* How far the page has been read: a cut-coloured line at the very top (only where the browser can tie it to scrolling). */
+.scroll-progress { display: none; }
+@supports (animation-timeline: scroll()) {
+  .scroll-progress {
+    display: block;
+    position: fixed;
+    inset: 0 0 auto 0;
+    height: 3px;
+    z-index: 50;
+    background: var(--cut);
+    transform-origin: 0 50%;
+    transform: scaleX(0);
+    animation: scroll-grow linear both;
+    animation-timeline: scroll(root);
+  }
+  @keyframes scroll-grow { to { transform: scaleX(1); } }
+}
+
+/* A row that scrolls sideways without showing a scrollbar (the template showcase). */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] { opacity: 1; transform: none; transition: none; }
+  .word-rise > span, .hero-in { animation: none; opacity: 1; transform: none; }
+  .tape-track { animation: none; }
+  .fv-draw, .fv-tick { animation: none; stroke-dashoffset: 0; }
+  .fv-fade, .fv-answer { animation: none; opacity: 1; transform: none; }
+  .fv-layer { animation: none; }
+  .fv-type { animation: none; width: auto; border-right: 0; }
+  .scroll-progress { display: none; }
+}
+
+/* The small "live" label on the hero box: a dot that pulses. */
+.live-dot { position: relative; width: 7px; height: 7px; border-radius: 9999px; background: var(--cut); }
+.live-dot::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--cut); animation: live-ping 1.8s ease-out infinite; }
+@keyframes live-ping { 0% { transform: scale(1); opacity: 0.7; } 100% { transform: scale(3.2); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .live-dot::after { animation: none; opacity: 0; } }

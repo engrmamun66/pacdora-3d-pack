@@ -1,0 +1,30 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Home, LayoutTemplate, PanelTop, Search } from "lucide-react";
+
+const TABS = [
+  { href: "/doraadmin/pages", label: "Home page", icon: Home },
+  { href: "/doraadmin/pages/templates", label: "Templates page", icon: LayoutTemplate },
+  { href: "/doraadmin/pages/header-footer", label: "Header and footer", icon: PanelTop },
+  { href: "/doraadmin/pages/seo", label: "Search engines", icon: Search },
+];
+
+/** The pages an admin can edit: a vertical list on wide screens, a scrollable row on narrow ones. */
+export function PagesTabs() {
+  const path = usePathname().replace(/\/$/, "");
+  return (
+    <nav aria-label="Pages" className="flex gap-1 overflow-x-auto rounded-xl border bg-card p-1.5 shadow-xs md:flex-col md:overflow-visible">
+      {TABS.map(({ href, label, icon: Icon }) => {
+        const active = path === href;
+        return (
+          <Link key={href} href={href} aria-current={active ? "page" : undefined} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm whitespace-nowrap transition-colors ${active ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"}`}>
+            <Icon className="size-4" aria-hidden />
+            {label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}

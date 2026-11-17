@@ -4,6 +4,7 @@ import { ArrowLeft, Check } from "lucide-react";
 import { SiteBrand, SiteTitle } from "@/components/site-brand";
 import { site } from "@/config/site";
 import { AuthArt } from "./auth-art";
+import { PackBox } from "@/components/studio/pack-box";
 
 const POINTS = ["Dielines calculated from your dimensions", "Live 3D fold with your artwork", "PDF, Illustrator, DXF and more"];
 
@@ -35,11 +36,12 @@ export function AuthShell({
   variant?: "default" | "admin";
 }) {
   return (
-    <div className="grid min-h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
-      <aside className="relative hidden overflow-hidden bg-primary text-primary-foreground lg:flex lg:flex-col lg:justify-between lg:p-10">
+    <div className="studio grid min-h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+      <aside className="ink-band relative hidden overflow-hidden lg:flex lg:flex-col lg:justify-between lg:p-10">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_60%_at_20%_10%,rgb(255_255_255/0.14),transparent)]" aria-hidden />
         {variant === "default" ? <AuthArt /> : null}
-        <Logo className="relative text-primary-foreground" />
+        {variant === "default" ? <div className="pointer-events-none absolute top-24 right-10"><PackBox w={70} h={98} d={48} /></div> : null}
+        <Logo className="relative text-white" />
         <div className="relative max-w-md">
           {variant === "admin" ? (
             <>
@@ -48,11 +50,11 @@ export function AuthShell({
             </>
           ) : (
             <>
-              <h2 className="text-3xl font-semibold tracking-tight text-balance">Packaging dielines that fold the way you designed them.</h2>
+              <h2 className="font-display text-4xl leading-[1.05] font-bold tracking-tight text-balance">Packaging dielines that fold the way you designed them.</h2>
               <ul className="mt-6 flex flex-col gap-3 text-sm">
                 {POINTS.map((p) => (
                   <li key={p} className="flex items-center gap-2.5">
-                    <span className="grid size-5 shrink-0 place-items-center rounded-full bg-white/20"><Check className="size-3" aria-hidden /></span>
+                    <span className="grid size-5 shrink-0 place-items-center rounded-full bg-[var(--cut)] text-white"><Check className="size-3" aria-hidden /></span>
                     {p}
                   </li>
                 ))}
@@ -72,14 +74,16 @@ export function AuthShell({
           </Link>
         </div>
 
-        <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-6 py-10">
+        <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-10">
+          <div className="sheet marks flex flex-col gap-6 p-6 sm:p-8">
           <div className="flex flex-col gap-1.5">
             {variant === "admin" ? <p className="w-fit rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">Super admin</p> : null}
-            <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+            <h1 className="text-3xl leading-tight">{title}</h1>
             {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
           </div>
           <div className="flex flex-col gap-4">{children}</div>
           {footer ? <div className="text-center text-sm text-muted-foreground">{footer}</div> : null}
+          </div>
         </div>
       </main>
     </div>

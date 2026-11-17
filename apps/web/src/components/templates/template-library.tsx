@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import type { PublicCategory, PublicTemplate } from "@/server/templates-public";
 
 /**
@@ -35,11 +34,11 @@ export function TemplateLibrary({ items, categories, children }: { items: Public
       <nav aria-label="Template categories" className="hidden md:block">
         <div className="sticky top-24 flex max-h-[calc(100vh-7rem)] flex-col gap-1 overflow-y-auto pr-2">
           <CategoryRow active={cat === null} label="All templates" count={items.length} onClick={() => pick(null)} />
-          {uses.length ? <p className="mt-4 px-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">By uses</p> : null}
+          {uses.length ? <p className="mt-4 px-3 font-mono text-xs text-muted-foreground">By uses</p> : null}
           {uses.map((c) => <CategoryRow key={c.key} active={cat === c.key} label={c.name} count={c.count} onClick={() => pick(c.key)} />)}
           {models.length ? (
             <details open={modelActive} className="group mt-4">
-              <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:bg-muted [&::-webkit-details-marker]:hidden">
+              <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg px-3 py-2 font-mono text-xs text-muted-foreground hover:bg-muted [&::-webkit-details-marker]:hidden">
                 By models
                 <span aria-hidden className="text-base leading-none transition-transform group-open:rotate-180">⌄</span>
               </summary>
@@ -60,7 +59,7 @@ export function TemplateLibrary({ items, categories, children }: { items: Public
 
         <div className="relative sm:max-w-sm">
           <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Search templates" value={q} onChange={(e) => setQ(e.target.value)} className="pl-9" aria-label="Search templates" />
+          <Input placeholder="Search templates" value={q} onChange={(e) => setQ(e.target.value)} className="sheet h-11 rounded-xl pl-9" aria-label="Search templates" />
         </div>
 
         {children}
@@ -68,16 +67,17 @@ export function TemplateLibrary({ items, categories, children }: { items: Public
         {filtered.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted-foreground">No templates match.</p>
         ) : (
-          <ul className="grid gap-x-6 gap-y-8 sm:grid-cols-2 xl:grid-cols-3">
+          <ul className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
             {filtered.map((t) => (
               <li key={t.id}>
-                <Link href={`/template/dieline/${t.id}`} target="_blank" rel="noopener noreferrer" className="group flex flex-col gap-3 rounded-2xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
-                  <div className="relative flex aspect-[4/3] overflow-hidden rounded-2xl border bg-muted/40 transition group-hover:border-foreground/40 group-hover:shadow-sm">
+                <Link href={`/template/dieline/${t.id}`} target="_blank" rel="noopener noreferrer" className="sheet marks-hover flap group flex h-full flex-col outline-none transition-transform duration-200 hover:-translate-y-1 focus-visible:ring-3 focus-visible:ring-ring/50">
+                  <span className="flap-corner" aria-hidden />
+                  <div className="paper-grid-soft relative m-2 flex aspect-[4/3] overflow-hidden rounded-lg border">
                     {/* Dieline on the left (60%), the 3D picture an admin saved on the right (40%). Without a picture the dieline fills the card. */}
                     <div className={`flex items-center justify-center p-4 ${t.productImage ? "basis-[60%]" : "basis-full"}`}>
                       {t.thumbnail ? (
                         // eslint-disable-next-line @next/next/no-img-element -- generated SVG data URL
-                        <img src={t.thumbnail} alt="" className="size-full object-contain" />
+                        <img src={t.thumbnail} alt="" className="size-full object-contain transition-transform duration-300 group-hover:scale-[1.05]" />
                       ) : null}
                     </div>
                     {t.productImage ? (
@@ -86,9 +86,9 @@ export function TemplateLibrary({ items, categories, children }: { items: Public
                         <img src={t.productImage} alt={`${t.name}, folded`} className="size-full object-cover" loading="lazy" />
                       </div>
                     ) : null}
-                    {t.has3d ? <Badge variant="secondary" className="absolute left-3 top-3 bg-background/90">3D</Badge> : null}
+                    {t.has3d ? <span className="absolute top-2 left-2 rounded-full bg-[var(--ink,#16213a)] px-2 py-0.5 font-mono text-[11px] font-medium text-white">3D</span> : null}
                   </div>
-                  <span className="px-1 text-base text-muted-foreground transition-colors group-hover:text-foreground">{t.name}<span className="sr-only"> (opens in a new tab)</span></span>
+                  <span className="font-display px-4 pt-1.5 pb-4 text-base font-semibold tracking-tight">{t.name}<span className="sr-only"> (opens in a new tab)</span></span>
                 </Link>
               </li>
             ))}
@@ -105,10 +105,10 @@ function CategoryRow({ active, label, count, onClick }: { active: boolean; label
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${active ? "border-foreground font-medium" : "border-transparent hover:bg-muted"}`}
+      className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${active ? "border-[var(--ink,currentColor)] bg-[var(--ink,transparent)] font-medium text-white" : "border-transparent hover:bg-muted"}`}
     >
       <span className="truncate">{label}</span>
-      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{count}</span>
+      <span className={`shrink-0 font-mono text-xs tabular-nums ${active ? "text-white/70" : "text-muted-foreground"}`}>{count}</span>
     </button>
   );
 }
