@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { DEFAULT_CONTENT, type ChromeContent, type SeoContent, type TemplatesPageContent } from "@/lib/site-content";
+import { DEFAULT_CONTENT, type ChromeContent, type TemplatesPageContent } from "@/lib/site-content";
 import { LinkFields, ListEditor, Panel, SaveBar, TextField, Toggle } from "./fields";
 
 /** The heading of the public Templates page. */
@@ -73,28 +73,6 @@ export function ChromeEditor({ initial }: { initial: ChromeContent }) {
       </Panel>
 
       <SaveBar part="chrome" value={v} dirty={JSON.stringify(v) !== JSON.stringify(saved)} viewHref="/" onSaved={() => setSaved(v)} onReset={() => { setV(DEFAULT_CONTENT.chrome); setSaved(DEFAULT_CONTENT.chrome); }} />
-    </div>
-  );
-}
-
-/** What search engines and the browser tab show for the home page. */
-export function SeoEditor({ initial, siteTitle, defaultDescription }: { initial: SeoContent; siteTitle: string; defaultDescription: string }) {
-  const [saved, setSaved] = useState(initial);
-  const [v, setV] = useState(initial);
-  const title = v.title || siteTitle;
-  const description = v.description || defaultDescription;
-  return (
-    <div className="flex flex-col gap-3">
-      <Panel title="Search result" summary={title} defaultOpen>
-        <TextField label="Title of the home page" value={v.title} onChange={(t) => setV({ ...v, title: t })} max={70} hint={`Leave empty to use the site name (${siteTitle}).`} />
-        <TextField label="Description" value={v.description} onChange={(description) => setV({ ...v, description })} max={200} rows={3} hint="One or two sentences. Leave empty to use the built-in one." />
-        <div className="rounded-lg border bg-background/60 p-4" aria-label="How it may look in a search result">
-          <p className="text-xs text-muted-foreground">How it may look in a search result</p>
-          <p className="mt-1.5 truncate text-lg text-[#1a0dab] dark:text-sky-400">{title}</p>
-          <p className="line-clamp-2 text-sm text-muted-foreground">{description}</p>
-        </div>
-      </Panel>
-      <SaveBar part="seo" value={v} dirty={JSON.stringify(v) !== JSON.stringify(saved)} viewHref="/" onSaved={() => setSaved(v)} onReset={() => { setV(DEFAULT_CONTENT.seo); setSaved(DEFAULT_CONTENT.seo); }} />
     </div>
   );
 }

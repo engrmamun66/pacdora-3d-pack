@@ -3,7 +3,7 @@ import { DEFAULT_CONTENT, HOME_SECTIONS, PART_SCHEMAS, featureSpans, isSafeHref,
 
 describe("site content", () => {
   it("has defaults that pass their own rules", () => {
-    for (const k of ["home", "templatesPage", "chrome", "seo"] as const) expect(PART_SCHEMAS[k].safeParse(DEFAULT_CONTENT[k]).success).toBe(true);
+    for (const k of ["home", "templatesPage", "chrome"] as const) expect(PART_SCHEMAS[k].safeParse(DEFAULT_CONTENT[k]).success).toBe(true);
   });
 
   it("falls back to the defaults part by part", () => {

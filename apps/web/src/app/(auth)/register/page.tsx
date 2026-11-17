@@ -1,9 +1,11 @@
+import { pageMetadata } from "@/server/seo-meta";
 import Link from "next/link";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { RegisterForm } from "@/components/auth/register-form";
 import { googleEnabled } from "@/server/env";
 
-export const metadata = { title: "Create account" };
+/** Title and description: Settings > SEO. */
+export const generateMetadata = () => pageMetadata("register", "/register");
 
 export default function RegisterPage() {
   return (

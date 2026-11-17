@@ -9,6 +9,8 @@ import { SUPERADMIN, requireSuperAdmin } from "@/server/admin";
 import { HERO_TAG, listHeroTemplateChoices } from "@/server/site-settings";
 import { heroSettingsSchema } from "@/lib/hero-settings";
 import { svgColorSchema } from "@/lib/svg-colors";
+import { DEFAULT_SEO, seoSettingsSchema } from "@/lib/seo-settings";
+import { SEO_TAG } from "@/server/seo-settings";
 import { watermarkSchema } from "@/lib/watermark-settings";
 import { SITE_TITLE_MAX } from "@/lib/site-identity";
 import { IDENTITY_TAG, readSiteIdentity, writeSiteIdentity } from "@/server/site-identity";
@@ -152,4 +154,37 @@ export async function saveSiteTitle(_prev: IdentityFormState, formData: FormData
   updateTag(IDENTITY_TAG);
   revalidatePath("/", "layout"); // the tab title is part of every page
   return { ok: true, message: title ? "Saved. The site now uses this title." : "Saved. The site uses its default title." };
+}
+
+export type SeoActionResult = { ok: boolean; message: string };
+
+/** Save the SEO data (Settings > SEO). Checked again here: lengths, list sizes and every address. */
+export async function saveSeoSettings(value: unknown): Promise<SeoActionResult> {
+  const admin = await requireSuperAdmin();
+  const parsed = seoSettingsSchema.safeParse(value);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0]!;
+    return { ok: false, message: `${issue.message}${issue.path.length ? ` (${issue.path.join(" > ")})` : ""}` };
+  }
+  await db.siteSetting.upsert({
+    where: { key: "seo" },
+    create: { key: "seo", value: parsed.data, updatedById: admin.id },
+    update: { value: parsed.data, updatedById: admin.id },
+  });
+  updateTag(SEO_TAG);
+  revalidatePath("/doraadmin/settings/seo");
+  return { ok: true, message: "SEO data saved. The site uses it now." };
+}
+
+/** Put the SEO data back to the built-in starting data. */
+export async function resetSeoSettings(): Promise<SeoActionResult> {
+  const admin = await requireSuperAdmin();
+  await db.siteSetting.upsert({
+    where: { key: "seo" },
+    create: { key: "seo", value: DEFAULT_SEO, updatedById: admin.id },
+    update: { value: DEFAULT_SEO, updatedById: admin.id },
+  });
+  updateTag(SEO_TAG);
+  revalidatePath("/doraadmin/settings/seo");
+  return { ok: true, message: "Back to the built-in SEO data." };
 }

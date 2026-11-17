@@ -69,12 +69,12 @@ export function Showcase({ c, templates, total }: { c: HomeContent["showcase"]; 
         <RowScroller label="Templates">
           {templates.map((t) => (
             <li key={t.id} className="w-[78%] shrink-0 snap-start min-[520px]:w-[46%] lg:w-[31%] xl:w-[23.5%]">
-              <Link href={`/template/dieline/${t.id}`} className="sheet marks-hover flap group flex h-full flex-col transition-transform duration-200 hover:-translate-y-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+              <Link href={`/dielines/${t.id}`} className="sheet marks-hover flap group flex h-full flex-col transition-transform duration-200 hover:-translate-y-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                 <span className="flap-corner" aria-hidden />
                 <span className="paper-grid-soft relative m-2 flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border p-3">
                   {t.thumbnail ? (
                     // eslint-disable-next-line @next/next/no-img-element -- generated SVG data URL
-                    <img src={t.thumbnail} alt="" loading="lazy" className="max-h-full max-w-full transition-transform duration-300 group-hover:scale-[1.06]" />
+                    <img src={t.thumbnail} alt={`${t.name} dieline template`} loading="lazy" className="max-h-full max-w-full transition-transform duration-300 group-hover:scale-[1.06]" />
                   ) : null}
                   {t.has3d ? <span className="absolute top-2 left-2 rounded-full bg-[var(--ink)] px-2 py-0.5 font-mono text-[11px] font-medium text-white">3D</span> : null}
                 </span>

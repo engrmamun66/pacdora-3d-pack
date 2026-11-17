@@ -9,13 +9,38 @@ import { SiteHeader } from "@/components/marketing/site-header";
 import { DEFAULT_BOX_COLOR, luminance } from "@/lib/hero-settings";
 import type { HomeSectionId } from "@/lib/site-content";
 import { getSiteContent } from "@/server/site-content";
+import { getSeoSettings } from "@/server/seo-settings";
+import { getSiteIdentity } from "@/server/site-identity";
+import { pageMetadata } from "@/server/seo-meta";
+import { env } from "@/server/env";
+import { JsonLd } from "@/components/seo/json-ld";
+import { homeJsonLd } from "@/lib/structured-data";
 import { getHeroSettings, getHeroTemplate } from "@/server/site-settings";
 import { getPublicCatalogue } from "@/server/templates-public";
 
-/** Title and description for search engines: set under Admin > Pages > Search engines (empty = the site's own). */
+/** Title, description and link preview of the home page: Settings > SEO. */
 export async function generateMetadata(): Promise<Metadata> {
-  const { seo } = await getSiteContent();
-  return { ...(seo.title ? { title: { absolute: seo.title } } : {}), ...(seo.description ? { description: seo.description } : {}) };
+  return pageMetadata("home", "/");
+}
+
+/** Structured data of the home page (company, web site, tool, and the questions shown on it): Settings > SEO switches it. */
+async function HomeStructuredData() {
+  const [seo, content, identity] = await Promise.all([getSeoSettings(), getSiteContent(), getSiteIdentity()]);
+  if (!seo.structuredData) return null;
+  const faqOn = content.home.sections.some((s) => s.id === "faq" && s.on);
+  return (
+    <JsonLd
+      data={homeJsonLd({
+        origin: new URL(env.BETTER_AUTH_URL).origin,
+        siteName: identity.title,
+        description: seo.pages.home.description || seo.description,
+        logoUrl: identity.logoUrl,
+        sameAs: seo.sameAs,
+        freeToUse: seo.freeToUse,
+        faq: faqOn ? content.home.faq.items : [],
+      })}
+    />
+  );
 }
 
 /**
@@ -132,6 +157,9 @@ export default function Home() {
       </Suspense>
       <Suspense fallback={<div className="min-h-96" aria-hidden />}>
         <HomeBody />
+      </Suspense>
+      <Suspense fallback={null}>
+        <HomeStructuredData />
       </Suspense>
       <Suspense fallback={null}>
         <SiteFooter />

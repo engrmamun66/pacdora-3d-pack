@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, LayoutTemplate, PanelTop, Search } from "lucide-react";
+import { Home, LayoutTemplate, PanelTop } from "lucide-react";
 
 const TABS = [
   { href: "/doraadmin/pages", label: "Home page", icon: Home },
   { href: "/doraadmin/pages/templates", label: "Templates page", icon: LayoutTemplate },
   { href: "/doraadmin/pages/header-footer", label: "Header and footer", icon: PanelTop },
-  { href: "/doraadmin/pages/seo", label: "Search engines", icon: Search },
 ];
 
 /** The pages an admin can edit: a vertical list on wide screens, a scrollable row on narrow ones. */

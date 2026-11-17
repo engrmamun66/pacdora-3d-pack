@@ -146,6 +146,41 @@ export async function listPortalTemplates(owner: PortalOwner, scope: PortalScope
   return rows.map(toTemplate);
 }
 
+/** A shared page address (path only) for the sitemap. */
+export interface SharedPage {
+  path: string;
+  updatedAt: Date | null;
+}
+
+/**
+ * Every shared page that is on: for each Client whose "all" link is on (and who is not suspended) the list, the lists of their
+ * category and tag links that are on, and each template that is not switched off (at most MAX_PORTAL_TEMPLATES a Client,
+ * the same as the pages show). Paths only; the caller adds the site address.
+ */
+export async function listSharedPages(limit: number): Promise<SharedPage[]> {
+  const alls = await db.shareLink.findMany({ where: { scope: "all", active: true, user: { banned: false } }, select: { userId: true, hash: true } });
+  if (alls.length === 0) return [];
+  const userHash = new Map(alls.map((l) => [l.userId, l.hash]));
+  const userIds = [...userHash.keys()];
+  const [links, hidden, projects] = await Promise.all([
+    db.shareLink.findMany({ where: { userId: { in: userIds }, scope: { in: ["category", "tag"] }, active: true }, select: { userId: true, hash: true } }),
+    db.shareLink.findMany({ where: { userId: { in: userIds }, scope: "template", active: false, projectId: { not: null } }, select: { projectId: true } }),
+    db.project.findMany({ where: { userId: { in: userIds } }, orderBy: { updatedAt: "desc" }, select: { id: true, userId: true, updatedAt: true }, take: limit }),
+  ]);
+  const off = new Set(hidden.flatMap((h) => (h.projectId ? [h.projectId] : [])));
+  const pages: SharedPage[] = alls.map((l) => ({ path: `/${l.hash}/templates`, updatedAt: null }));
+  for (const l of links) pages.push({ path: `/${userHash.get(l.userId)}/${l.hash}/templates`, updatedAt: null });
+  const perUser = new Map<string, number>();
+  for (const pr of projects) {
+    if (off.has(pr.id)) continue;
+    const n = perUser.get(pr.userId) ?? 0;
+    if (n >= MAX_PORTAL_TEMPLATES) continue;
+    perUser.set(pr.userId, n + 1);
+    pages.push({ path: `/${userHash.get(pr.userId)}/templates/${templateHash(pr.id)}`, updatedAt: pr.updatedAt });
+  }
+  return pages;
+}
+
 /** One template by its hash, when this shared page may show it (it is in the scope and not switched off). */
 export async function findPortalTemplate(owner: PortalOwner, scope: PortalScope, hash: string): Promise<PortalTemplate | null> {
   if (!isHash(hash)) return null;

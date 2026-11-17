@@ -4,6 +4,9 @@ import "./globals.css";
 import { site } from "@/config/site";
 import { Toaster } from "@/components/ui/sonner";
 import { getSiteIdentity } from "@/server/site-identity";
+import { getSeoSettings } from "@/server/seo-settings";
+import { env } from "@/server/env";
+import { withSite } from "@/lib/seo-settings";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -21,12 +24,25 @@ const display = Bricolage_Grotesque({
   subsets: ["latin"],
 });
 
-/** Tab title and icon come from Settings > Site Identity (cached; the default name and icon if nothing is set). */
+/**
+ * Site-wide head data: the tab title and its pattern, the description, link previews, the robots switch and the ownership
+ * codes come from Settings > SEO; the name and the icon from Settings > Site Identity. A page can set its own title
+ * and description on top of this (see server/seo-meta.ts).
+ */
 export async function generateMetadata(): Promise<Metadata> {
-  const { title, faviconUrl } = await getSiteIdentity();
+  const [{ title, faviconUrl }, seo] = await Promise.all([getSiteIdentity(), getSeoSettings()]);
+  const defaultTitle = withSite(seo.defaultTitle || "{site}", title);
   return {
-    title: { default: title, template: `${title} | %s` },
-    description: site.tagline,
+    metadataBase: new URL(env.BETTER_AUTH_URL),
+    title: { default: defaultTitle, template: withSite(seo.titleTemplate || "%s | {site}", title) },
+    description: seo.description || site.tagline,
+    applicationName: title,
+    ...(seo.keywords.length ? { keywords: seo.keywords } : {}),
+    alternates: { canonical: "./" },
+    robots: seo.indexing ? { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1 } } : { index: false, follow: false },
+    openGraph: { type: "website", siteName: title, locale: "en_US", title: defaultTitle, description: seo.description || site.tagline, ...(seo.shareImage ? { images: [{ url: seo.shareImage, width: 1200, height: 630, alt: title }] } : {}) },
+    twitter: { card: "summary_large_image", title: defaultTitle, description: seo.description || site.tagline, ...(seo.twitter ? { site: seo.twitter.startsWith("@") ? seo.twitter : `@${seo.twitter}` } : {}), ...(seo.shareImage ? { images: [seo.shareImage] } : {}) },
+    ...(seo.googleVerification || seo.bingVerification ? { verification: { ...(seo.googleVerification ? { google: seo.googleVerification } : {}), ...(seo.bingVerification ? { other: { "msvalidate.01": seo.bingVerification } } : {}) } } : {}),
     ...(faviconUrl ? { icons: { icon: faviconUrl, shortcut: faviconUrl } } : {}),
   };
 }

@@ -4,8 +4,10 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { LoginForm } from "@/components/auth/login-form";
 import { googleEnabled } from "@/server/env";
 import { safeNext } from "@/lib/safe-next";
+import { pageMetadata } from "@/server/seo-meta";
 
-export const metadata = { title: "Log in" };
+/** Title and description: Settings > SEO. */
+export const generateMetadata = () => pageMetadata("login", "/login");
 
 const ERRORS: Record<string, string> = {
   google: "Google sign-in failed or was cancelled.",

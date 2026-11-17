@@ -5,7 +5,7 @@ import { z } from "zod";
  * sections show and in what order, and each section's content), the heading of the Templates page, the header
  * menu, the announcement bar, the footer, and the search-engine title and description.
  *
- * One stored value (site setting "site-content") with four parts. Each part is read on its own, so a part that
+ * One stored value (site setting "site-content") with three parts. Each part is read on its own, so a part that
  * cannot be read falls back to its defaults without touching the others. Text only: no HTML is stored or rendered.
  */
 
@@ -88,34 +88,25 @@ export const chromeSchema = z.object({
 });
 export type ChromeContent = z.output<typeof chromeSchema>;
 
-export const seoSchema = z.object({
-  /** Browser-tab and search title of the home page. Empty = the site name. */
-  title: text(70),
-  /** The short description search engines show. Empty = the built-in one. */
-  description: text(200),
-});
-export type SeoContent = z.output<typeof seoSchema>;
-
 export interface SiteContent {
   home: HomeContent;
   templatesPage: TemplatesPageContent;
   chrome: ChromeContent;
-  seo: SeoContent;
 }
 
-export const CONTENT_PARTS = ["home", "templatesPage", "chrome", "seo"] as const;
+export const CONTENT_PARTS = ["home", "templatesPage", "chrome"] as const;
 export type ContentPart = (typeof CONTENT_PARTS)[number];
-export const PART_SCHEMAS = { home: homeSchema, templatesPage: templatesPageSchema, chrome: chromeSchema, seo: seoSchema } as const;
+export const PART_SCHEMAS = { home: homeSchema, templatesPage: templatesPageSchema, chrome: chromeSchema } as const;
 
 export const DEFAULT_CONTENT: SiteContent = {
   home: {
     hero: {
       badge: "Parametric packaging design",
-      title: "Packaging dielines that fold the way you designed them.",
-      subtitle: "Parametric packaging dielines, 2D artwork and 3D preview in your browser.",
+      title: "Online dieline generator that folds in 3D",
+      subtitle: "Make a custom box dieline from your own size, add artwork, fold it in 3D and export print-ready PDF, AI, EPS, SVG and DXF files, all in your browser.",
       primary: { label: "Create a free account", href: "/register" },
-      secondary: { label: "Browse templates", href: "/templates" },
-      points: ["Cut and crease layers", "Live 3D fold", "Print-ready exports"],
+      secondary: { label: "Browse dielines", href: "/dielines" },
+      points: ["Free to start", "Cut and crease layers", "Live 3D fold", "DXF, PDF, AI, EPS, SVG"],
     },
     sections: HOME_SECTIONS.map((s) => ({ id: s.id, on: true })),
     tape: ["Tuck end", "Crash-lock bottom", "Mailer box", "Shipping carton", "Cut", "Crease", "Bleed", "Safe area", "3D fold", "Print-ready"],
@@ -159,10 +150,12 @@ export const DEFAULT_CONTENT: SiteContent = {
       title: "Questions, answered",
       subtitle: "",
       items: [
+        { q: "What is a dieline?", a: "A dieline is the flat plan of a box or carton: the outline to cut, the lines to crease and fold, the glue flaps and the bleed. A printer or cutting table uses it to make the box from one sheet of board." },
+        { q: "How do I make a custom box dieline?", a: "Pick a box style, type the width, depth and height in mm or inches and choose the board. The dieline is calculated from your size, and you can add artwork to each panel and fold the box in 3D." },
+        { q: "Which dieline file formats can I download?", a: "PDF, Illustrator (AI), EPS, SVG and DXF for production, with separate cut and crease layers, PNG as a picture and GLB for the folded 3D box." },
+        { q: "Is the dieline generator free?", a: "You can create a free account without a card and start from any template." },
+        { q: "Which box styles are available?", a: "Tuck end cartons, crash-lock bottom boxes, regular slotted shipping boxes, reverse tuck boxes, gift and mailer boxes, and more. New templates are added all the time." },
         { q: "Do I need to install anything?", a: "No. The dieline, the artwork editor and the 3D preview all run in your browser." },
-        { q: "Can I use my own sizes?", a: "Yes. Every template is parametric: type the width, depth and height in mm or inches and the whole dieline is calculated again." },
-        { q: "Which files can I download?", a: "PDF, Illustrator (AI), EPS, SVG and DXF for production, PNG as a picture, and GLB for the folded 3D box." },
-        { q: "Does it cost anything to start?", a: "No. You can create a free account without a card and start from any template." },
       ],
     },
     cta: { title: "Make your first dieline in a minute", subtitle: "Free account, no card. Start from a template and change the size.", button: { label: "Get started", href: "/register" } },
@@ -171,7 +164,7 @@ export const DEFAULT_CONTENT: SiteContent = {
   chrome: {
     announcement: { on: false, text: "", link: { label: "", href: "" } },
     nav: [
-      { label: "Templates", href: "/templates" },
+      { label: "Dielines", href: "/dielines" },
       { label: "Features", href: "/#features" },
       { label: "How it works", href: "/#how" },
       { label: "File formats", href: "/#formats" },
@@ -179,13 +172,12 @@ export const DEFAULT_CONTENT: SiteContent = {
     footer: {
       tagline: "Parametric packaging dielines, 2D artwork and 3D preview in your browser.",
       columns: [
-        { title: "Product", links: [{ label: "Templates", href: "/templates" }, { label: "Features", href: "/#features" }, { label: "How it works", href: "/#how" }, { label: "File formats", href: "/#formats" }] },
+        { title: "Product", links: [{ label: "Dieline templates", href: "/dielines" }, { label: "Features", href: "/#features" }, { label: "How it works", href: "/#how" }, { label: "File formats", href: "/#formats" }] },
         { title: "Account", links: [{ label: "Log in", href: "/login" }, { label: "Create an account", href: "/register" }, { label: "My dashboard", href: "/my-dashboard" }] },
       ],
       note: "",
     },
   },
-  seo: { title: "", description: "" },
 };
 
 /** The stored section list made complete: unknown ids dropped, doubles dropped, and any section that is missing added at the end (on). */
@@ -204,7 +196,7 @@ export function parseSiteContent(raw: unknown): SiteContent {
     return (r.success ? r.data : DEFAULT_CONTENT[k]) as SiteContent[K];
   };
   const home = part("home");
-  return { home: { ...home, sections: normalizeSections(home.sections) }, templatesPage: part("templatesPage"), chrome: part("chrome"), seo: part("seo") };
+  return { home: { ...home, sections: normalizeSections(home.sections) }, templatesPage: part("templatesPage"), chrome: part("chrome") };
 }
 
 /** How many of three columns each feature card takes: the first is wide, the last fills what is left of its row. */

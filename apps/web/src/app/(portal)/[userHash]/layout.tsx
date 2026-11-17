@@ -28,12 +28,22 @@ async function Shell({ params, children }: { params: Promise<{ userHash: string 
   );
 }
 
-/** The tab shows the Client's business name alone (no site name). Falls back to the site's own title when the address is wrong. */
+/** The tab shows the Client's business name and logo alone (no site name or icon). Falls back to the site's own title when the address is wrong. */
 export async function generateMetadata({ params }: { params: Promise<{ userHash: string }> }): Promise<Metadata> {
   const { userHash } = await params;
   const owner = await getOwner(userHash);
   if (!owner) return { title: (await getSiteIdentity()).title, robots: { index: false, follow: false } };
-  return { title: { absolute: owner.title }, robots: { index: false, follow: false } };
+  // Link previews (a shared link posted in a chat) show the Client's name and logo, not the site's.
+  const description = `Packaging templates from ${owner.title}. Pick a box, set the quantity and send your order.`;
+  return {
+    title: { absolute: owner.title },
+    description,
+    robots: { index: false, follow: false },
+    openGraph: { type: "website", siteName: owner.title, title: owner.title, description, ...(owner.logoUrl ? { images: [{ url: owner.logoUrl, alt: owner.title }] } : {}) },
+    twitter: { card: owner.logoUrl ? "summary" : "summary_large_image", title: owner.title, description, ...(owner.logoUrl ? { images: [owner.logoUrl] } : {}) },
+    // The tab icon is the Client's own logo too (the site's icon shows when they have none).
+    ...(owner.logoUrl ? { icons: { icon: owner.logoUrl, shortcut: owner.logoUrl, apple: owner.logoUrl } } : {}),
+  };
 }
 
 export default function PortalLayout({ children, params }: { children: ReactNode; params: Promise<{ userHash: string }> }) {

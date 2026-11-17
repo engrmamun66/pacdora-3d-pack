@@ -13,9 +13,9 @@ const LABELS: Record<string, string> = {
   pages: "Pages",
   profile: "Profile",
 };
-const LAST: Record<string, string> = { new: "Add template", edit: "Edit", templates: "Client Templates", orders: "Client Orders", customers: "Client Customers", "header-footer": "Header and footer", seo: "Search engines" };
+const LAST: Record<string, string> = { new: "Add template", edit: "Edit", templates: "Client Templates", orders: "Client Orders", customers: "Client Customers", "header-footer": "Header and footer" };
 /** Last parts that mean something else under Pages. */
-const PAGES_LAST: Record<string, string> = { templates: "Templates page", "header-footer": "Header and footer", seo: "Search engines" };
+const PAGES_LAST: Record<string, string> = { templates: "Templates page", "header-footer": "Header and footer" };
 
 /** Where you are, in the top bar: Admin / Section / (Add template | Edit). */
 export function AdminCrumbs() {
