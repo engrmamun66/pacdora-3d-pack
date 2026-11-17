@@ -93,6 +93,8 @@ export function FoldSetupEditor({
   // Blink Mode is always on: the panel under the mouse blinks on the 3D box. (No switch is shown for it.)
   const blinkMode = true;
   const [hoverId, setHoverId] = useState<string | null>(null);
+  // The panel under the mouse in the 3D view: it is lit on the flat sheet.
+  const [hover3d, setHover3d] = useState<string | null>(null);
   // Which piece's fold list is shown (one tab per piece). Selecting something in the picture switches to its piece.
   const [tab, setTab] = useState(() => (memoryKey ? (openTabs.get(memoryKey) ?? 0) : 0));
   useEffect(() => {
@@ -306,7 +308,8 @@ export function FoldSetupEditor({
               {fold.panels.map((p) => {
                 const d = depth.get(p.id) ?? 0;
                 const on = sel?.kind === "panel" && sel.id === p.id;
-                const hot = blinkMode && hoverId === p.id && !on;
+                const hot = (blinkMode && hoverId === p.id && !on) || (hover3d === p.id && !on);
+                const lit3d = hover3d === p.id && !on;
                 const [cx, cy] = centroid(p.polygon);
                 // Names are 1.5x the old size (half of the earlier 3x, which was too big), never wider than their panel: a narrow panel turns its name or shrinks it.
                 const xs = p.polygon.filter((_, i) => i % 2 === 0);
@@ -324,9 +327,9 @@ export function FoldSetupEditor({
                     <path
                       d={pathData(p.polygon, true)}
                       fill={DEPTH_COLORS[d % DEPTH_COLORS.length]}
-                      fillOpacity={on ? 0.95 : 0.6}
+                      fillOpacity={on || lit3d ? 0.95 : 0.6}
                       stroke={on || hot ? "#2563eb" : "#ffffff"}
-                      strokeWidth={size / (on ? 120 : hot ? 220 : 400)}
+                      strokeWidth={size / (on || lit3d ? 120 : hot ? 220 : 400)}
                       className="cursor-pointer"
                       onPointerEnter={() => setHoverId(p.id)}
                       onPointerLeave={() => setHoverId((cur) => (cur === p.id ? null : cur))}
@@ -381,7 +384,7 @@ export function FoldSetupEditor({
         <div className="flex min-w-0 flex-col gap-2">
           <div className="relative overflow-hidden rounded-xl border bg-muted/40">
             {geo.geo ? (
-              <CartonView ref={view} className="h-[min(420px,50vh)] w-full" geo={shownGeo ?? geo.geo} texture={null} textureRect={null} progress={progress} outsideColor="#ffffff" insideColor="#c8a97e" initialView={startView} />
+              <CartonView ref={view} className="h-[min(420px,50vh)] w-full" geo={shownGeo ?? geo.geo} texture={null} textureRect={null} progress={progress} outsideColor="#ffffff" insideColor="#c8a97e" initialView={startView} onPanelHover={setHover3d} />
             ) : (
               <p className="grid h-48 place-items-center px-4 text-center text-sm text-muted-foreground">{geo.error ?? "Fix the problems above to see the 3D preview."}</p>
             )}
@@ -430,7 +433,6 @@ export function FoldSetupEditor({
             <div className="flex items-center gap-1.5">
               <label htmlFor="panel-kind">Kind</label>
               <PanelKindHelp />
-              <InfoTip label="This kind">{ROLE_OPTIONS.find((r) => r.value === shownPanel.role)?.hint ?? ""}</InfoTip>
             </div>
             <select id="panel-kind" className={field} value={shownPanel.role} onChange={(e) => onChange(updatePanel(fold, shownPanel.id, { role: e.target.value as PanelRole }))}>
               {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}

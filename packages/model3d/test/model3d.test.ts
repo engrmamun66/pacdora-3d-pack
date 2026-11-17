@@ -227,3 +227,46 @@ describe("window holes", () => {
     expect(wallMesh(r.geo).geometry.getAttribute("position").count - wallMesh(base).geometry.getAttribute("position").count).toBe(4 * 4);
   });
 });
+
+describe("panels that close on top of each other", () => {
+  // A square base with a flap folded flat over it from each side: the right one first (step 1), the left one after it (step 2).
+  // A wall stands up from the base so the closed shape has some depth (the layers move toward its centre).
+  const sq = (x0: number, x1: number) => [{ x: x0, y: 0 }, { x: x1, y: 0 }, { x: x1, y: 100 }, { x: x0, y: 100 }];
+  const panel = (id: string, x0: number, x1: number) => ({ id, role: "body" as const, label: id, polygon: sq(x0, x1), printable: true });
+  const stack = {
+    ...geo,
+    foldTree: {
+      rootId: "base",
+      panels: [panel("base", 0, 100), panel("right", 100, 200), panel("left", -100, 0), { id: "wall", role: "body" as const, label: "wall", polygon: [{ x: 0, y: -100 }, { x: 100, y: -100 }, { x: 100, y: 0 }, { x: 0, y: 0 }], printable: true }],
+      hinges: [
+        { id: "h1", parentId: "base", childId: "right", a: { x: 100, y: 0 }, b: { x: 100, y: 100 }, foldAngleDeg: 180, foldOrder: 1 },
+        { id: "h3", parentId: "base", childId: "wall", a: { x: 0, y: 0 }, b: { x: 100, y: 0 }, foldAngleDeg: 90, foldOrder: 3 },
+        { id: "h2", parentId: "base", childId: "left", a: { x: 0, y: 0 }, b: { x: 0, y: 100 }, foldAngleDeg: 180, foldOrder: 2 },
+      ],
+    },
+  };
+  const level = (id: string, gap: number) => {
+    const { object } = buildCartonModel(stack, { progress: 1, layerGap: gap });
+    const e = object.getObjectByName(id)!.matrix.elements;
+    return e[14]!; // z of the panel's origin
+  };
+
+  it("without any gap they share one plane", () => {
+    expect(level("base", 0)).toBeCloseTo(level("right", 0), 6);
+    expect(level("base", 0)).toBeCloseTo(level("left", 0), 6);
+  });
+
+  it("also stacks flaps that all share one role layer (all tuck) by fold step", () => {
+    const tucks = { ...stack, foldTree: { ...stack.foldTree, panels: stack.foldTree.panels.map((p) => (p.id === "wall" ? p : { ...p, role: "tuck" as const })) } };
+    const z = (id: string) => buildCartonModel(tucks, { progress: 1, layerGap: 0.3 }).object.getObjectByName(id)!.matrix.elements[14]!;
+    expect(Math.abs(z("left") - z("right"))).toBeCloseTo(0.3, 6);
+    expect(Math.abs(z("right") - z("base"))).toBeCloseTo(0.3, 6);
+  });
+
+  it("puts the panel folded last outermost and the ones folded earlier one layer further in each", () => {
+    const [b, r, l] = [level("base", 0.3), level("right", 0.3), level("left", 0.3)];
+    expect(Math.abs(l - r)).toBeCloseTo(0.3, 6);
+    expect(Math.abs(r - b)).toBeCloseTo(0.3, 6);
+    expect(Math.abs(l - b)).toBeCloseTo(0.6, 6);
+  });
+});

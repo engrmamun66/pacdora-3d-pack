@@ -144,6 +144,8 @@ export interface CartonViewProps {
   onViewChange?: (v: ViewSettings) => void;
   /** Called once, on the frame after the box is first built and drawn (so a loading placeholder can go away). */
   onReady?: () => void;
+  /** Called with the id of the panel under the mouse (null when none, while dragging, or when the mouse leaves). */
+  onPanelHover?: (id: string | null) => void;
 }
 
 /** Camera angles in degrees. */
@@ -230,7 +232,7 @@ export interface CartonViewHandle {
 
 /** Interactive 3D carton built from the engine's fold tree (three.js, no React renderer). */
 export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function CartonView(
-  { geo, texture, textureRect, progress, outsideColor, insideColor, thickness = 0, watermark = null, boardGrain = 0, boardEdge, className, autoRotate = false, transparent = false, shadows = true, frameMm, rotateOnly = false, initialView = null, onViewChange, onReady },
+  { geo, texture, textureRect, progress, outsideColor, insideColor, thickness = 0, watermark = null, boardGrain = 0, boardEdge, className, autoRotate = false, transparent = false, shadows = true, frameMm, rotateOnly = false, initialView = null, onViewChange, onReady, onPanelHover },
   ref,
 ) {
   const host = useRef<HTMLDivElement>(null);
@@ -241,12 +243,14 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   const initialViewRef = useRef(initialView);
   const onViewChangeRef = useRef(onViewChange);
   const onReadyRef = useRef(onReady);
+  const onPanelHoverRef = useRef(onPanelHover);
   const readyFired = useRef(false);
   const progressRef = useRef(progress);
   useEffect(() => {
     initialViewRef.current = initialView;
     onViewChangeRef.current = onViewChange;
     onReadyRef.current = onReady;
+    onPanelHoverRef.current = onPanelHover;
     progressRef.current = progress;
   });
   /** The panel that blinks (id), the blink overlays now on the model, and their shared materials. */
@@ -898,6 +902,42 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     const ro = new ResizeObserver(resize);
     ro.observe(el);
     resize();
+    // Hover: the panel under the mouse is reported (once per frame at most), so a screen can light it up elsewhere.
+    const picker = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    let hovered: string | null = null;
+    let hoverFrame = 0;
+    const setHovered = (id: string | null) => {
+      if (id === hovered) return;
+      hovered = id;
+      onPanelHoverRef.current?.(id);
+    };
+    const onMove = (e: PointerEvent) => {
+      if (e.buttons !== 0) {
+        cancelAnimationFrame(hoverFrame);
+        setHovered(null); // dragging the camera
+        return;
+      }
+      cancelAnimationFrame(hoverFrame);
+      hoverFrame = requestAnimationFrame(() => {
+        const t = three.current;
+        if (!t?.model) return;
+        const r = renderer.domElement.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) return;
+        ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+        picker.setFromCamera(ndc, camera);
+        const hit = picker.intersectObject(t.model.object, true)[0];
+        const group = hit?.object.parent;
+        // A panel's meshes sit in a group named with the panel id; the rounded folds are named "fold-...".
+        setHovered(group && group.name && !group.name.startsWith("fold-") ? group.name : null);
+      });
+    };
+    const onLeave = () => {
+      cancelAnimationFrame(hoverFrame);
+      setHovered(null);
+    };
+    renderer.domElement.addEventListener("pointermove", onMove);
+    renderer.domElement.addEventListener("pointerleave", onLeave);
     renderer.setAnimationLoop((now: number) => {
       controls.update();
       arrowTick.current();
@@ -913,6 +953,10 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     });
     return () => {
       ro.disconnect();
+      cancelAnimationFrame(hoverFrame);
+      renderer.domElement.removeEventListener("pointermove", onMove);
+      renderer.domElement.removeEventListener("pointerleave", onLeave);
+      setHovered(null);
       controls.removeEventListener("change", onChange);
       renderer.setAnimationLoop(null);
       blinkMats.current?.front.dispose();
