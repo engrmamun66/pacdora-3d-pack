@@ -508,7 +508,11 @@ export class EditorController {
     const d = this.bgDrag;
     if (!d) {
       const hit = this.bgHit(pt);
-      this.canvas.defaultCursor = this.canvas.hoverCursor = hit === "scale" ? "nwse-resize" : hit === "move" ? "move" : "default";
+      // The grips are listed top-left, top-right, bottom-right, bottom-left: the arrow follows the diagonal each one drags along.
+      const tol = 11 / this.canvas.getZoom();
+      const grip = hit === "scale" ? this.bgGrips().findIndex((g) => Math.hypot(g.x - pt.x, g.y - pt.y) <= tol) : -1;
+      const resize = grip === 1 || grip === 3 ? "nesw-resize" : "nwse-resize";
+      this.canvas.defaultCursor = this.canvas.hoverCursor = hit === "scale" ? resize : hit === "move" ? "move" : "default";
       return;
     }
     if (d.kind === "scale") {
