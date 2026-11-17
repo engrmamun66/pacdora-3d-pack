@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRef } from "react";
 import { Folder, SlidersHorizontal, Trash2 } from "lucide-react";
 import type { MyLabel, MyTemplateRow } from "@/server/my-templates";
+import { ShareCopy } from "./share-copy";
 
 export interface ItemProps {
   t: MyTemplateRow;
@@ -28,7 +29,7 @@ export function TemplateItem({ t, view, categories, tags, busy, onCategory, onTa
 
   const chips = (
     <div className="flex min-w-0 flex-wrap items-center gap-1">
-      {category ? <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary"><Folder className="size-3 shrink-0" aria-hidden /><span className="truncate">{category.name}</span></span> : null}
+      {category ? <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-[var(--cut)]/10 px-2 py-0.5 text-xs text-[var(--cut)]"><Folder className="size-3 shrink-0" aria-hidden /><span className="truncate">{category.name}</span></span> : null}
       {shownTags.map((x) => <span key={x.id} className="max-w-28 truncate rounded-full bg-muted px-2 py-0.5 text-xs">{x.name}</span>)}
       {mine.length > shownTags.length ? <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">+{mine.length - shownTags.length}</span> : null}
       {!category && mine.length === 0 ? <span className="text-xs text-muted-foreground">Not organised yet</span> : null}
@@ -37,10 +38,11 @@ export function TemplateItem({ t, view, categories, tags, busy, onCategory, onTa
 
   const actions = (
     <div className="flex items-center gap-1.5">
-      <Link href={href} className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/85 focus-visible:ring-2 focus-visible:ring-ring">Open</Link>
+      <Link href={href} className="inline-flex h-8 items-center rounded-lg cta px-3 text-sm font-medium text-primary-foreground focus-visible:ring-2 focus-visible:ring-ring">Open</Link>
       <button type="button" className={btn} disabled={busy} onClick={() => dialog.current?.showModal()} aria-label={`Organise ${t.name}: category and tags`}>
         <SlidersHorizontal className="size-3.5" aria-hidden /> Organise
       </button>
+      <ShareCopy share={t.share} label={t.name} className="grid size-8 place-items-center rounded-lg border bg-background text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring" />
       <button type="button" disabled={busy} aria-label={`Delete ${t.name}`} onClick={onDelete} className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
         <Trash2 className="size-4" aria-hidden />
       </button>
@@ -82,7 +84,7 @@ export function TemplateItem({ t, view, categories, tags, busy, onCategory, onTa
           </div>
         </fieldset>
         <div className="flex justify-end">
-          <button type="button" className="h-9 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/85" onClick={() => dialog.current?.close()}>Done</button>
+          <button type="button" className="h-9 rounded-lg cta px-4 text-sm font-medium text-primary-foreground" onClick={() => dialog.current?.close()}>Done</button>
         </div>
       </div>
     </dialog>
@@ -90,7 +92,7 @@ export function TemplateItem({ t, view, categories, tags, busy, onCategory, onTa
 
   if (view === "list") {
     return (
-      <li className={`flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border bg-card p-2.5 shadow-xs ${busy ? "opacity-70" : ""}`}>
+      <li className={`flex flex-wrap items-center gap-x-4 gap-y-2 sheet p-2.5 ${busy ? "opacity-70" : ""}`}>
         <Link href={href} aria-label={`Open ${t.name}`} className="flex h-14 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted/40 p-1">{thumb}</Link>
         <div className="min-w-0 flex-1 basis-48">
           <Link href={href} className="block truncate text-sm font-medium hover:underline">{t.name}</Link>
@@ -103,12 +105,13 @@ export function TemplateItem({ t, view, categories, tags, busy, onCategory, onTa
     );
   }
   return (
-    <li className={`flex flex-col overflow-hidden rounded-xl border bg-card shadow-xs transition-shadow hover:shadow-sm ${busy ? "opacity-70" : ""}`}>
-      <Link href={href} aria-label={`Open ${t.name}`} className="flex aspect-[4/3] items-center justify-center bg-muted/40 p-3 outline-none focus-visible:ring-2 focus-visible:ring-ring">{thumb}</Link>
+    <li className={`sheet marks-hover flap flex flex-col transition-transform duration-200 hover:-translate-y-0.5 ${busy ? "opacity-70" : ""}`}>
+      <span className="flap-corner" aria-hidden />
+      <Link href={href} aria-label={`Open ${t.name}`} className="paper-grid-soft m-2 flex aspect-[4/3] items-center justify-center rounded-lg border p-3 outline-none focus-visible:ring-2 focus-visible:ring-ring">{thumb}</Link>
       <div className="flex flex-1 flex-col gap-2.5 p-3">
         <div className="min-w-0">
-          <Link href={href} className="block truncate text-sm font-medium hover:underline" title={t.name}>{t.name}</Link>
-          <p className="truncate text-xs text-muted-foreground">{t.templateName} · {t.updatedAt}</p>
+          <Link href={href} className="font-display block truncate text-base font-semibold tracking-tight hover:underline" title={t.name}>{t.name}</Link>
+          <p className="truncate font-mono text-xs text-muted-foreground">{t.templateName} · {t.updatedAt}</p>
         </div>
         {chips}
         <div className="mt-auto pt-1">{actions}</div>

@@ -16,7 +16,7 @@ import {
   type MyResult,
 } from "@/app/(dash)/my-dashboard/actions";
 import { notify } from "@/lib/notify";
-import type { MyLabel, MyTemplateRow } from "@/server/my-templates";
+import type { MyDashboard, MyLabel, MyTemplateRow } from "@/server/my-templates";
 import { AddSystemDialog } from "./add-system-dialog";
 import { ManagePanel } from "./manage-panel";
 import { TemplateItem } from "./template-item";
@@ -48,7 +48,7 @@ const signature = (t: MyTemplateRow[], c: MyLabel[], g: MyLabel[]) =>
  * filtering and sorting answer at once; every change is shown immediately and saved in the
  * background (and put back with a message if saving fails).
  */
-export function DashboardClient({ templates, categories, tags, total, initial }: { templates: MyTemplateRow[]; categories: MyLabel[]; tags: MyLabel[]; total: number; initial: DashboardInitial }) {
+export function DashboardClient({ templates, categories, tags, total, share, initial }: { templates: MyTemplateRow[]; categories: MyLabel[]; tags: MyLabel[]; total: number; share: MyDashboard["share"]; initial: DashboardInitial }) {
   const router = useRouter();
   const pathname = usePathname();
   const [items, setItems] = useState(templates);
@@ -222,6 +222,7 @@ export function DashboardClient({ templates, categories, tags, total, initial }:
         onRenameTag={(id) => void rename("tag", id)}
         onDeleteCategory={(id) => void removeLabel("category", id)}
         onDeleteTag={(id) => void removeLabel("tag", id)}
+        share={share}
       />
 
       <section className="flex min-w-0 flex-col gap-4" aria-label="My templates">
@@ -262,13 +263,13 @@ export function DashboardClient({ templates, categories, tags, total, initial }:
         </div>
 
         {items.length === 0 ? (
-          <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed p-8">
+          <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-[var(--crease)]/50 bg-card/60 p-8">
             <h2 className="font-medium">No templates yet</h2>
             <p className="max-w-md text-sm text-muted-foreground">Add a system template to start your own list. Then give it a category and tags to find it fast.</p>
             <AddSystemDialog categories={cats} onAdded={() => router.refresh()} />
           </div>
         ) : shown.length === 0 ? (
-          <div className="flex flex-col items-start gap-2 rounded-xl border border-dashed p-8">
+          <div className="flex flex-col items-start gap-2 rounded-xl border border-dashed border-[var(--crease)]/50 bg-card/60 p-8">
             <p className="text-sm text-muted-foreground">No templates match.</p>
             <button type="button" onClick={clear} className="text-sm font-medium underline underline-offset-4">Clear filters</button>
           </div>

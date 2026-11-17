@@ -14,33 +14,38 @@ datasource db {
 // ---- Auth (Better Auth) ----
 
 model User {
-  id            String    @id
-  name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
-  image         String?
+  id               String            @id
+  name             String
+  email            String            @unique
+  emailVerified    Boolean           @default(false)
+  image            String?
   /// "user" or "superadmin". Set only by the server-side CLI (npm run admin:create), never from the web.
-  role          String    @default("user")
+  role             String            @default("user")
   /// Suspended accounts cannot sign in and lose their sessions.
-  banned        Boolean   @default(false)
-  bannedAt      DateTime?
-  banReason     String?
+  banned           Boolean           @default(false)
+  bannedAt         DateTime?
+  banReason        String?
   /// Contact details the customer adds on the profile settings tab (all optional).
-  phone           String?
-  altPhone        String?
-  businessName    String?
-  businessAddress String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-  projects      Project[]
-  assets        Asset[]
-  aiRequests    AiRequest[]
-  rateEvents    RateEvent[]
-  categories    UserCategory[]
-  tags          UserTag[]
+  phone            String?
+  altPhone         String?
+  businessName     String?
+  businessAddress  String?
+  /// The Client's logo (PNG or JPEG) shown on their shared pages: a storage key, and its MIME type. Both null = no logo.
+  businessLogoKey  String?
+  businessLogoMime String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  sessions         Session[]
+  accounts         Account[]
+  projects         Project[]
+  assets           Asset[]
+  aiRequests       AiRequest[]
+  rateEvents       RateEvent[]
+  categories       UserCategory[]
+  tags             UserTag[]
   favoriteArtworks ArtworkFavorite[]
+  shareLinks       ShareLink[]
+  clientOrders     Order[]
 
   @@map("user")
 }
@@ -110,22 +115,22 @@ model RateLimit {
 /// Geometry rules live in code (packages/dieline-engine); the DB stores the
 /// catalogue entry and its default parameters.
 model Template {
-  id                String    @id // stable slug, e.g. "tuck-end-carton-straight"
-  generatorId       String    // engine template id, e.g. "tuck-end-carton"
+  id                String             @id // stable slug, e.g. "tuck-end-carton-straight"
+  generatorId       String // engine template id, e.g. "tuck-end-carton"
   name              String
-  category          String    // e.g. "folding-carton", "mailer", "shipping"
+  category          String // e.g. "folding-carton", "mailer", "shipping"
   description       String
   schemaVersion     Int
-  defaultParameters Json      @db.JsonB
+  defaultParameters Json               @db.JsonB
   previewUrl        String?
   /// Where the template is in the admin's workflow: draft, step-1, step-2, hide, published, sealed (see lib/template-status.ts).
-  status            String    @default("published")
+  status            String             @default("published")
   /// Public on the site. Always equals (status == "published"); kept as its own column so public queries stay simple and indexed.
-  published         Boolean   @default(true)
+  published         Boolean            @default(true)
   /// "builtin" = parametric generator in code (seeded); "svg" = imported from an SVG by an admin.
-  source            String    @default("builtin")
+  source            String             @default("builtin")
   /// For source "svg": the parsed dieline (millimetres) and the role chosen for each line style.
-  geometry          Json?     @db.JsonB
+  geometry          Json?              @db.JsonB
   widthMm           Float?
   heightMm          Float?
   /// Small SVG (as text) for lists; built when the template is saved. Keeps list pages light.
@@ -138,14 +143,14 @@ model Template {
   /// Built-in templates: board thickness (mm) new projects start with, set by an admin (see docs/thickness.md). Null = the template's own default.
   defaultThickness  Float?
   /// Camera and fold amount the 3D preview starts with (set by an admin). Null = standard view.
-  viewSettings      Json?     @db.JsonB
+  viewSettings      Json?              @db.JsonB
   /// Window holes new projects start with (array of WindowDoc, sheet frame in mm at the template's default size). Null = none. Set by an admin.
-  windows           Json?     @db.JsonB
+  windows           Json?              @db.JsonB
   /// Imported templates only: true when an admin has set up the 3D fold (stored in geometry.fold).
-  hasFold           Boolean   @default(false)
-  sortOrder         Int       @default(0)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  hasFold           Boolean            @default(false)
+  sortOrder         Int                @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
   projects          Project[]
   categories        TemplateCategory[]
 
@@ -158,20 +163,22 @@ model Template {
 /// A user's packaging project. `projectData` holds the full versioned
 /// ProjectDoc JSON (parameters, artwork, 3D and export settings).
 model Project {
-  id           String   @id @default(cuid())
+  id           String        @id @default(cuid())
   userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   name         String
   templateId   String
-  template     Template @relation(fields: [templateId], references: [id], onDelete: Restrict)
-  projectData  Json     @db.JsonB
+  template     Template      @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  projectData  Json          @db.JsonB
   /// The customer's own category for this project (one at most), see UserCategory.
   categoryId   String?
   category     UserCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   tags         ProjectTag[]
+  shareLinks   ShareLink[]
+  orderItems   OrderItem[]
   thumbnailUrl String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
   assets       Asset[]
 
   @@index([userId, updatedAt(sort: Desc)])
@@ -224,7 +231,7 @@ model Asset {
   projectId  String?
   project    Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   fileName   String
-  fileType   String   // MIME type
+  fileType   String // MIME type
   sizeBytes  Int
   storageKey String   @unique
   createdAt  DateTime @default(now())
@@ -236,13 +243,13 @@ model Asset {
 
 /// One AI parameter-extraction request (for the per-user daily quota and auditing).
 model AiRequest {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// ok | needs_info | unsupported | invalid | error
-  outcome   String
+  outcome    String
   inputChars Int
-  createdAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 
   @@index([userId, createdAt(sort: Desc)])
   @@map("ai_request")
@@ -305,7 +312,7 @@ model ArtworkItem {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  favorites   ArtworkFavorite[]
+  favorites ArtworkFavorite[]
 
   @@index([category])
   @@index([createdAt(sort: Desc)])
@@ -323,4 +330,111 @@ model ArtworkFavorite {
   @@id([userId, artworkId])
   @@index([artworkId])
   @@map("artwork_favorite")
+}
+
+// ---- Client portal: shared template pages, customers (phone + OTP) and their orders ----
+
+/// A permanent, hashed public link of a Client (a signed-in user): all templates, one category, one tag, or one template.
+/// The "all" link's hash is the Client's user hash (the first part of every portal address). Turning a link off keeps its address.
+model ShareLink {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "all" | "category" | "tag" | "template"
+  scope     String
+  /// UserCategory id, UserTag id or Project id (null for "all").
+  targetId  String?
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  hash      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, scope, targetId])
+  @@index([userId])
+  @@map("share_link")
+}
+
+/// A buyer on a Client's portal. The phone number is the identity (checked with a one-time code); not a Client account.
+model Customer {
+  id        String            @id @default(cuid())
+  /// Digits with country code, e.g. 8801712345678.
+  phone     String            @unique
+  fullName  String            @default("")
+  country   String            @default("Bangladesh")
+  district  String            @default("")
+  address   String            @default("")
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  sessions  CustomerSession[]
+  orders    Order[]
+
+  @@map("customer")
+}
+
+/// A one-time sign-in code sent to a phone. Only a hash of the code is kept.
+model CustomerOtp {
+  id        String   @id @default(cuid())
+  phone     String
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  consumed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([phone, createdAt(sort: Desc)])
+  @@map("customer_otp")
+}
+
+model CustomerSession {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
+  @@map("customer_session")
+}
+
+/// An order a customer placed on a Client's portal. The contact details are copied at order time.
+model Order {
+  id           String      @id @default(cuid())
+  /// A short number the Client and the customer both see (ORD-1001 ...).
+  number       Int         @default(autoincrement())
+  clientId     String
+  client       User        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  customerId   String
+  customer     Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  /// new | confirmed | in_progress | done | cancelled
+  status       String      @default("new")
+  customerName String
+  phone        String
+  country      String
+  district     String
+  address      String
+  notes        String      @default("")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  items        OrderItem[]
+
+  @@index([clientId, createdAt(sort: Desc)])
+  @@index([customerId, createdAt(sort: Desc)])
+  @@map("order")
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  /// The template's name when ordered (the Client may rename or delete it later).
+  name      String
+  quantity  Int
+  details   String   @default("")
+
+  @@index([orderId])
+  @@map("order_item")
 }

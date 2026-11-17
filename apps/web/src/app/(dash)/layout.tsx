@@ -8,9 +8,9 @@ import { SiteHeader } from "@/components/marketing/site-header";
  */
 export default function DashLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="studio min-h-screen bg-background">
       <SiteHeader solid inApp />
-      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">{children}</main>
+      <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
     </div>
   );
 }

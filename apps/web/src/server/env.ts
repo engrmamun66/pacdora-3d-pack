@@ -30,6 +30,13 @@ const schema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   /** AI requests allowed per user per 24 hours. */
   AI_DAILY_LIMIT: z.coerce.number().int().min(0).max(10_000).default(20),
+  /** MiMSMS gateway for customer sign-in codes. Without them no SMS can be sent (only the dev code below works). */
+  MIMSMS_USERNAME: z.string().optional(),
+  MIMSMS_API_KEY: z.string().optional(),
+  MIMSMS_SENDER_NAME: z.string().optional(),
+  /** Development shortcut: when set, every sign-in code is this value and no SMS is sent. Empty or missing = random codes by SMS. (MIMSMSM_DEV_PASS is read as the same setting.) */
+  MIMSMS_DEV_PASS: z.string().optional(),
+  MIMSMSM_DEV_PASS: z.string().optional(),
   /** Directory for uploaded files (default: ./storage relative to the app). */
   STORAGE_DIR: z.string().min(1).optional(),
 });
@@ -57,5 +64,7 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+/** The development sign-in code, or null when real SMS codes are used. */
+export const devOtp: string | null = (env.MIMSMS_DEV_PASS || env.MIMSMSM_DEV_PASS || "").trim() || null;
 export const googleEnabled = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
 export const aiEnabled = Boolean(env.ANTHROPIC_API_KEY);

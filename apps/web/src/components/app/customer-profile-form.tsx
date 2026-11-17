@@ -41,8 +41,8 @@ export function CustomerProfileForm({ values }: { values: ProfileValues }) {
         <Input id="altPhone" name="altPhone" type="tel" defaultValue={values.altPhone} maxLength={20} placeholder="Optional" />
       </div>
       <div className="flex flex-col gap-1.5 sm:col-span-2">
-        <Label htmlFor="businessName">Business name</Label>
-        <Input id="businessName" name="businessName" defaultValue={values.businessName} maxLength={120} autoComplete="organization" placeholder="Optional" />
+        <Label htmlFor="businessName">Business name <span className="font-normal text-muted-foreground">(shown on your shared pages)</span></Label>
+        <Input id="businessName" name="businessName" defaultValue={values.businessName} maxLength={120} autoComplete="organization" placeholder="Your own name is used if empty" />
       </div>
       <div className="flex flex-col gap-1.5 sm:col-span-2">
         <Label htmlFor="businessAddress">Business address</Label>

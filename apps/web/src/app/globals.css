@@ -353,3 +353,166 @@ dialog.drop-dialog[open]::backdrop {
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
   }
 }
+
+/*
+ * "Studio": the look of the Client dashboard and the shared shop pages. A drafting table for boxes:
+ * graph paper, the dieline's own colours (cut = magenta, crease = blue dashes, board = kraft) and boxes that fold.
+ * Scoped to .studio so the editor, the admin panel and the home page keep their own look.
+ */
+.studio {
+  color-scheme: light;
+  --ink: oklch(0.22 0.045 258);
+  --paper: oklch(0.973 0.007 250);
+  --cut: oklch(0.6 0.23 2);
+  --crease: oklch(0.64 0.15 238);
+  --board: oklch(0.86 0.065 80);
+  --board-deep: oklch(0.74 0.09 70);
+  --grid-minor: oklch(0.22 0.045 258 / 0.045);
+  --grid-major: oklch(0.22 0.045 258 / 0.085);
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: oklch(0.985 0.004 250);
+  --muted: oklch(0.945 0.01 250);
+  --muted-foreground: oklch(0.5 0.03 255);
+  --accent: oklch(0.95 0.02 245);
+  --accent-foreground: var(--ink);
+  --border: oklch(0.9 0.014 250);
+  --input: oklch(0.88 0.016 250);
+  --ring: var(--crease);
+  background: var(--background);
+  color: var(--foreground);
+}
+.studio h1,
+.studio .font-display {
+  font-family: var(--font-display), var(--font-geist-sans), system-ui, sans-serif;
+  letter-spacing: -0.02em;
+  font-optical-sizing: auto;
+}
+.studio h1 { font-weight: 700; }
+
+/* Graph paper: a fine grid every 16px and a stronger one every 80px. */
+.paper-grid {
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid-major) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+    linear-gradient(var(--grid-minor) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-minor) 1px, transparent 1px);
+  background-size: 80px 80px, 80px 80px, 16px 16px, 16px 16px;
+  background-position: -1px -1px;
+}
+/* The same grid, only on the dieline pictures, so each template sits on its own sheet. */
+.paper-grid-soft {
+  background-color: oklch(0.99 0.004 250);
+  background-image:
+    linear-gradient(var(--grid-minor) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-minor) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+/* A sheet: a white card with a soft lift. */
+.sheet {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 1px 0 oklch(0.22 0.045 258 / 0.04), 0 10px 28px -16px oklch(0.22 0.045 258 / 0.28);
+}
+/* Corner brackets in the cut colour: always on (.marks) or when the card is hovered / focused (.marks-hover). */
+.marks,
+.marks-hover { position: relative; }
+.marks::before, .marks::after,
+.marks-hover::before, .marks-hover::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 0 solid var(--cut);
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.marks::before, .marks-hover::before { top: -1px; left: -1px; border-top-width: 2px; border-left-width: 2px; border-top-left-radius: var(--radius-xl); }
+.marks::after, .marks-hover::after { right: -1px; bottom: -1px; border-right-width: 2px; border-bottom-width: 2px; border-bottom-right-radius: var(--radius-xl); }
+.marks-hover::before, .marks-hover::after { opacity: 0; transform: scale(0.6); }
+.marks-hover:hover::before, .marks-hover:hover::after,
+.marks-hover:focus-within::before, .marks-hover:focus-within::after { opacity: 1; transform: none; }
+
+/* A dog-ear: the corner of a card folds over when it is hovered. */
+.flap { position: relative; overflow: hidden; }
+.flap > .flap-corner {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  background: linear-gradient(225deg, transparent 50%, var(--board) 50%);
+  box-shadow: -2px 2px 6px oklch(0.22 0.045 258 / 0.18);
+  transition: width 0.22s ease, height 0.22s ease;
+  pointer-events: none;
+}
+.flap:hover > .flap-corner, .flap:focus-within > .flap-corner { width: 26px; height: 26px; }
+
+/* A crease: the blue dashed line of a dieline, as a divider. */
+.crease-line { height: 0; border-top: 1.5px dashed var(--crease); opacity: 0.55; }
+.crease-border-b { border-bottom: 1.5px dashed color-mix(in oklab, var(--crease) 55%, transparent); }
+
+/* The main button: ink, with a cut-line outline that draws around it on hover. */
+.cta {
+  background: var(--ink);
+  color: var(--primary-foreground);
+  box-shadow: 0 6px 16px -8px oklch(0.22 0.045 258 / 0.6);
+  transition: box-shadow 0.18s, transform 0.18s, background 0.18s;
+}
+.cta:hover:not(:disabled) { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3.5px var(--cut), 0 8px 18px -8px oklch(0.22 0.045 258 / 0.6); }
+.cta:active:not(:disabled) { transform: translateY(1px); }
+.cta:disabled { opacity: 0.55; }
+
+/* A status line like a fold: dashed crease with a node for each step. */
+.fold-steps { position: relative; }
+.fold-steps::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 8px;
+  border-top: 1.5px dashed color-mix(in oklab, var(--crease) 60%, transparent);
+}
+
+/* A box that turns: six faces in 3D (see components/studio/pack-box.tsx). Sizes come from --w, --h, --d. */
+.pack-stage { perspective: 900px; width: calc(var(--w) * 1px * 2.2); height: calc(var(--h) * 1px * 1.7); display: grid; place-items: center; }
+.pack-box {
+  position: relative;
+  width: calc(var(--w) * 1px);
+  height: calc(var(--h) * 1px);
+  transform-style: preserve-3d;
+  transform: rotateX(-22deg) rotateY(32deg);
+  animation: pack-spin 22s linear infinite;
+}
+.pack-face {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border: 1.5px solid var(--cut);
+  background: var(--face, var(--board));
+  backface-visibility: hidden;
+  display: grid;
+  place-items: center;
+}
+.pack-face::after { content: ""; position: absolute; inset: 14% 0 auto 0; border-top: 1.5px dashed var(--crease); opacity: 0.7; }
+.pack-front, .pack-back { width: calc(var(--w) * 1px); height: calc(var(--h) * 1px); margin: calc(var(--h) * -0.5px) 0 0 calc(var(--w) * -0.5px); }
+.pack-left, .pack-right { width: calc(var(--d) * 1px); height: calc(var(--h) * 1px); margin: calc(var(--h) * -0.5px) 0 0 calc(var(--d) * -0.5px); }
+.pack-top, .pack-bottom { width: calc(var(--w) * 1px); height: calc(var(--d) * 1px); margin: calc(var(--d) * -0.5px) 0 0 calc(var(--w) * -0.5px); }
+.pack-top::after, .pack-bottom::after { display: none; }
+.pack-front { transform: translateZ(calc(var(--d) * 0.5px)); filter: brightness(1.04); }
+.pack-back { transform: rotateY(180deg) translateZ(calc(var(--d) * 0.5px)); filter: brightness(0.9); }
+.pack-right { transform: rotateY(90deg) translateZ(calc(var(--w) * 0.5px)); filter: brightness(0.94); }
+.pack-left { transform: rotateY(-90deg) translateZ(calc(var(--w) * 0.5px)); filter: brightness(0.88); }
+.pack-top { transform: rotateX(90deg) translateZ(calc(var(--h) * 0.5px)); filter: brightness(1.1); }
+.pack-bottom { transform: rotateX(-90deg) translateZ(calc(var(--h) * 0.5px)); filter: brightness(0.8); }
+@keyframes pack-spin { to { transform: rotateX(-22deg) rotateY(392deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .pack-box { animation: none; }
+  .flap > .flap-corner, .cta, .marks-hover::before, .marks-hover::after { transition: none; }
+}
