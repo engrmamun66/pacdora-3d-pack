@@ -4,10 +4,12 @@ import { isBackgroundCategory } from "@/lib/artwork-meta";
 import { notify } from "@/lib/notify";
 import "./fonts";
 import Link from "next/link";
+import { site } from "@/config/site";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Circle,
+  PaintBucket,
   Copy,
   Download,
   Hand,
@@ -34,7 +36,7 @@ import {
 import { applyWindows, createImportedGenerator, generateDieline, type FlatDieline, type FoldSetup, type WatermarkSpec, type WindowSpec } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import type { ViewSettings } from "@/lib/view-settings";
-import { type Artwork, type ArtworkObject, type BoxBackground, MAX_BACKGROUNDS, backgroundsOf } from "@packaging/schema";
+import { type Artwork, type ArtworkObject, type BoxBackground, MAX_BACKGROUNDS, backgroundsOf, facesOf } from "@packaging/schema";
 import { saveArtwork, saveThreeD } from "@/app/editor/[id]/actions";
 import { Preview3D, type ThreeDSettings } from "@/components/viewer3d/preview-3d";
 import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
@@ -62,6 +64,8 @@ const SPLIT_MAX = 85;
 const RIGHT_W = 288;
 const MIN_3D = 240;
 const MIN_CANVAS = 320;
+/** How long the 3D preview takes to slide in or out (ms). */
+const THREE_MS = 360;
 
 
 function ToolButton({ label, onClick, disabled, children, active }: { label: string; onClick: () => void; disabled?: boolean; children: React.ReactNode; active?: boolean }) {
@@ -90,8 +94,98 @@ const OVERLAY_TOGGLES = [
   { key: "showDimensions", label: "Dimensions" },
 ] as const;
 
-/** Bottom bar over the dieline: zoom (minus, plus, percentage, fit) and what to show on the sheet (grid, bleed, safe area). */
-function CanvasBar({ viewport, overlay, onOverlay, onBy, onFit }: { viewport: Viewport | null; overlay: OverlayOptions; onOverlay: (o: OverlayOptions) => void; onBy: (f: number) => void; onFit: () => void }) {
+/** Colours offered for a face: plain board-like colours first, then strong ones. */
+const FACE_COLORS = ["#ffffff", "#f3e6d3", "#f4c95d", "#fbd5e3", "#e86a6a", "#8c1d1d", "#8a5a2b", "#0f6b1d", "#3b82f6", "#9ca3af", "#111111"] as const;
+
+/**
+ * The box that opens on a panel in Face color mode: pick a colour for that whole panel, or take it away.
+ * Colours are applied at once (one undo step each); the custom colour is applied when its picker closes.
+ */
+function FaceColorBox({ name, color, left, top, onPick, onClose }: { name: string; color: string | null; left: number; top: number; onPick: (c: string | null) => void; onClose: () => void }) {
+  const custom = useRef<HTMLInputElement>(null);
+  // The browser's colour picker fires "input" all the time and "change" when it is closed: only the last counts as one step.
+  useEffect(() => {
+    const el = custom.current;
+    if (!el) return;
+    const done = () => onPick(el.value);
+    el.addEventListener("change", done);
+    return () => el.removeEventListener("change", done);
+  });
+  return (
+    <div
+      role="dialog"
+      aria-label={`Face color of ${name}`}
+      className="absolute z-30 w-64 rounded-xl border bg-background p-3 shadow-lg"
+      style={{ left, top }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
+    >
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">Face color</p>
+          <p className="truncate text-xs text-muted-foreground">{name}</p>
+        </div>
+        <button type="button" aria-label="Close" onClick={onClose} className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">×</button>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          title="No face color"
+          aria-label="No face color"
+          aria-pressed={color === null}
+          onClick={() => onPick(null)}
+          className={`relative grid size-7 place-items-center overflow-hidden rounded-full border bg-white ${color === null ? "ring-2 ring-foreground ring-offset-1" : ""}`}
+        >
+          <span aria-hidden className="absolute h-px w-9 rotate-45 bg-red-500" />
+        </button>
+        {FACE_COLORS.map((c) => (
+          <button
+            key={c}
+            type="button"
+            title={c}
+            aria-label={`Face color ${c}`}
+            aria-pressed={color?.toLowerCase() === c}
+            onClick={() => onPick(c)}
+            className={`size-7 rounded-full border ${color?.toLowerCase() === c ? "ring-2 ring-foreground ring-offset-1" : ""}`}
+            style={{ backgroundColor: c }}
+          />
+        ))}
+        <label title="Pick any color" className="relative grid size-7 cursor-pointer place-items-center overflow-hidden rounded-full border" style={{ background: "conic-gradient(#f43f5e, #f59e0b, #22c55e, #06b6d4, #6366f1, #d946ef, #f43f5e)" }}>
+          <span className="sr-only">Pick any color</span>
+          <input ref={custom} type="color" defaultValue={color ?? "#ffffff"} className="absolute inset-0 size-full cursor-pointer opacity-0" />
+        </label>
+      </div>
+      <p className="mt-2 text-[11px] text-muted-foreground">Click another panel to colour it too. Press Esc to close.</p>
+    </div>
+  );
+}
+
+/** Bottom bar over the dieline: hand and face color tools, zoom (minus, plus, percentage, fit) and what to show on the sheet (grid, bleed, safe area). */
+function CanvasBar({
+  viewport,
+  overlay,
+  onOverlay,
+  onBy,
+  onFit,
+  panMode,
+  onPan,
+  faceTool,
+  onFace,
+}: {
+  viewport: Viewport | null;
+  overlay: OverlayOptions;
+  onOverlay: (o: OverlayOptions) => void;
+  onBy: (f: number) => void;
+  onFit: () => void;
+  panMode: boolean;
+  onPan: () => void;
+  faceTool: boolean;
+  onFace: () => void;
+}) {
   const z = viewport?.zoom ?? 1;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -114,6 +208,9 @@ function CanvasBar({ viewport, overlay, onOverlay, onBy, onFit }: { viewport: Vi
   }, [menuOpen]);
   return (
     <div className="absolute inset-x-2 bottom-3 z-10 mx-auto flex w-fit flex-wrap items-center justify-center gap-x-0.5 gap-y-0.5 rounded-lg border bg-background/95 px-1.5 py-1 shadow-md backdrop-blur" role="toolbar" aria-label="Dieline view">
+      <ToolButton label="Hand tool: drag to move the view (or hold Space, or drag with the right mouse button)" active={panMode} onClick={onPan}><Hand className="size-4" /></ToolButton>
+      <ToolButton label="Face color: click a panel of the dieline to give it a color" active={faceTool} onClick={onFace}><PaintBucket className="size-4" /></ToolButton>
+      <div className="mx-0.5 h-5 w-px bg-border" />
       <ToolButton label="Zoom out (Ctrl/Cmd+-)" onClick={() => onBy(0.8)}><Minus className="size-4" /></ToolButton>
       <span className="w-10 text-center text-xs tabular-nums" title="100% = real size on a 96 dpi screen. Mouse wheel zooms, Shift + wheel moves sideways.">{viewport ? `${Math.round((z / PX_PER_MM_AT_100) * 100)}%` : ""}</span>
       <ToolButton label="Zoom in (Ctrl/Cmd++)" onClick={() => onBy(1.25)}><Plus className="size-4" /></ToolButton>
@@ -233,6 +330,11 @@ export function ArtworkEditor({
   const [assets, setAssets] = useState<Asset[]>(initialAssets);
   const [uploading, setUploading] = useState(false);
   const [panMode, setPanMode] = useState(false);
+  // Face color: the tool, the panel whose colour box is open (and where), and the colours as panel id -> colour.
+  const [faceTool, setFaceTool] = useState(false);
+  const [hostSize, setHostSize] = useState({ w: 800, h: 600 });
+  const [facePick, setFacePick] = useState<{ panelId: string; x: number; y: number } | null>(null);
+  const [faces, setFaces] = useState<Record<string, string>>(() => facesOf(initialArtwork));
   const [dropping, setDropping] = useState(false);
   /** Right-click menu of the selected artwork (px from the top-left of the dieline area), or null. */
   /** Width (px) of the 3D panel, set by dragging the divider; null = the default (38%). Remembered in this browser. */
@@ -299,7 +401,63 @@ export function ArtworkEditor({
   const [showExport, setShowExport] = useState(false);
   const [threeD, setThreeD] = useState<ThreeDSettings>(initialThreeD);
   const view3d = useRef<CartonViewHandle>(null);
-  const artworkForPreview = useMemo<Artwork>(() => ({ objects, backgrounds }), [objects, backgrounds]);
+  // 3D on/off is animated: the 3D column grows or shrinks (drawer-like), the dieline follows and is re-fitted on every frame.
+  // `expanded` drives the column width, `animating` switches the CSS transition on (never while dragging the divider),
+  // `exited` keeps the preview mounted until the closing animation is over.
+  const [expanded, setExpanded] = useState(show3d);
+  const [animating, setAnimating] = useState(false);
+  const [exited, setExited] = useState(!show3d);
+  const [gridW, setGridW] = useState(1200);
+  useEffect(() => {
+    const el = gridEl.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setGridW(Math.round(e.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const seen3d = useRef(show3d);
+  useEffect(() => {
+    if (seen3d.current === show3d) return;
+    seen3d.current = show3d;
+    let start = -1;
+    let frame = 0;
+    let id2 = 0;
+    let done = 0;
+    let fit = 0;
+    const follow = (now: number) => {
+      if (start < 0) start = now;
+      ctl.current?.zoomFit();
+      if (now - start < THREE_MS + 40) frame = requestAnimationFrame(follow);
+    };
+    // Two frames so a freshly mounted preview is painted at width 0 before it grows.
+    const id1 = requestAnimationFrame(() => {
+      id2 = requestAnimationFrame(() => {
+        setExited(false);
+        setAnimating(true);
+        setExpanded(show3d);
+        frame = requestAnimationFrame(follow);
+        done = window.setTimeout(() => {
+          setAnimating(false);
+          if (!show3d) setExited(true);
+        }, THREE_MS + 30);
+        fit = window.setTimeout(() => ctl.current?.zoomFit(), THREE_MS + 80);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(id1);
+      cancelAnimationFrame(id2);
+      cancelAnimationFrame(frame);
+      window.clearTimeout(done);
+      window.clearTimeout(fit);
+    };
+  }, [show3d]);
+  /** Width (px) of the 3D column when it is open. */
+  const openW = threeW ?? Math.max(280, Math.round(gridW * 0.38));
+  const threeVisible = foldable && (show3d || !exited);
+  const artworkForPreview = useMemo<Artwork>(() => {
+    const list = Object.entries(faces).map(([panelId, color]) => ({ panelId, color }));
+    return { objects, backgrounds, ...(list.length ? { faces: list } : {}) };
+  }, [objects, backgrounds, faces]);
   const updateThreeD = (s: ThreeDSettings) => {
     setThreeD(s);
     void saveThreeD(projectId, s).then((r) => {
@@ -344,6 +502,7 @@ export function ArtworkEditor({
       onChange: (art) => {
         setObjects(art.objects);
         setBackgrounds(backgroundsOf(art));
+        setFaces(facesOf(art));
         saver.schedule(art);
       },
       onSelection: (ids) => {
@@ -366,6 +525,7 @@ export function ArtworkEditor({
       onError: (text) => notify.error(text),
       onBackgroundEdit: setBgEditing,
       onBackgroundSelect: setBgSelected,
+      onFacePick: setFacePick,
     });
     ctl.current = c;
     if (process.env.NODE_ENV !== "production") Object.assign(window, { __editor: c });
@@ -374,7 +534,11 @@ export function ArtworkEditor({
     let alive = true;
     // The page keeps its skeleton until the sheet, its pictures and the background are drawn.
     void c.init(initialArtwork).finally(() => alive && setLoaded(true));
-    const ro = new ResizeObserver(([e]) => e && c.resize(Math.floor(e.contentRect.width), Math.floor(e.contentRect.height)));
+    const ro = new ResizeObserver(([e]) => {
+      if (!e) return;
+      c.resize(Math.floor(e.contentRect.width), Math.floor(e.contentRect.height));
+      setHostSize({ w: Math.floor(e.contentRect.width), h: Math.floor(e.contentRect.height) });
+    });
     ro.observe(host);
     return () => {
       alive = false;
@@ -587,6 +751,16 @@ export function ArtworkEditor({
     const next = !panMode;
     setPanMode(next);
     ctl.current?.setPanMode(next);
+    if (next && faceTool) toggleFace();
+  };
+  const toggleFace = () => {
+    const next = !faceTool;
+    setFaceTool(next);
+    if (next && panMode) {
+      setPanMode(false);
+      ctl.current?.setPanMode(false);
+    }
+    ctl.current?.setFaceMode(next);
   };
 
   if (!geo) {
@@ -607,6 +781,9 @@ export function ArtworkEditor({
       <EditorSkeletonOverlay show={!loaded} />
       {/* Top bar */}
       <header className="flex items-center gap-1 border-b px-2">
+        <Link href="/" aria-label={`${site.name} home`} className="mr-1 grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
+          <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden><path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z" /><path d="M3 7.5 12 12l9-4.5M12 12v9" /></svg>
+        </Link>
         <Link href={`/projects/${projectId}`} title={`Back to the dieline page of ${name}`} className="mr-2 rounded-md px-2 py-1 text-sm hover:bg-muted">
           ← <span className="font-medium">Back to dieline page</span>
         </Link>
@@ -649,8 +826,6 @@ export function ArtworkEditor({
         <ToolButton label="Duplicate (Ctrl/Cmd+D)" disabled={!selected.length} onClick={() => void c?.duplicateSelected()}><Copy className="size-4" /></ToolButton>
         <ToolButton label="Delete (Del)" disabled={!selected.length} onClick={() => c?.removeSelected()}><Trash2 className="size-4" /></ToolButton>
         <div className="mx-1 h-5 w-px bg-border" />
-        <ToolButton label="Hand tool: drag to move the view (or hold Space, or drag with the right mouse button)" active={panMode} onClick={togglePan}><Hand className="size-4" /></ToolButton>
-        <div className="mx-1 h-5 w-px bg-border" />
         {foldable ? (
           <ToolButton label={show3d ? "Hide 3D preview" : "Show 3D preview"} active={show3d} onClick={() => setShow3d((v) => !v)}>
             <Box className="size-4" /> 3D
@@ -670,7 +845,10 @@ export function ArtworkEditor({
       <div
         ref={gridEl}
         className="grid min-h-0"
-        style={{ gridTemplateColumns: show3d && foldable ? `${LEFT_W}px minmax(0,1fr) ${threeW === null ? "minmax(280px,38%)" : `${threeW}px`} ${RIGHT_W}px` : `${LEFT_W}px minmax(0,1fr) ${RIGHT_W}px` }}
+        style={{
+          gridTemplateColumns: threeVisible ? `${LEFT_W}px minmax(0,1fr) ${expanded && show3d ? openW : 0}px ${RIGHT_W}px` : `${LEFT_W}px minmax(0,1fr) ${RIGHT_W}px`,
+          transition: animating ? `grid-template-columns ${THREE_MS}ms cubic-bezier(0.22, 1, 0.36, 1)` : undefined,
+        }}
       >
         {/* Left: layers + uploads */}
         <aside ref={leftEl} className="flex min-h-0 flex-col border-r" style={{ "--artwork-h": `${splitPct}%` } as React.CSSProperties}>
@@ -830,12 +1008,26 @@ export function ArtworkEditor({
                 </button>
               </div>
             ) : null}
-            <CanvasBar viewport={viewport} overlay={overlay} onOverlay={setOverlay} onBy={(f) => c?.zoomBy(f)} onFit={() => c?.zoomFit()} />
+            {facePick ? (
+              <FaceColorBox
+                key={facePick.panelId}
+                name={geo.foldTree.panels.find((p) => p.id === facePick.panelId)?.label ?? facePick.panelId}
+                color={faces[facePick.panelId] ?? null}
+                left={Math.max(8, Math.min(facePick.x + 14, hostSize.w - 272))}
+                top={Math.max(8, Math.min(facePick.y + 14, hostSize.h - 150))}
+                onPick={(color) => ctl.current?.setFace(facePick.panelId, color)}
+                onClose={() => {
+                  setFacePick(null);
+                  ctl.current?.chooseFace(null);
+                }}
+              />
+            ) : null}
+            <CanvasBar viewport={viewport} overlay={overlay} onOverlay={setOverlay} onBy={(f) => c?.zoomBy(f)} onFit={() => c?.zoomFit()} panMode={panMode} onPan={togglePan} faceTool={faceTool} onFace={toggleFace} />
           </div>
         </div>
 
-        {show3d && foldable ? (
-          <section className="relative min-h-0 min-w-0 border-l" aria-label="3D preview">
+        {threeVisible ? (
+          <section className="relative min-h-0 min-w-0" aria-label="3D preview" aria-hidden={!show3d}>
             {/* Drag this edge to give the dieline or the 3D view more room (arrow keys too; double-click resets). */}
             <div
               role="separator"
@@ -844,7 +1036,7 @@ export function ArtworkEditor({
               aria-valuemin={MIN_3D}
               aria-valuenow={threeW ?? undefined}
               tabIndex={0}
-              className="group absolute inset-y-0 -left-1.5 z-20 w-3 cursor-col-resize touch-none outline-none"
+              className={`group absolute inset-y-0 -left-1.5 z-20 w-3 cursor-col-resize touch-none outline-none ${show3d && expanded && !animating ? "" : "pointer-events-none invisible"}`}
               onPointerDown={(e) => {
                 e.preventDefault();
                 e.currentTarget.setPointerCapture(e.pointerId);
@@ -877,7 +1069,12 @@ export function ArtworkEditor({
                 <span className="size-[3px] rounded-full bg-muted-foreground/70" />
               </span>
             </div>
-            <Preview3D initialView={initialView} geo={geo} artwork={artworkForPreview} settings={threeD} onSettings={updateThreeD} viewRef={view3d} watermark={watermark} />
+            {/* Clipped drawer: the preview keeps its full width while the column grows, so it slides in instead of being squeezed (no re-layout of the 3D canvas per frame). */}
+            <div className={`absolute inset-0 overflow-hidden border-l transition-opacity motion-reduce:transition-none ${animating ? "duration-300" : "duration-0"} ${show3d && expanded ? "opacity-100" : "opacity-0"}`}>
+              <div className="absolute inset-y-0 right-0" style={{ width: openW }}>
+                <Preview3D initialView={initialView} geo={geo} artwork={artworkForPreview} settings={threeD} onSettings={updateThreeD} viewRef={view3d} watermark={watermark} />
+              </div>
+            </div>
           </section>
         ) : null}
 

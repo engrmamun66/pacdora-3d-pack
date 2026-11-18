@@ -66,7 +66,7 @@ function NumberBox({ value, placeholder, onChange, label, min, max, step }: { va
  * Admin: the box settings of an imported dieline. Everything is guessed from the file first
  * (shown as the placeholder or the selected value); change whatever is not right.
  */
-export function ConstructionEditor({ fold, onChange }: { fold: FoldSetup; onChange: (f: FoldSetup) => void }) {
+export function ConstructionEditor({ fold, onChange, onMaterial }: { fold: FoldSetup; onChange: (f: FoldSetup) => void; onMaterial?: (typeId: string | null) => void }) {
   const plan = useMemo(() => fullPlan(fold), [fold]);
   const c = fold.construction;
   // The material menu keeps its own pick (several boards can share a thickness); a reset starts it over.
@@ -84,6 +84,7 @@ export function ConstructionEditor({ fold, onChange }: { fold: FoldSetup; onChan
         <DefaultMaterialField
           key={materialKey}
           alwaysShown
+          {...(onMaterial ? { onMaterial } : {})}
           legend="Material"
           hint="The board clients start with on the dieline page. They can change it there."
           resetLabel="Use the suggested board"
@@ -92,7 +93,7 @@ export function ConstructionEditor({ fold, onChange }: { fold: FoldSetup; onChan
           max={THICKNESS_RANGE.max}
           value={c?.thickness ?? CONSTRUCTION_DEFAULTS.thickness}
           onChange={(mm) => {
-            if (mm === null) setMaterialKey((n) => n + 1);
+            if (mm === null) { setMaterialKey((n) => n + 1); onMaterial?.(null); }
             onChange(setConstruction(fold, mm === null ? null : { ...(c ?? {}), thickness: mm }));
           }}
         />
@@ -125,7 +126,7 @@ export function ConstructionEditor({ fold, onChange }: { fold: FoldSetup; onChan
           </div>
         </div>
         {c ? (
-          <button type="button" className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground" onClick={() => { setMaterialKey((n) => n + 1); onChange(setConstruction(fold, null)); }}>
+          <button type="button" className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground" onClick={() => { setMaterialKey((n) => n + 1); onMaterial?.(null); onChange(setConstruction(fold, null)); }}>
             Use the guessed values
           </button>
         ) : null}
@@ -136,6 +137,7 @@ export function ConstructionEditor({ fold, onChange }: { fold: FoldSetup; onChan
       <DefaultMaterialField
         key={materialKey}
         alwaysShown
+        {...(onMaterial ? { onMaterial } : {})}
         legend="Material"
         hint="The board clients start with on the dieline page. They can change it there."
         resetLabel="Use the guessed board"
@@ -144,7 +146,7 @@ export function ConstructionEditor({ fold, onChange }: { fold: FoldSetup; onChan
         max={THICKNESS_RANGE.max}
         value={res.thickness}
         onChange={(mm) => {
-          if (mm === null) setMaterialKey((n) => n + 1);
+          if (mm === null) { setMaterialKey((n) => n + 1); onMaterial?.(null); }
           set({ thickness: mm ?? undefined });
         }}
       />

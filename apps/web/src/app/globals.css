@@ -646,3 +646,91 @@ dialog.drop-dialog[open]::backdrop {
 .live-dot::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--cut); animation: live-ping 1.8s ease-out infinite; }
 @keyframes live-ping { 0% { transform: scale(1); opacity: 0.7; } 100% { transform: scale(3.2); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .live-dot::after { animation: none; opacity: 0; } }
+
+/* Slim slider with a filled track; set --p (0-100) inline for the filled part. */
+.fold-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 1.25rem;
+  background: transparent;
+  cursor: pointer;
+}
+.fold-range:focus-visible {
+  outline: none;
+}
+.fold-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(to right, var(--primary) var(--p, 0%), var(--border) var(--p, 0%));
+}
+.fold-range::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--border);
+}
+.fold-range::-moz-range-progress {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--primary);
+}
+.fold-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 9999px;
+  background: var(--background);
+  border: 2px solid var(--primary);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+  transition: transform 120ms ease;
+}
+.fold-range::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  background: var(--background);
+  border: 2px solid var(--primary);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+}
+.fold-range:hover::-webkit-slider-thumb,
+.fold-range:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.2);
+}
+.fold-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 25%, transparent);
+}
+
+/* Colour swatch: the native picker as a round chip. */
+.color-chip {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.375rem;
+  height: 1.375rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: none;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: 0 0 0 2px var(--background) inset;
+}
+.color-chip::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.color-chip::-webkit-color-swatch {
+  border: none;
+  border-radius: 9999px;
+}
+.color-chip::-moz-color-swatch {
+  border: none;
+  border-radius: 9999px;
+}
+.color-chip:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.fold-range:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

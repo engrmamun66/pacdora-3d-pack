@@ -7,6 +7,7 @@ import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-
 import { renderArtwork, type RasterRect } from "@/components/editor/artwork-raster";
 import { setAssetUrlBase } from "@/components/editor/fabric-map";
 import type { PortalScene } from "@/server/portal";
+import { RangeSlider } from "@/components/ui/range-slider";
 
 /** The box of a shared template in 3D: drag to turn, scroll to zoom, a slider (and a button) to fold it. */
 export function Scene3D({ userHash, scene, foldable, onFoldable }: { userHash: string; scene: PortalScene; foldable: boolean; onFoldable: (v: boolean) => void }) {
@@ -69,7 +70,7 @@ export function Scene3D({ userHash, scene, foldable, onFoldable }: { userHash: s
           <>
             <label className="flex items-center gap-2">
               Fold
-              <input type="range" min={0} max={100} value={Math.round(progress * 100)} aria-label="Fold amount" onChange={(e) => setProgress(Number(e.target.value) / 100)} />
+              <RangeSlider min={0} max={100} value={Math.round(progress * 100)} aria-label="Fold amount" onChange={(e) => setProgress(Number(e.target.value) / 100)} />
               <span className="w-8 tabular-nums">{Math.round(progress * 100)}%</span>
             </label>
             <button type="button" onClick={fold} className="flex items-center gap-1 rounded-md border px-2 py-1 hover:bg-muted"><Play className="size-3" aria-hidden /> Fold</button>

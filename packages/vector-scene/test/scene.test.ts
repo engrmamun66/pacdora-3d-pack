@@ -230,3 +230,22 @@ describe("watermark", () => {
     expect(dxf).toContain("CREASE");
   });
 });
+
+describe("face colours", () => {
+  it("pour a colour over a whole panel, under the other artwork, and into the SVG", async () => {
+    const front = geo.foldTree.panels.find((p) => p.id === "front")!;
+    const art: Artwork = { objects: [text()], faces: [{ panelId: "front", color: "#ff0000" }, { panelId: "no-such-panel", color: "#00ff00" }] };
+    const s = await buildScene(geo, art, src);
+    const items = s.layers.find((l) => l.id === "artwork")!.items;
+    const face = items[0]!;
+    expect(face.kind).toBe("path");
+    if (face.kind !== "path") return;
+    expect(face.fill).toEqual({ kind: "rgb", hex: "#ff0000" });
+    expect(face.name).toContain(front.label);
+    expect(items.length).toBe(2); // the face, then the text; an unknown panel adds nothing
+    const b = pathBounds(face.d);
+    const xs = front.polygon.map((p) => p.x);
+    expect(b.maxX - b.minX).toBeCloseTo(Math.max(...xs) - Math.min(...xs), 6);
+    expect(sceneToSvg(s)).toContain("#ff0000");
+  });
+});

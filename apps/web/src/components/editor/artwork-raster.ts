@@ -2,7 +2,8 @@ import { StaticCanvas } from "fabric";
 import { STYLE, outlinePathD } from "@packaging/render-svg";
 import { anchorIndex } from "@packaging/artwork";
 import type { DielineGeometry, WatermarkSpec } from "@packaging/dieline-engine";
-import { type Artwork, backgroundsOf } from "@packaging/schema";
+import { type Artwork, backgroundsOf, facesOf } from "@packaging/schema";
+import { paintFaces } from "@/lib/panel-fill";
 import { loadBackgroundImage, paintBackground } from "./background";
 import { ensureFont } from "./editor-controller";
 import { toFabric } from "./fabric-map";
@@ -57,6 +58,14 @@ export async function renderArtwork(
   const octx = out.getContext("2d")!;
   octx.fillStyle = opts.background;
   octx.fillRect(0, 0, w, h);
+  // Face colours: single panels poured with a colour, on the board colour and under every picture.
+  const faces = facesOf(artwork);
+  if (Object.keys(faces).length > 0) {
+    octx.save();
+    octx.setTransform(s, 0, 0, s, -rect.minX * s, -rect.minY * s);
+    paintFaces(octx, geo, faces);
+    octx.restore();
+  }
   for (const bg of backgroundsOf(artwork)) {
     // A background that cannot be loaded is left out, like an image object that fails.
     const img = await loadBackgroundImage(bg.assetId).catch(() => null);

@@ -6,6 +6,7 @@ import { SheetWatermark } from "@/components/dielines/sheet-watermark";
 import { notify } from "@/lib/notify";
 import { saveWatermark, type WatermarkFormState } from "@/app/doraadmin/actions";
 import { DEFAULT_WATERMARK_STYLE, DEFAULT_WATERMARK_TEXT, WATERMARK_FONT_RANGE, WATERMARK_LINE_RANGE, WATERMARK_TEXT_MAX, watermarkStyle, watermarkText, type WatermarkSettings } from "@/lib/watermark-settings";
+import { RangeSlider } from "@/components/ui/range-slider";
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const input = "h-9 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground";
@@ -50,7 +51,7 @@ function SizeField({ id, label, unit, value, range, disabled, onChange }: { id: 
         {label} <span className="font-normal text-muted-foreground">({unit})</span>
       </label>
       <div className="flex items-center gap-3">
-        <input type="range" aria-label={`${label}, slider`} {...range} value={value} disabled={disabled} onChange={(e) => onChange(Number(e.target.value))} className="min-w-0 flex-1" />
+        <RangeSlider aria-label={`${label}, slider`} {...range} value={value} disabled={disabled} onChange={(e) => onChange(Number(e.target.value))} className="min-w-0 flex-1" />
         <input id={id} type="number" {...range} value={value} disabled={disabled} onChange={(e) => onChange(Number(e.target.value))} className={`${input} w-20`} />
       </div>
     </div>

@@ -9,6 +9,7 @@ import { boardLookOf } from "@/lib/board-look";
 import { GridToggle } from "@/components/viewer3d/grid-toggle";
 import { RotationControls } from "@/components/viewer3d/rotation-controls";
 import type { ViewSettings } from "@/lib/view-settings";
+import { RangeSlider } from "@/components/ui/range-slider";
 
 export type DownloadFormat = "ai" | "pdf" | "dxf" | "svg" | "glb";
 
@@ -122,8 +123,7 @@ export function FoldPreview({
       <div className="flex items-center gap-2 border-t bg-background px-3 py-2 text-xs">
         <label className="flex flex-1 items-center gap-2">
           Open
-          <input
-            type="range"
+          <RangeSlider
             min={0}
             max={100}
             value={Math.round(progress * 100)}

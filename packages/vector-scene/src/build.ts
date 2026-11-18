@@ -1,7 +1,7 @@
 import * as fontkit from "fontkit";
 import { anchorIndex, backgroundPlacement, backgroundTiles, objectCentre } from "@packaging/artwork";
 import { type DielineGeometry, type WatermarkSpec, flattenOutline, layoutWatermark } from "@packaging/dieline-engine";
-import { type Artwork, type ArtworkFont, type ArtworkObject, type BoxBackground, MM_PER_PT, backgroundRepeat, backgroundsOf } from "@packaging/schema";
+import { type Artwork, type ArtworkFont, type ArtworkObject, type BoxBackground, MM_PER_PT, backgroundRepeat, backgroundsOf, facesOf } from "@packaging/schema";
 import { ellipsePath, linePath, mul, outlinePath, pathBounds, polygonPath, rectPath, rotate, scale, transformPath, translate } from "./geometry";
 import { imageSize, imageSizeProblem } from "./images";
 import { layoutTextbox, lineOutlines, measureWith } from "./text";
@@ -101,7 +101,15 @@ export async function buildScene(
     const idx = anchorIndex(geo);
     const budget = { bytes: 0, warned: false };
     const items: SceneItem[] = [];
-    // Box background first: it sits under every other artwork item.
+    // Face colours first (they pour a colour over a whole panel, around its window holes), then the box background: both sit under every other artwork item.
+    const faces = facesOf(artwork);
+    for (const panel of geo.foldTree.panels) {
+      const color = faces[panel.id];
+      if (!color) continue;
+      const d = [...outlinePath({ points: panel.polygon, ...(panel.bulges ? { bulges: panel.bulges } : {}) }), ...(panel.holes ?? []).flatMap((h) => polygonPath(h))];
+      items.push({ kind: "path", name: `Face color ${panel.label}`, d, fill: rgb(color), fillRule: "evenodd", stroke: null, strokeWidth: 0, opacity: 1 } as PathItem);
+    }
+    // Box background: it sits under every other artwork item.
     for (const bg of backgroundsOf(artwork)) items.push(...(await backgroundItems(geo, bg, { images: src.images, losses, budget })));
     for (const a of artwork.objects) {
       if (!a.visible) continue;

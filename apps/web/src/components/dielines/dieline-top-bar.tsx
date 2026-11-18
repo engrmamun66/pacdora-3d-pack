@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronRight, CopyPlus, Download, ExternalLink, Menu, Pencil, Save, Share2 } from "lucide-react";
+import { ChevronDown, CopyPlus, Download, ExternalLink, Menu, Pencil, Save, Share2 } from "lucide-react";
 import { deleteProject } from "@/app/(app)/projects/actions";
 import { authClient } from "@/lib/auth-client";
 import { notify } from "@/lib/notify";
@@ -13,9 +13,8 @@ import type { SaveAsOptions } from "@/server/projects";
 
 type SaveAs = (name: string, organize?: { categoryId: string | null; tagIds: string[] }) => Promise<{ ok: boolean; message: string | null }>;
 
-const row = "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm";
+const row = "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-1.5 text-left text-sm";
 const rowLive = `${row} hover:bg-muted focus-visible:bg-muted focus-visible:outline-none`;
-const rowOff = `${row} cursor-not-allowed text-muted-foreground/70`;
 
 /** Dropdown opened by the hamburger button. Closes on outside click, Escape and when a choice is made. */
 function MainMenu({
@@ -61,13 +60,7 @@ function MainMenu({
     setOpen(false);
     router.push(href);
   };
-  const soon = (label: string) => (
-    <button key={label} type="button" role="menuitem" aria-disabled className={rowOff} onClick={(e) => e.preventDefault()}>
-      {label}
-      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide">Soon</span>
-    </button>
-  );
-  const rule = <div role="separator" className="my-1 h-px bg-border" />;
+  const rule = <div role="separator" className="my-0.5 h-px bg-border" />;
 
   return (
     <div ref={box} className="relative">
@@ -82,8 +75,8 @@ function MainMenu({
         <Menu className="size-5" aria-hidden />
       </button>
       {open ? (
-        <div role="menu" aria-label="Main menu" className="absolute left-0 top-12 z-50 w-72 rounded-2xl border bg-popover p-2 text-popover-foreground shadow-xl ring-1 ring-foreground/5">
-          <div className="flex items-center gap-2 rounded-lg px-3 py-2">
+        <div role="menu" aria-label="Main menu" className="absolute left-0 top-12 z-50 w-64 rounded-2xl border bg-popover p-1.5 text-popover-foreground shadow-xl ring-1 ring-foreground/5">
+          <div className="flex items-center gap-2 rounded-lg px-3 py-1.5">
             <input
               ref={nameInput}
               aria-label="Project name"
@@ -118,18 +111,9 @@ function MainMenu({
           {rule}
           <button type="button" role="menuitem" className={rowLive} onClick={() => go("/templates")}>Create new project</button>
           {rule}
-          {soon("Add to favorites")}
-          {soon("Move")}
-          {rule}
           <button type="button" role="menuitem" className={rowLive} onClick={() => go("/projects")}>My projects</button>
-          {soon("AI generations")}
           <button type="button" role="menuitem" className={rowLive} onClick={() => go("/my-dashboard?tab=profile")}>Profile settings</button>
           <button type="button" role="menuitem" className={rowLive} onClick={() => go("/")}>Homepage</button>
-          {rule}
-          <button type="button" role="menuitem" aria-disabled className={rowOff} onClick={(e) => e.preventDefault()}>
-            English
-            <ChevronRight className="size-4" aria-hidden />
-          </button>
           {projectId ? (
             <>
               {rule}
@@ -403,7 +387,7 @@ export function DielineTopBar({
       <div className="ml-auto flex items-center gap-2">
         <SaveSplit saving={saving} disabled={!mayHere} why={whyNot} saveTitle={mode === "edit" ? "Save the changes to this project" : "Save this as a project in My projects"} onSaveAs={openSaveAs} />
         {mode === "edit" && projectId ? (
-          <Link href={`/editor/${projectId}`} className={ghost}>
+          <Link href={`/editor/${projectId}`} target="_blank" rel="noopener" className={ghost} title="Open the artwork editor in a new tab">
             Design Online <ExternalLink className="size-3.5" aria-hidden />
           </Link>
         ) : (

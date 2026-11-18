@@ -11,6 +11,7 @@ import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-
 import { GridToggle } from "@/components/viewer3d/grid-toggle";
 import { notify } from "@/lib/notify";
 import { STANDARD_VIEW, type ViewSettings } from "@/lib/view-settings";
+import { RangeSlider } from "@/components/ui/range-slider";
 
 /** Dieline geometry of a template at its default size (what clients see first). */
 export function geometryForViewData(data: TemplateViewData, windows: readonly WindowSpec[] = data.windows): DielineGeometry {
@@ -244,7 +245,7 @@ export function ViewSettingsEditor({ slug, data, windows, onSaved, onDone }: { s
           <label className="grid grid-cols-[110px_1fr] items-center gap-2 text-sm">
             <span className="text-muted-foreground">Folded</span>
             <span className="flex items-center gap-2">
-              <input type="range" min={0} max={100} value={Math.round(progress * 100)} aria-label="How far the box is folded" className="flex-1" onChange={(e) => move({ progress: Number(e.target.value) / 100 })} />
+              <RangeSlider min={0} max={100} value={Math.round(progress * 100)} aria-label="How far the box is folded" className="flex-1" onChange={(e) => move({ progress: Number(e.target.value) / 100 })} />
               <span className="w-10 text-right text-xs tabular-nums">{Math.round(progress * 100)}%</span>
             </span>
           </label>

@@ -102,6 +102,14 @@ export type BackgroundRepeat = (typeof BACKGROUND_REPEATS)[number];
 /** The repeat of a background, "none" for files made before repeating existed. */
 export const backgroundRepeat = (bg: { repeat?: BackgroundRepeat | undefined }): BackgroundRepeat => bg.repeat ?? "none";
 
+/**
+ * Face colour: a flat colour poured over one whole panel (inside its outline, around any window holes). It sits on the board
+ * colour and under the box backgrounds and every other artwork item. One colour per panel.
+ */
+export const MAX_FACES = 200;
+export const faceColor = z.object({ panelId: z.string().min(1).max(60), color: hex });
+export type FaceColor = z.infer<typeof faceColor>;
+
 export const artworkSchema = z
   .object({
     /** Bottom to top. */
@@ -110,6 +118,8 @@ export const artworkSchema = z
     backgrounds: z.array(boxBackground).max(MAX_BACKGROUNDS).optional(),
     /** Older files: the single background they had. Read it through `backgroundsOf`; new saves write `backgrounds`. */
     background: boxBackground.nullable().optional(),
+    /** Colours of single panels (see `faceColor`); absent or empty = none. */
+    faces: z.array(faceColor).max(MAX_FACES).optional(),
   })
   .superRefine((a, ctx) => {
     const seen = new Set<string>();
@@ -117,8 +127,18 @@ export const artworkSchema = z
       if (seen.has(o.id)) ctx.addIssue({ code: "custom", path: ["objects", i, "id"], message: "duplicate object id" });
       seen.add(o.id);
     });
+    const faced = new Set<string>();
+    (a.faces ?? []).forEach((f, i) => {
+      if (faced.has(f.panelId)) ctx.addIssue({ code: "custom", path: ["faces", i, "panelId"], message: "a panel has two face colours" });
+      faced.add(f.panelId);
+    });
   });
 export type Artwork = z.infer<typeof artworkSchema>;
+
+/** The face colours of an artwork as panel id -> colour. */
+export function facesOf(a: { faces?: readonly FaceColor[] | undefined }): Record<string, string> {
+  return Object.fromEntries((a.faces ?? []).map((f) => [f.panelId, f.color]));
+}
 
 /** The background pictures of an artwork, bottom to top (an older file's single `background` counts as one). */
 export function backgroundsOf(a: { backgrounds?: readonly BoxBackground[] | undefined; background?: BoxBackground | null | undefined }): BoxBackground[] {

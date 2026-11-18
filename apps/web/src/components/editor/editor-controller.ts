@@ -2,7 +2,9 @@ import { ActiveSelection, Canvas, Ellipse, type FabricObject, FabricImage, Line,
 import { type AnchorIndex, anchorFor, anchorIndex, backgroundPlacement, panelAt } from "@packaging/artwork";
 import { type DielineGeometry, flattenOutline, panelOutline } from "@packaging/dieline-engine";
 import { STYLE, outlinePathD } from "@packaging/render-svg";
-import { type Artwork, type ArtworkObject, type BoxBackground, MAX_BACKGROUNDS, artworkObject, backgroundsOf, boxBackground, MM_PER_PT } from "@packaging/schema";
+import { type Artwork, type ArtworkObject, type BoxBackground, type FaceColor, MAX_BACKGROUNDS, artworkObject, backgroundsOf, boxBackground, facesOf, MM_PER_PT } from "@packaging/schema";
+import { panelFillPath, paintFaces } from "@/lib/panel-fill";
+import { panelAt as panelUnder, panelShapes, type PanelShape } from "@/lib/panel-hit";
 import { loadBackgroundImage, paintBackground } from "./background";
 import { applyLock, assetUrl, fromFabric, metaOf, retag, toFabric } from "./fabric-map";
 import { installSelectionStyle, styleFrame } from "./selection-style";
@@ -21,6 +23,8 @@ export interface EditorCallbacks {
   onViewport(v: Viewport): void;
   onHistory(h: { canUndo: boolean; canRedo: boolean }): void;
   onError(message: string): void;
+  /** Face color mode: a click on a panel (null = a click on no panel). Where to show the colour box (px from the canvas top-left) and which panel. */
+  onFacePick?(pick: { panelId: string; x: number; y: number } | null): void;
   /** A right click (no drag) on artwork: where to show its menu (px from the canvas top-left); the artwork is selected. */
   onContextMenu?(at: { x: number; y: number }): void;
   /** A right click (no drag) on a background picture, with no artwork under it: where to show its menu, and which picture (it is chosen). */
@@ -93,6 +97,12 @@ export class EditorController {
   private get bgImg(): HTMLImageElement | null {
     return this.bgImgs[this.bgSel] ?? null;
   }
+  /** Face colours (panel id -> colour), the panels as plain shapes for picking, and the face colour mode. */
+  private faces: Record<string, string> = {};
+  private shapes: PanelShape[] = [];
+  private faceMode = false;
+  private faceHover: string | null = null;
+  private faceChosen: string | null = null;
   private textTimer: ReturnType<typeof setTimeout> | null = null;
   private panning: { x: number; y: number } | null = null;
   spaceDown = false;
@@ -119,6 +129,7 @@ export class EditorController {
     private readonly cb: EditorCallbacks,
   ) {
     this.idx = anchorIndex(geo);
+    this.shapes = panelShapes(geo);
     this.buildPaths();
     this.canvas = new Canvas(el, {
       preserveObjectStacking: true,
@@ -156,11 +167,14 @@ export class EditorController {
         this.panning = { x: me.clientX, y: me.clientY };
         this.canvas.selection = false;
         this.canvas.discardActiveObject();
+      } else if (this.faceMode && me.button === 0) {
+        this.faceDown(me);
       } else if (this.bgEdit && me.button === 0) {
         this.bgDown(me);
       }
     });
     this.canvas.on("mouse:move", ({ e }) => {
+      if (this.faceMode && !this.panning) return this.faceMove(e as MouseEvent);
       if (this.bgEdit && !this.panning) return this.bgMove(e as MouseEvent);
       if (!this.panning) return;
       const me = e as MouseEvent;
@@ -173,7 +187,7 @@ export class EditorController {
     });
     this.canvas.on("mouse:up", () => {
       this.panning = null;
-      this.canvas.selection = !this.panMode && !this.bgEdit;
+      this.canvas.selection = !this.panMode && !this.bgEdit && !this.faceMode;
       this.bgUp();
     });
 
@@ -291,6 +305,7 @@ export class EditorController {
     ctx.fillStyle = "#ffffff";
     ctx.fill(this.paths.sheet, "nonzero");
     ctx.shadowBlur = 0;
+    paintFaces(ctx, this.geo, this.faces);
     this.bgs.forEach((b, i) => {
       const img = this.bgImgs[i];
       if (img) paintBackground(ctx, this.geo, b, img);
@@ -332,6 +347,18 @@ export class EditorController {
     ctx.save();
     this.applyVpt(ctx);
     ctx.lineWidth = 1 / z;
+    // Face color mode: the panel under the pointer (and the one whose colour box is open) is outlined.
+    for (const id of new Set([this.faceHover, this.faceChosen])) {
+      const panel = id ? this.geo.foldTree.panels.find((p) => p.id === id) : undefined;
+      if (!panel) continue;
+      const path = panelFillPath(panel);
+      ctx.fillStyle = "rgba(37,99,235,0.10)";
+      ctx.fill(path, "evenodd");
+      ctx.strokeStyle = "#2563eb";
+      ctx.lineWidth = (id === this.faceChosen ? 2.5 : 1.5) / z;
+      ctx.stroke(path);
+      ctx.lineWidth = 1 / z;
+    }
     if (this.overlay.showBleed) {
       ctx.setLineDash([4 / z, 3 / z]);
       ctx.strokeStyle = STYLE.bleed.stroke;
@@ -422,6 +449,64 @@ export class EditorController {
     ctx.setLineDash([]);
   }
 
+  // ---------------------------------------------------------------- face colours
+
+  /** Switch the "click a panel to colour it" mode on or off. */
+  setFaceMode(on: boolean) {
+    if (on === this.faceMode) return;
+    this.faceMode = on;
+    this.faceHover = null;
+    this.faceChosen = null;
+    if (on) {
+      this.setBackgroundEdit(false);
+      this.canvas.discardActiveObject();
+    }
+    this.canvas.skipTargetFind = on || this.panMode || this.bgEdit;
+    this.canvas.selection = !on && !this.panMode && !this.bgEdit;
+    this.canvas.defaultCursor = this.canvas.hoverCursor = on ? "pointer" : "default";
+    if (!on) this.cb.onFacePick?.(null);
+    this.canvas.requestRenderAll();
+  }
+
+  getFaces(): Readonly<Record<string, string>> {
+    return this.faces;
+  }
+
+  /** Give a panel a face colour (null takes it away). One undo step. */
+  setFace(panelId: string, color: string | null) {
+    const next = { ...this.faces };
+    if (color) next[panelId] = color;
+    else delete next[panelId];
+    this.faces = next;
+    this.canvas.requestRenderAll();
+    this.commit();
+  }
+
+  /** Keep the panel whose colour box is open outlined (null = none). */
+  chooseFace(panelId: string | null) {
+    this.faceChosen = panelId;
+    this.canvas.requestRenderAll();
+  }
+
+  private panelAtPointer(e: MouseEvent): string | null {
+    return panelUnder(this.shapes, this.pointerScene(e))?.id ?? null;
+  }
+
+  private faceMove(e: MouseEvent) {
+    const id = this.panelAtPointer(e);
+    if (id === this.faceHover) return;
+    this.faceHover = id;
+    this.canvas.requestRenderAll();
+  }
+
+  private faceDown(e: MouseEvent) {
+    const id = this.panelAtPointer(e);
+    const r = this.canvas.upperCanvasEl.getBoundingClientRect();
+    this.faceChosen = id;
+    this.canvas.requestRenderAll();
+    this.cb.onFacePick?.(id ? { panelId: id, x: e.clientX - r.left, y: e.clientY - r.top } : null);
+  }
+
   // ---------------------------------------------------------------- background edit mode
 
   /** Switch the "move and resize the box background on the dieline" mode on or off. It needs a background that is loaded. */
@@ -430,8 +515,8 @@ export class EditorController {
     if (next === this.bgEdit) return;
     this.bgEdit = next;
     this.bgDrag = null;
-    this.canvas.skipTargetFind = next || this.panMode;
-    this.canvas.selection = !next && !this.panMode;
+    this.canvas.skipTargetFind = next || this.panMode || this.faceMode;
+    this.canvas.selection = !next && !this.panMode && !this.faceMode;
     if (next) this.canvas.discardActiveObject();
     this.setCursors(this.panMode ? "grab" : null);
     this.clearGuides();
@@ -686,8 +771,8 @@ export class EditorController {
   /** Hand tool: dragging moves the view, and objects cannot be picked or moved until it is switched off. */
   setPanMode(on: boolean) {
     this.panMode = on;
-    this.canvas.skipTargetFind = on || this.bgEdit;
-    this.canvas.selection = !on && !this.bgEdit;
+    this.canvas.skipTargetFind = on || this.bgEdit || this.faceMode;
+    this.canvas.selection = !on && !this.bgEdit && !this.faceMode;
     this.setCursors(on ? "grab" : null);
     if (on) this.canvas.discardActiveObject();
     this.canvas.requestRenderAll();
@@ -737,6 +822,7 @@ export class EditorController {
       );
       const objs = await Promise.all(artwork.objects.map((o) => this.create(o)));
       await this.applyBackgrounds(backgroundsOf(artwork));
+      this.faces = facesOf(artwork);
       this.canvas.discardActiveObject();
       this.canvas.remove(...this.canvas.getObjects());
       if (objs.length) this.canvas.add(...objs);
@@ -858,7 +944,8 @@ export class EditorController {
       const a = fromFabric(o, this.idx);
       if (a) objects.push(a);
     }
-    return this.bgs.length ? { objects, backgrounds: [...this.bgs] } : { objects };
+    const faces: FaceColor[] = Object.entries(this.faces).map(([panelId, color]) => ({ panelId, color }));
+    return { objects, ...(this.bgs.length ? { backgrounds: [...this.bgs] } : {}), ...(faces.length ? { faces } : {}) };
   }
 
   /** Record the current state as one undo step and notify. */

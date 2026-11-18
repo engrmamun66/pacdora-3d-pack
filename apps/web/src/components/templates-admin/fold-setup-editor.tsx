@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppWindow, ListOrdered, Play, RotateCcw, Wand2, X } from "lucide-react";
-import { applyWindows, createImportedGenerator, detectFoldSetup, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldHingeSpec, type FoldSetup, type PanelRole, type WindowSpec, partFits } from "@packaging/dieline-engine";
+import { applyWindows, createImportedGenerator, detectFoldSetup, THICKNESS_RANGE, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldHingeSpec, type FoldSetup, type PanelRole, type WindowSpec, partFits } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
-import { applyFoldSteps, compactOrders, depthOf, makeBase, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootsOf, setGround, sortedHinges, stepsOf, updateHinge, updatePanel } from "@/lib/fold-edit";
+import { applyFoldSteps, depthOf, makeBase, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootsOf, setGround, sortedHinges, stepsOf, updateHinge, updatePanel } from "@/lib/fold-edit";
 import { ConstructionEditor, PieceLinksEditor } from "./construction-editor";
 import { HelpTip, InfoTip } from "./help-tip";
 import { PiecesEditor } from "./pieces-editor";
@@ -18,8 +18,10 @@ import { GridToggle } from "@/components/viewer3d/grid-toggle";
 import { RotationControls } from "@/components/viewer3d/rotation-controls";
 import { pathData } from "@/lib/template-import";
 import { importedStartParams } from "@/lib/imported-start";
-import type { Unit } from "@/components/dielines/units";
+import { materialFor, materialsFor, MATERIAL_TYPES, type Unit } from "@/components/dielines/units";
+import { boardLookOf } from "@/lib/board-look";
 import { WindowEditorModal } from "./window-editor-modal";
+import { RangeSlider } from "@/components/ui/range-slider";
 
 const ROLE_OPTIONS: { value: PanelRole; label: string; hint: string }[] = [
   { value: "body", label: "Wall / main panel", hint: "A side of the box or the front of a card." },
@@ -120,6 +122,8 @@ export function FoldSetupEditor({
   const [progress, setProgress] = useState(startView?.progress ?? 1);
   const view = useRef<CartonViewHandle>(null);
   const anim = useRef<number | null>(null);
+  // The board picked on the "Material & Paper" tab (null = not picked: the family is guessed from the thickness). The 3D preview shows its colour, grain, cut edge and thickness.
+  const [pickedMaterial, setPickedMaterial] = useState<string | null>(null);
 
   // A newly saved (or removed) starting view shows in this preview at once: the fold amount is set while rendering, the camera in an effect.
   const [seenView, setSeenView] = useState(startView);
@@ -182,6 +186,11 @@ export function FoldSetupEditor({
   const [windowUnit, setWindowUnit] = useState<Unit>("mm");
   const windowResult = useMemo(() => (geo.geo && windows.length > 0 ? applyWindows(geo.geo, windows) : null), [geo.geo, windows]);
   const shownGeo = windowResult ? windowResult.geo : geo.geo;
+  // The board in the 3D preview: the picked family (or the one that fits the thickness), with its look and the real thickness.
+  const boardThickness = geo.thickness ?? 0;
+  const boardTypeId = pickedMaterial ?? materialFor(boardThickness || 0.5, materialsFor(THICKNESS_RANGE.min, THICKNESS_RANGE.max)).typeId;
+  const boardLook = boardLookOf(boardTypeId);
+  const boardColor = MATERIAL_TYPES.find((t) => t.id === boardTypeId)?.color ?? "#c9a574";
   // Blink Mode: the panel under the mouse on the flat sheet blinks on the 3D box (the box keeps it across rebuilds).
   const blinkTarget = blinkMode ? hoverId : null;
   useEffect(() => {
@@ -384,14 +393,14 @@ export function FoldSetupEditor({
         <div className="flex min-w-0 flex-col gap-2">
           <div className="relative overflow-hidden rounded-xl border bg-muted/40">
             {geo.geo ? (
-              <CartonView ref={view} className="h-[min(420px,50vh)] w-full" geo={shownGeo ?? geo.geo} texture={null} textureRect={null} progress={progress} outsideColor="#ffffff" insideColor="#c8a97e" initialView={startView} onPanelHover={setHover3d} />
+              <CartonView ref={view} className="h-[min(420px,50vh)] w-full" geo={shownGeo ?? geo.geo} texture={null} textureRect={null} progress={progress} outsideColor={boardColor} insideColor={boardLook.inside} thickness={boardThickness} boardGrain={boardLook.grain} boardEdge={{ color: boardLook.edge, flute: boardLook.flute }} initialView={startView} onPanelHover={setHover3d} />
             ) : (
               <p className="grid h-48 place-items-center px-4 text-center text-sm text-muted-foreground">{geo.error ?? "Fix the problems above to see the 3D preview."}</p>
             )}
             <div className="flex items-center gap-2 border-t bg-background px-3 py-2 text-xs">
               <label className="flex flex-1 items-center gap-2">
                 Open
-                <input type="range" min={0} max={100} value={Math.round(progress * 100)} className="flex-1" aria-label="Fold amount: open to closed" onChange={(e) => setProgress(Number(e.target.value) / 100)} />
+                <RangeSlider min={0} max={100} value={Math.round(progress * 100)} className="flex-1" aria-label="Fold amount: open to closed" onChange={(e) => setProgress(Number(e.target.value) / 100)} />
                 Closed
               </label>
               <button type="button" aria-label="Play the fold step by step" className="grid size-7 place-items-center rounded-md border hover:bg-muted" onClick={play}><Play className="size-3.5" /></button>
@@ -450,8 +459,10 @@ export function FoldSetupEditor({
             Size: <strong className="text-foreground tabular-nums">{panelSize(shownPanel.polygon).w.toFixed(1)} × {panelSize(shownPanel.polygon).h.toFixed(1)} mm</strong> at the imported size, {shownPanel.polygon.length / 2} corners.
           </p>
           <div className="flex basis-full flex-wrap items-center gap-2">
-            <Button type="button" variant="dark" size="sm" aria-pressed={fold.groundId === shownPanel.id} onClick={() => onChange(setGround(fold, fold.groundId === shownPanel.id ? null : shownPanel.id))} title="In the 3D view the box stands on this panel, with its printed side down.">{fold.groundId === shownPanel.id ? "Bottom of the box ✓ (click to undo)" : "Set as bottom of the box"}</Button>
-            {roots.includes(shownPanel.id) ? <p className="text-sm text-muted-foreground">{parts.length ? `This is the base panel of the ${pieceName(shownPanel.id).toLowerCase()}.` : "This is the base panel."}</p> : <Button type="button" variant="dark" size="sm" onClick={() => onChange(makeBase(fold, shownPanel.id))}>{parts.length ? `Make this the base of its piece (${pieceName(roots[Math.max(0, pieceOf(fold, shownPanel.id))]!).toLowerCase()})` : "Make this the base (stays flat)"}</Button>}
+            <Button type="button" variant="dark" size="sm" aria-pressed={fold.groundId === shownPanel.id} onClick={() => onChange(setGround(fold, fold.groundId === shownPanel.id ? null : shownPanel.id))} title="In the 3D view the box stands on this panel, with its printed side down.">{fold.groundId === shownPanel.id ? "Bottom of the 3D View ✓ (click to undo)" : "Set as bottom of the 3D View"}</Button>
+            <Button type="button" variant="dark" size="sm" disabled={roots.includes(shownPanel.id)} onClick={() => onChange(makeBase(fold, shownPanel.id))}>
+              {roots.includes(shownPanel.id) ? "Already made as base ✓" : parts.length ? `Make this the base of its piece (${pieceName(roots[Math.max(0, pieceOf(fold, shownPanel.id))]!).toLowerCase()})` : "Make this the base (stays flat)"}
+            </Button>
           </div>
             </div>
             <div className="flex justify-end border-t px-5 py-3">
@@ -506,7 +517,7 @@ export function FoldSetupEditor({
           ) : curTab.k === "links" ? (
             stale ? <p className="rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Detect the panels again first: the lines changed after the fold was set up.</p> : <PieceLinksEditor fold={fold} onChange={onChange} />
           ) : curTab.k === "material" ? (
-            stale ? <p className="rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Detect the panels again first: the lines changed after the fold was set up.</p> : <ConstructionEditor fold={fold} onChange={onChange} />
+            stale ? <p className="rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Detect the panels again first: the lines changed after the fold was set up.</p> : <ConstructionEditor fold={fold} onChange={onChange} onMaterial={setPickedMaterial} />
           ) : (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -519,7 +530,7 @@ export function FoldSetupEditor({
                 {curTab.i > 0 ? <Button type="button" variant="dark" size="xs" onClick={() => onChange(makeMain(fold, roots[curTab.i]!))}>Make main body</Button> : null}
               </div>
               {sortedHinges(fold, curTab.i).length ? (
-                <HingeList hinges={sortedHinges(fold, curTab.i)} label={label} selectedId={sel?.kind === "hinge" ? sel.id : null} onSelect={(id) => setSel({ kind: "hinge", id })} onSetHinge={setHinge} onMove={(id, to) => onChange(moveHinge(fold, id, to))} />
+                <HingeList hinges={sortedHinges(fold, curTab.i)} label={label} selectedId={sel?.kind === "hinge" ? sel.id : null} onSelect={(id) => setSel({ kind: "hinge", id })} onSetHinge={setHinge} onMove={(id, to) => onChange(moveHinge(fold, id, to))} kinds={ROLE_OPTIONS} kindOf={(id) => fold.panels.find((p) => p.id === id)?.role ?? "body"} onKind={(id, role) => onChange(updatePanel(fold, id, { role: role as PanelRole }))} />
               ) : (
                 <p className="rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">This piece has no fold lines.</p>
               )}
@@ -527,14 +538,6 @@ export function FoldSetupEditor({
           )}
         </div>
       </div>
-      {curTab.k === "piece" ? (
-        <>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="dark" size="sm" onClick={() => onChange(compactOrders(fold))}>Tidy step numbers</Button>
-          <Button type="button" variant="dark" size="sm" onClick={() => onChange({ ...fold, hinges: fold.hinges.map((h) => ({ ...h, angleDeg: Math.sign(h.angleDeg || 1) * 90 })) })}>Set every angle to 90°</Button>
-        </div>
-        </>
-      ) : null}
       {quick ? (
         <QuickSortBar
           bottom={barBottom}

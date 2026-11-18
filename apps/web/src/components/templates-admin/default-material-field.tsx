@@ -21,6 +21,7 @@ export function DefaultMaterialField({
   hint = "New projects start with this board. Clients can change it.",
   resetLabel = "Use the template's standard board",
   canReset = true,
+  onMaterial,
 }: {
   /** Limits of the generator's thickness (mm). */
   min: number;
@@ -36,6 +37,8 @@ export function DefaultMaterialField({
   resetLabel?: string;
   /** Show the reset link. */
   canReset?: boolean;
+  /** Called with the board family (units.ts id) whenever a material is picked, so a 3D preview can show its look. */
+  onMaterial?: (typeId: string) => void;
 }) {
   const types = useMemo(() => materialsFor(min, max), [min, max]);
   const [unit, setUnit] = useState<Unit>("mm");
@@ -58,6 +61,7 @@ export function DefaultMaterialField({
     const g = types.find((t) => t.id === typeId)?.grades.find((x) => x.id === gradeId);
     if (!g) return;
     setMaterial({ typeId, gradeId });
+    onMaterial?.(typeId);
     onChange(g.thickness);
   };
 

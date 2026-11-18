@@ -3,6 +3,7 @@
 import { useEffect, useState, type RefObject } from "react";
 import { ChevronUp, Rotate3d } from "lucide-react";
 import type { CartonViewHandle, Rotation } from "./carton-view";
+import { RangeSlider } from "@/components/ui/range-slider";
 
 /** Small borderless field to type an angle. Commits on Enter or when leaving the field; Esc puts the old value back. */
 function AngleInput({ value, min, max, label, onCommit }: { value: number; min: number; max: number; label: string; onCommit: (v: number) => void }) {
@@ -80,14 +81,13 @@ export function RotationControls({ viewRef, className = "" }: { viewRef: RefObje
   const slider = (axis: "x" | "y" | "z", hint: string, min: number, max: number) => (
     <div className="flex items-center gap-1.5" title={hint}>
       <span aria-hidden className="w-3 shrink-0 font-medium">{axis.toUpperCase()}</span>
-      <input
-        type="range"
+      <RangeSlider
         min={min}
         max={max}
         step={1}
         value={Math.round(rot[axis])}
         aria-label={`Rotate ${axis.toUpperCase()}: ${hint}`}
-        className="h-4 w-24 min-w-0"
+        className="w-24 min-w-0"
         onChange={(e) => apply(axis, Number(e.target.value))}
       />
       <AngleInput value={rot[axis]} min={min} max={max} label={`Rotate ${axis.toUpperCase()}`} onCommit={(v) => apply(axis, v)} />

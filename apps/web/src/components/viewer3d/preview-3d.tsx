@@ -9,6 +9,7 @@ import type { ViewSettings } from "@/lib/view-settings";
 import { CartonView, type CartonViewHandle } from "./carton-view";
 import { GridToggle } from "./grid-toggle";
 import { RotationControls } from "./rotation-controls";
+import { RangeSlider } from "@/components/ui/range-slider";
 
 export type ThreeDSettings = ProjectDoc["threeD"];
 
@@ -84,29 +85,34 @@ export function Preview3D({
       />
       <GridToggle viewRef={inner} />
       <RotationControls viewRef={inner} />
-      <div className="flex flex-wrap items-center gap-3 border-t px-3 py-2 text-xs">
-        <label className="flex items-center gap-2">
-          Fold
-          <input
-            type="range"
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t bg-background px-3 py-2 text-xs">
+        <label className="flex min-w-[150px] flex-1 items-center gap-2.5">
+          <span className="font-medium text-muted-foreground">Fold</span>
+          <RangeSlider
             min={0}
             max={100}
             value={Math.round(progress * 100)}
             aria-label="Fold amount"
+            className="fold-range min-w-0 flex-1"
+            style={{ "--p": `${Math.round(progress * 100)}%` } as React.CSSProperties}
             onChange={(e) => setProgress(Number(e.target.value) / 100)}
             onPointerUp={() => onSettings({ ...settings, foldProgress: progress })}
             onKeyUp={() => onSettings({ ...settings, foldProgress: progress })}
           />
-          <span className="w-8 tabular-nums">{Math.round(progress * 100)}%</span>
+          <span className="w-9 rounded-md bg-muted px-1.5 py-0.5 text-center font-medium tabular-nums">{Math.round(progress * 100)}%</span>
         </label>
-        <button type="button" className="flex items-center gap-1 rounded-md border px-2 py-1 hover:bg-muted" onClick={animate}>
-          <Play className="size-3" /> Fold
-        </button>
-        <button type="button" className="flex items-center gap-1 rounded-md border px-2 py-1 hover:bg-muted" onClick={() => inner.current?.resetView()}>
-          <RotateCcw className="size-3" /> View
-        </button>
-        <NativeColor label="Board" ariaLabel="Board colour (outside)" value={settings.outsideColor} onCommit={(outsideColor) => onSettings({ ...settings, outsideColor })} />
-        <NativeColor label="Inside" ariaLabel="Inside colour" value={settings.insideColor} onCommit={(insideColor) => onSettings({ ...settings, insideColor })} />
+        <div className="flex items-center gap-1">
+          <button type="button" title="Play the folding animation" className="flex h-7 items-center gap-1.5 rounded-md bg-primary px-2.5 font-medium text-primary-foreground transition-opacity hover:opacity-85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" onClick={animate}>
+            <Play className="size-3 fill-current" /> Fold
+          </button>
+          <button type="button" title="Reset the camera" className="flex h-7 items-center gap-1.5 rounded-md px-2 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" onClick={() => inner.current?.resetView()}>
+            <RotateCcw className="size-3" /> View
+          </button>
+        </div>
+        <div className="flex items-center gap-3">
+          <NativeColor label="Board" ariaLabel="Board colour (outside)" value={settings.outsideColor} onCommit={(outsideColor) => onSettings({ ...settings, outsideColor })} />
+          <NativeColor label="Inside" ariaLabel="Inside colour" value={settings.insideColor} onCommit={(insideColor) => onSettings({ ...settings, insideColor })} />
+        </div>
       </div>
     </div>
   );
@@ -124,9 +130,9 @@ function NativeColor({ label, ariaLabel, value, onCommit }: { label: string; ari
     return () => el.removeEventListener("change", h);
   }, [value]); // the input remounts (key) when the value changes
   return (
-    <label className="flex items-center gap-1">
+    <label className="flex items-center gap-1.5 font-medium text-muted-foreground">
       {label}
-      <input ref={ref} type="color" aria-label={ariaLabel} defaultValue={value} key={value} className="h-6 w-8" />
+      <input ref={ref} type="color" aria-label={ariaLabel} defaultValue={value} key={value} className="color-chip" />
     </label>
   );
 }

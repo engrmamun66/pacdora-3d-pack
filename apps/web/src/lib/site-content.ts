@@ -164,7 +164,7 @@ export const DEFAULT_CONTENT: SiteContent = {
   chrome: {
     announcement: { on: false, text: "", link: { label: "", href: "" } },
     nav: [
-      { label: "Dielines", href: "/dielines" },
+      { label: "Templates", href: "/templates" },
       { label: "Features", href: "/#features" },
       { label: "How it works", href: "/#how" },
       { label: "File formats", href: "/#formats" },

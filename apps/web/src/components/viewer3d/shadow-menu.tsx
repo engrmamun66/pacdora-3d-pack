@@ -4,6 +4,7 @@ import { useEffect, useState, type RefObject } from "react";
 import { Eye, EyeOff, SlidersHorizontal, Sun } from "lucide-react";
 import { DEFAULT_SHADOW, type CartonViewHandle, type ShadowSettings } from "./carton-view";
 import { stripFrame, stripItem, useCanvasBottom, useStrip } from "./strip";
+import { RangeSlider } from "@/components/ui/range-slider";
 
 type ShadowPreset = Pick<ShadowSettings, "azimuthDeg" | "elevationDeg"> & { id: string; label: string };
 
@@ -218,7 +219,7 @@ function GlobalLightPanel({ shadow, bottom, onChange }: { shadow: ShadowSettings
           return (
             <div key={row.key} className="flex items-center gap-2">
               <span className="w-14 shrink-0 text-muted-foreground">{row.label}</span>
-              <input type="range" min={row.min} max={row.max} value={value} aria-label={row.label} onChange={(e) => set(Number(e.target.value))} className="min-w-0 flex-1" />
+              <RangeSlider min={row.min} max={row.max} value={value} aria-label={row.label} onChange={(e) => set(Number(e.target.value))} className="min-w-0 flex-1" />
               <span className="w-9 shrink-0 text-right tabular-nums">
                 {value}
                 {row.unit}

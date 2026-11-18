@@ -5,7 +5,7 @@ import { ChevronDown, ChevronUp, GripVertical } from "lucide-react";
 import type { FoldHingeSpec } from "@packaging/dieline-engine";
 
 const field = "h-9 rounded-lg border border-input bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
-const COLS = "grid grid-cols-[2.25rem_minmax(9rem,1fr)_6.5rem_6rem_minmax(12rem,1.2fr)] items-center";
+const COLS = "grid grid-cols-[2.25rem_minmax(9rem,1fr)_6.5rem_6rem_minmax(6rem,170px)_minmax(12rem,1.2fr)] items-center";
 const SETTLE_MS = 180;
 /** How long a row takes to glide to its new place when the order changes (arrows, typed step, keys). */
 const GLIDE_MS = 320;
@@ -74,6 +74,9 @@ export function HingeList({
   onSelect,
   onSetHinge,
   onMove,
+  kinds,
+  kindOf,
+  onKind,
 }: {
   /** Already sorted by step. */
   hinges: readonly FoldHingeSpec[];
@@ -83,6 +86,10 @@ export function HingeList({
   onSetHinge: (id: string, patch: Partial<Pick<FoldHingeSpec, "angleDeg" | "order">>) => void;
   /** Move the line to this position (0-based). */
   onMove: (id: string, toIndex: number) => void;
+  /** The kinds a panel can have (the "Kind" column), the kind of a panel, and a change of it. */
+  kinds: readonly { value: string; label: string }[];
+  kindOf: (panelId: string) => string;
+  onKind: (panelId: string, kind: string) => void;
 }) {
   const [drag, setDrag] = useState<Drag | null>(null);
   const rows = useRef(new Map<string, HTMLElement>());
@@ -181,13 +188,14 @@ export function HingeList({
 
   return (
     <div className="overflow-x-auto rounded-xl border">
-      <div className="min-w-[620px]">
+      <div className="min-w-[760px]">
         <div className={`${COLS} gap-x-1 border-b bg-muted/40 px-1 py-2 text-xs font-medium text-muted-foreground`}>
           <span className="sr-only">Drag to reorder</span>
           <span aria-hidden />
           <span className="px-1">Fold</span>
           <span className="px-1">Step</span>
           <span className="px-1">Angle</span>
+          <span className="px-1">Kind</span>
           <span className="px-1">Direction</span>
         </div>
         <ul aria-label="Fold lines, in folding order" className="relative">
@@ -243,6 +251,11 @@ export function HingeList({
                     }}
                   />
                   <span className="ml-1 text-xs text-muted-foreground">°</span>
+                </span>
+                <span className="px-1">
+                  <select aria-label={`Kind of ${label(h.childId)}`} className={`${field} w-full`} value={kindOf(h.childId)} onChange={(e) => onKind(h.childId, e.target.value)}>
+                    {kinds.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+                  </select>
                 </span>
                 <span className="px-1">
                   <select aria-label={`Direction of ${label(h.parentId)} to ${label(h.childId)}`} className={`${field} w-full`} value={sign(h)} onChange={(e) => onSetHinge(h.id, { angleDeg: Number(e.target.value) * Math.abs(h.angleDeg) })}>
