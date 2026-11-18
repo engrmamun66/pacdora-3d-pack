@@ -40,7 +40,7 @@ export async function ListPage({ params }: { params: Promise<{ userHash: string;
       <StudioBand
         chip={`${templates.length} template${templates.length === 1 ? "" : "s"}${scope.kind === "all" ? "" : ` · ${scope.kind === "category" ? "category" : "tag"}`}`}
         title={scope.kind === "all" ? owner.title : scope.label}
-        description={scope.kind === "all" ? "Pick a box, set the quantity, and send your order. Open a template to see its dieline and a 3D preview." : `${scope.kind === "category" ? "Category" : "Tag"} from ${owner.title}. Pick a box, set the quantity, and send your order.`}
+        description={scope.kind === "all" ? "Pick a box, set the quantity, and send your order. Open a template to see it in 3D." : `${scope.kind === "category" ? "Category" : "Tag"} from ${owner.title}. Pick a box, set the quantity, and send your order.`}
       />
       <TemplateGrid userHash={userHash} scopeHash={scope.linkHash} templates={templates} />
     </div>
