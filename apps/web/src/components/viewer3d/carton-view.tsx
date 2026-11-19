@@ -491,13 +491,15 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     const spec = layoutRef.current;
     appliedLayout.current = spec;
     const FLOOR = 0.5; // the box's bottom edge, just above the shadow plane
+    const stand = (m.object.userData.stand as THREE.Quaternion | undefined) ?? new THREE.Quaternion();
     const rad = THREE.MathUtils.degToRad;
     const aim = (obj: THREE.Object3D, o: { yawDeg: number; pitchDeg: number; rollDeg: number; scale: number }, stretch: readonly number[] = [1, 1, 1]) => {
       obj.rotation.set(rad(o.pitchDeg), rad(o.yawDeg), rad(o.rollDeg), "YXZ");
+      obj.quaternion.multiply(stand); // the layout turns the box as it stands (right way up, on its ground panel)
       obj.scale.set(o.scale * (stretch[0] ?? 1), o.scale * (stretch[1] ?? 1), o.scale * (stretch[2] ?? 1)); // stretches the box's own width, height and depth
     };
     if (!spec) {
-      m.object.rotation.set(0, 0, 0);
+      m.object.quaternion.copy(stand);
       m.object.scale.setScalar(1);
       m.object.position.set(0, m.size.y / 2 + FLOOR, 0);
       groupBounds.current = null;
@@ -559,6 +561,11 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
         ghost.matrixAutoUpdate = false;
         ghost.matrix.multiplyMatrices(flip, obj.matrixWorld);
         ghost.traverse((o) => {
+          // The outlines of the panels fade like the faces do (they are lines, not meshes), or the reflection shows as a full-strength wire frame.
+          if (o instanceof THREE.Line) {
+            o.material = Array.isArray(o.material) ? o.material.map(fade) : fade(o.material);
+            return;
+          }
           if (!(o instanceof THREE.Mesh)) return;
           o.castShadow = false;
           o.receiveShadow = false;

@@ -40,9 +40,24 @@ export function TemplatePreview({
   const background = backgrounds.find((b) => b.id === backgroundId) ?? null;
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row">
+    <div className="flex min-w-0 flex-col gap-3">
+      <div className="paper-grid sheet marks relative aspect-[4/3] overflow-hidden">
+        {scene ? (
+          <Scene3D userHash={userHash} scene={scene} onFoldable={setFoldable} foldable={foldable} layout={layout?.spec ?? null} backgroundUrl={background ? `/api/portal/backgrounds/${background.id}` : null} />
+        ) : (
+          <div className="flex h-full items-center justify-center p-6">
+            {thumbnail ? (
+              // eslint-disable-next-line @next/next/no-img-element -- generated SVG data URL
+              <img src={thumbnail} alt={name} className="max-h-full max-w-full" />
+            ) : (
+              <span className="text-sm text-muted-foreground">No preview</span>
+            )}
+          </div>
+        )}
+      </div>
+
       {scene && layouts.length > 0 ? (
-        <div role="tablist" aria-label="Sample layouts" aria-orientation="vertical" className="sheet flex w-full shrink-0 gap-1 self-start overflow-x-auto rounded-xl p-1 sm:w-28 sm:flex-col sm:overflow-visible">
+        <div role="tablist" aria-label="Sample layouts" className="flex items-start gap-2 overflow-x-auto px-1 pt-1 pb-1.5">
           {layouts.map((l, i) => {
             const on = l.id === layoutId;
             return (
@@ -53,61 +68,68 @@ export function TemplatePreview({
                 aria-selected={on}
                 title={l.name}
                 onClick={() => setLayoutId(l.id)}
-                className={`flex shrink-0 flex-col gap-1 rounded-lg px-1.5 py-1.5 text-left text-sm font-medium whitespace-nowrap transition-colors ${l.iconUrl ? "w-20 sm:w-full" : "h-9 justify-center px-3"} ${on ? "bg-[var(--ink)] text-white" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                className="group flex w-[4.5rem] shrink-0 flex-col items-center gap-1.5 rounded-xl p-0.5 text-center focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               >
-                {l.iconUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- the layout's icon, a small PNG
-                  <img src={l.iconUrl} alt="" className={`aspect-square w-full rounded-md object-cover ${on ? "ring-1 ring-white/40" : "border"}`} />
-                ) : null}
-                <span className={l.iconUrl ? "px-1" : ""}>Sample {i + 1}</span>
+                <span className={`relative block aspect-square w-full overflow-hidden rounded-xl border bg-card shadow-xs transition-all ${on ? "ring-2 ring-[var(--ink)] ring-offset-2 ring-offset-background" : "group-hover:-translate-y-0.5 group-hover:shadow-md"}`}>
+                  {l.iconUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- the layout's icon, a small PNG
+                    <img src={l.iconUrl} alt="" className="size-full object-cover" />
+                  ) : (
+                    <SamplePlaceholder />
+                  )}
+                </span>
+                <span className={`text-xs font-medium whitespace-nowrap ${on ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"}`}>Sample {i + 1}</span>
               </button>
             );
           })}
         </div>
       ) : null}
 
-      <div className="flex min-w-0 flex-1 flex-col gap-3">
-        <div className="paper-grid sheet marks relative aspect-[4/3] overflow-hidden">
-          {scene ? (
-            <Scene3D userHash={userHash} scene={scene} onFoldable={setFoldable} foldable={foldable} layout={layout?.spec ?? null} backgroundUrl={background ? `/api/portal/backgrounds/${background.id}` : null} />
-          ) : (
-            <div className="flex h-full items-center justify-center p-6">
-              {thumbnail ? (
-                // eslint-disable-next-line @next/next/no-img-element -- generated SVG data URL
-                <img src={thumbnail} alt={name} className="max-h-full max-w-full" />
-              ) : (
-                <span className="text-sm text-muted-foreground">No preview</span>
-              )}
-            </div>
-          )}
-        </div>
-
-        {scene && backgrounds.length > 0 ? (
-          <div role="group" aria-label="Background" className="flex items-center gap-2 overflow-x-auto pb-1">
+      {scene && backgrounds.length > 0 ? (
+        <div role="group" aria-label="Background" className="flex items-center gap-2 overflow-x-auto pb-1">
+          <button
+            type="button"
+            aria-pressed={backgroundId === null}
+            onClick={() => setBackgroundId(null)}
+            className={`grid h-14 w-20 shrink-0 place-items-center rounded-lg border bg-[#f4f4f2] text-xs text-muted-foreground transition-shadow ${backgroundId === null ? "ring-2 ring-[var(--ink)]" : "hover:ring-2 hover:ring-border"}`}
+          >
+            None
+          </button>
+          {backgrounds.map((b) => (
             <button
+              key={b.id}
               type="button"
-              aria-pressed={backgroundId === null}
-              onClick={() => setBackgroundId(null)}
-              className={`grid h-14 w-20 shrink-0 place-items-center rounded-lg border bg-[#f4f4f2] text-xs text-muted-foreground transition-shadow ${backgroundId === null ? "ring-2 ring-[var(--ink)]" : "hover:ring-2 hover:ring-border"}`}
+              aria-pressed={backgroundId === b.id}
+              title={b.name}
+              onClick={() => setBackgroundId(b.id)}
+              className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-lg border transition-shadow ${backgroundId === b.id ? "ring-2 ring-[var(--ink)]" : "hover:ring-2 hover:ring-border"}`}
             >
-              None
+              {/* eslint-disable-next-line @next/next/no-img-element -- public route, cached by URL */}
+              <img src={`/api/portal/backgrounds/${b.id}`} alt={b.name} loading="lazy" className="absolute inset-0 size-full object-cover" />
             </button>
-            {backgrounds.map((b) => (
-              <button
-                key={b.id}
-                type="button"
-                aria-pressed={backgroundId === b.id}
-                title={b.name}
-                onClick={() => setBackgroundId(b.id)}
-                className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-lg border transition-shadow ${backgroundId === b.id ? "ring-2 ring-[var(--ink)]" : "hover:ring-2 hover:ring-border"}`}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element -- public route, cached by URL */}
-                <img src={`/api/portal/backgrounds/${b.id}`} alt={b.name} loading="lazy" className="absolute inset-0 size-full object-cover" />
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
+          ))}
+        </div>
+      ) : null}
     </div>
+  );
+}
+
+/** The picture of a Sample that has no icon yet: a soft tile with a line drawing of a box. */
+function SamplePlaceholder() {
+  return (
+    <svg viewBox="0 0 64 64" className="size-full" role="img" aria-label="No preview picture yet">
+      <defs>
+        <linearGradient id="sample-ph-bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#f4f6f8" />
+          <stop offset="1" stopColor="#e4e8ee" />
+        </linearGradient>
+      </defs>
+      <rect width="64" height="64" fill="url(#sample-ph-bg)" />
+      <g fill="none" stroke="#9aa3b2" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round">
+        <path d="M32 15 47 23.5v17L32 49 17 40.5v-17z" fill="#ffffff" fillOpacity="0.7" />
+        <path d="M17 23.5 32 32l15-8.5M32 32v17" />
+      </g>
+      <ellipse cx="32" cy="53" rx="14" ry="2.5" fill="#9aa3b2" fillOpacity="0.2" />
+    </svg>
   );
 }

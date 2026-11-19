@@ -124,7 +124,7 @@ const DEFAULTS: Record<ArrangementKind, { options: ArrangementOptions; azimuthDe
   row: { options: { count: 3, columns: 3, gap: 0.15, turnDeg: 0, tiltDeg: 0 }, azimuthDeg: 20, elevationDeg: 14 },
   stack: { options: { count: 3, columns: 1, gap: 0, turnDeg: 12, tiltDeg: 0 }, azimuthDeg: 30, elevationDeg: 22 },
   stagger: { options: { count: 3, columns: 1, gap: 0.15, turnDeg: 8, tiltDeg: 0 }, azimuthDeg: 28, elevationDeg: 24 },
-  fan: { options: { count: 3, columns: 1, gap: 0.15, turnDeg: 22, tiltDeg: 0 }, azimuthDeg: 0, elevationDeg: 22 },
+  fan: { options: { count: 3, columns: 1, gap: 0.1, turnDeg: 22, tiltDeg: 0 }, azimuthDeg: 0, elevationDeg: 22 },
   grid: { options: { count: 9, columns: 3, gap: 0.15, turnDeg: 0, tiltDeg: 0 }, azimuthDeg: 0, elevationDeg: 70 },
   "flat-stack": { options: { count: 3, columns: 1, gap: 0.02, turnDeg: 8, tiltDeg: 0 }, azimuthDeg: 28, elevationDeg: 18 },
 };
@@ -145,7 +145,8 @@ export function arrangementItems(kind: ArrangementKind, o: ArrangementOptions): 
     case "stagger":
       return [r(newBoxItem({ x: -mid * step * 0.55, z: mid * step * 0.6, yawDeg: o.turnDeg, rollDeg: o.tiltDeg, repeat: { count: n, dx: step * 0.55, dz: -step * 0.6 } }))];
     case "fan": {
-      const dx = 0.45 + o.gap * 0.6;
+      // Close together (a quarter of a box width apart by default): the turned boxes overlap and merge into one fan.
+      const dx = 0.2 + o.gap * 0.6;
       return [r(newBoxItem({ x: -mid * dx, yawDeg: -mid * o.turnDeg, rollDeg: o.tiltDeg, repeat: { count: n, dx, dYawDeg: o.turnDeg } }))];
     }
     case "grid": {
@@ -164,10 +165,13 @@ export function arrangementItems(kind: ArrangementKind, o: ArrangementOptions): 
   }
 }
 
+/** The zoom a new layout (and every preset and starter layout) starts with. */
+export const DEFAULT_ZOOM = 1.2;
+
 /** Sensible settings for an arrangement: what a new layout starts with. */
 export function defaultLayoutSpec(kind: ArrangementKind): LayoutSpec {
   const d = DEFAULTS[kind];
-  return { v: 2, items: arrangementItems(kind, d.options), mirror: { on: false, opacity: 0.4, fade: 1 }, azimuthDeg: d.azimuthDeg, elevationDeg: d.elevationDeg, zoom: 1 };
+  return { v: 2, items: arrangementItems(kind, d.options), mirror: { on: false, opacity: 0.4, fade: 1 }, azimuthDeg: d.azimuthDeg, elevationDeg: d.elevationDeg, zoom: DEFAULT_ZOOM };
 }
 
 /** More ready-made layouts: the boxes are written out, then edited freely like any other. */
@@ -199,7 +203,7 @@ export function presetSpec(id: string): LayoutSpec | null {
   if (ARRANGEMENTS.some((a) => a.id === id)) return defaultLayoutSpec(id as ArrangementKind);
   const v = SHOWCASE[id];
   if (!v) return null;
-  return { v: 2, items: v.items, mirror: { on: v.mirror ?? false, opacity: 0.4, fade: 1 }, azimuthDeg: v.azimuthDeg, elevationDeg: v.elevationDeg, zoom: v.zoom ?? 1 };
+  return { v: 2, items: v.items, mirror: { on: v.mirror ?? false, opacity: 0.4, fade: 1 }, azimuthDeg: v.azimuthDeg, elevationDeg: v.elevationDeg, zoom: v.zoom ?? DEFAULT_ZOOM };
 }
 
 /** A starting set of layouts, for an admin who has none yet. */

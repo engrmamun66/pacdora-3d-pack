@@ -30,6 +30,18 @@ describe("buildCartonModel with a ground panel", () => {
     expect(front.max.y).toBeCloseTo(-25, 4);
   });
 
+  it("keeps the open sheet flat on the floor when the ground panel is not the base", () => {
+    const rootId = geo.foldTree.rootId;
+    const other = geo.foldTree.panels.find((p) => p.id !== rootId && p.role === "body")?.id ?? geo.foldTree.panels.find((p) => p.id !== rootId)!.id;
+    const g = { ...geo, foldTree: { ...geo.foldTree, groundId: other } };
+    const flat = buildCartonModel(g, { progress: 0 });
+    const flatBox = worldBox(flat.object);
+    expect(flatBox.getSize(new THREE.Vector3()).y).toBeLessThan(1);
+    expect(flatBox.min.y).toBeCloseTo(-flat.size.y / 2, 3);
+    const closed = buildCartonModel(g, { progress: 1 });
+    expect(worldBox(closed.object).min.y).toBeCloseTo(-closed.size.y / 2, 3);
+  });
+
   it("keeps the usual orientation when no ground panel is set", () => {
     const { size } = buildCartonModel(geo, { progress: 1 });
     expect(size.y).toBeCloseTo(150, 4);

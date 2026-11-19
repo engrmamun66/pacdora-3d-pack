@@ -14,7 +14,7 @@ export default async function TemplateLayoutsPage() {
         title="Template Layouts"
         description="How the box is shown to customers on a shared template page: one box, a row, a stack, a grid... Each layout becomes a Sample tab beside the 3D view, for every template."
       />
-      <LayoutManager key={layouts.map((l) => l.id).join(",")} layouts={layouts} iconBox={icon.box} iconStyle={icon.style} />
+      <LayoutManager key={layouts.map((l) => l.id).sort().join(",")} layouts={layouts} iconBox={icon.box} iconStyle={icon.style} />
     </div>
   );
 }

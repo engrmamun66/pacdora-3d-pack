@@ -2,12 +2,13 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, Copy, ImageIcon, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, GripVertical, ImageIcon, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { generateDieline } from "@packaging/dieline-engine";
 import { Button } from "@/components/ui/button";
 import { RangeSlider } from "@/components/ui/range-slider";
+import { SortableList } from "@/components/ui/sortable-list";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
-import { addStarterLayouts, clearLayoutIcon, createLayout, deleteLayout, moveLayout, setIconBox, setIconStyle, setLayoutIcon, updateLayout } from "@/app/doraadmin/template-layout-actions";
+import { addStarterLayouts, clearLayoutIcon, createLayout, deleteLayout, reorderLayouts, setIconBox, setIconStyle, setLayoutIcon, updateLayout } from "@/app/doraadmin/template-layout-actions";
 import { MAX_BOXES, MAX_ITEMS, MAX_REPEAT, PRESETS, defaultLayoutSpec, layoutInstances, newBoxItem, presetSpec, type BoxItem, type LayoutItem, type LayoutSpec, type Repeat } from "@/lib/scene-layout";
 import { notify } from "@/lib/notify";
 import { SAMPLE_BOXES, SAMPLE_STYLES, styleCss } from "@/lib/sample-boxes";
@@ -85,6 +86,29 @@ export function LayoutManager({ layouts, iconBox, iconStyle }: { layouts: Layout
 
   // The gradient of the chosen style, painted on the flat sheet of the sample box (null for the plain board and solid colours).
   const look = useMemo(() => (sample ? gradientTexture(sample, style) : null), [sample, style]);
+
+  // The order the list is shown in. It changes at once when a layout is dragged or moved (the page is told afterwards).
+  const [ids, setIds] = useState(() => layouts.map((l) => l.id));
+  const ordered = ids.flatMap((id) => layouts.find((l) => l.id === id) ?? []);
+  const reorder = (next: string[]) => {
+    const before = ids;
+    setIds(next);
+    start(async () => {
+      const r = await reorderLayouts(next).catch(() => ({ ok: false, message: "Could not save the order." }));
+      if (!r.ok) {
+        setIds(before);
+        notify.error(r.message);
+      } else router.refresh();
+    });
+  };
+  const moveBy = (id: string, by: -1 | 1) => {
+    const at = ids.indexOf(id);
+    const to = at + by;
+    if (at < 0 || to < 0 || to >= ids.length) return;
+    const next = [...ids];
+    [next[at], next[to]] = [next[to]!, next[at]!];
+    reorder(next);
+  };
 
   const run = (fn: () => Promise<{ ok: boolean; message: string }>, after?: () => void) =>
     start(async () => {
@@ -215,33 +239,41 @@ export function LayoutManager({ layouts, iconBox, iconStyle }: { layouts: Layout
       ) : null}
     <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)] lg:items-start">
       <aside className="flex flex-col gap-3">
-        <ol aria-label="Layouts" className="flex flex-col gap-1 rounded-xl border bg-card p-1.5 shadow-xs">
-          {layouts.map((l, i) => {
+        <SortableList
+          label="Layouts"
+          className="flex flex-col gap-1 rounded-xl border bg-card p-1.5 shadow-xs"
+          items={ordered}
+          onReorder={reorder}
+          itemClass={(l, dragging) => `flex items-center gap-1 rounded-lg ${dragging ? "bg-card ring-1 ring-border" : draft.id === l.id ? "bg-accent" : "hover:bg-muted/60"}`}
+          empty={<li className="px-3 py-4 text-center text-sm text-muted-foreground">No layouts yet.</li>}
+          renderItem={(l, { handleProps, index }) => {
             const active = draft.id === l.id;
             return (
-              <li key={l.id} className={`flex items-center gap-1 rounded-lg ${active ? "bg-accent" : "hover:bg-muted/60"}`}>
-                <button type="button" onClick={() => pick(l)} aria-current={active ? "true" : undefined} className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-1.5 text-left">
+              <>
+                <span {...handleProps} role="img" aria-label={`Drag ${l.name} to re-order`} title="Drag to re-order" className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground">
+                  <GripVertical className="size-4" aria-hidden />
+                </span>
+                <button type="button" onClick={() => pick(l)} aria-current={active ? "true" : undefined} className="flex min-w-0 flex-1 items-center gap-2.5 py-1.5 pr-1 text-left">
                   {l.iconUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element -- the layout's own small PNG
-                    <img src={l.iconUrl} alt="" className="size-10 shrink-0 rounded border bg-muted object-cover" />
+                    <img src={l.iconUrl} alt="" draggable={false} className="size-10 shrink-0 rounded border bg-muted object-cover" />
                   ) : (
                     <span className="grid size-10 shrink-0 place-items-center rounded border border-dashed text-muted-foreground"><ImageIcon className="size-4" aria-hidden /></span>
                   )}
                   <span className="min-w-0">
-                  <span className={`block truncate text-sm ${active ? "font-medium" : ""}`}>{l.name}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{(() => {
+                    <span className={`block truncate text-sm ${active ? "font-medium" : ""}`}>{l.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{(() => {
                       const n = layoutInstances(l.spec).length;
                       return `${n} ${n === 1 ? "box" : "boxes"}${l.spec.mirror.on ? ", mirror" : ""}`;
                     })()}</span>
                   </span>
                 </button>
-                <button type="button" aria-label={`Move ${l.name} up`} disabled={pending || i === 0} className="grid size-7 place-items-center rounded-md hover:bg-background disabled:opacity-30" onClick={() => run(() => moveLayout(l.id, "up"))}><ArrowUp className="size-3.5" /></button>
-                <button type="button" aria-label={`Move ${l.name} down`} disabled={pending || i === layouts.length - 1} className="mr-1 grid size-7 place-items-center rounded-md hover:bg-background disabled:opacity-30" onClick={() => run(() => moveLayout(l.id, "down"))}><ArrowDown className="size-3.5" /></button>
-              </li>
+                <button type="button" aria-label={`Move ${l.name} up`} disabled={pending || index === 0} className="grid size-7 place-items-center rounded-md hover:bg-background disabled:opacity-30" onClick={() => moveBy(l.id, -1)}><ArrowUp className="size-3.5" /></button>
+                <button type="button" aria-label={`Move ${l.name} down`} disabled={pending || index === ordered.length - 1} className="mr-1 grid size-7 place-items-center rounded-md hover:bg-background disabled:opacity-30" onClick={() => moveBy(l.id, 1)}><ArrowDown className="size-3.5" /></button>
+              </>
             );
-          })}
-          {layouts.length === 0 ? <li className="px-3 py-4 text-center text-sm text-muted-foreground">No layouts yet.</li> : null}
-        </ol>
+          }}
+        />
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" className="h-9" onClick={() => { setDraft(newDraft(layouts.length + 1)); setSel(0); }}><Plus className="size-4" /> New layout</Button>
           {layouts.length === 0 ? (
@@ -297,7 +329,7 @@ export function LayoutManager({ layouts, iconBox, iconStyle }: { layouts: Layout
               <div className="flex gap-1.5">
                 <Button type="button" variant="outline" size="sm" onClick={addBox}><Plus className="size-3.5" /> Add box</Button>
                 <Button type="button" variant="outline" size="sm" onClick={dupBox}><Copy className="size-3.5" /> Duplicate</Button>
-                <Button type="button" variant="destructive" size="sm" className="border-destructive/30" disabled={spec.items.length < 2} onClick={removeBox}><Trash2 className="size-3.5" /> Remove</Button>
+                <Button type="button" variant="destructive" size="sm" disabled={spec.items.length < 2} onClick={removeBox}><Trash2 className="size-3.5" /> Remove</Button>
               </div>
             </div>
             <div role="tablist" aria-label="Boxes" className="flex flex-wrap gap-1">
@@ -396,7 +428,7 @@ export function LayoutManager({ layouts, iconBox, iconStyle }: { layouts: Layout
                 <Button
                   type="button"
                   variant="destructive"
-                  className="h-9 border-destructive/30"
+                  className="h-9"
                   disabled={pending}
                   onClick={async () => {
                     if (await confirmAction({ title: `Delete "${draft.name}"?`, description: "Customers will no longer see this layout." })) run(() => deleteLayout(draft.id), () => { setDraft(newDraft(layouts.length)); setSel(0); });

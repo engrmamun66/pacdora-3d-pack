@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ARRANGEMENTS, MAX_BOXES, PRESETS, presetSpec, STARTER_LAYOUTS, defaultLayoutSpec, layoutInstances, layoutSpecSchema, newBoxItem, readLayoutSpec, type LayoutSpec } from "./scene-layout";
+import { ARRANGEMENTS, DEFAULT_ZOOM, MAX_BOXES, PRESETS, presetSpec, STARTER_LAYOUTS, defaultLayoutSpec, layoutInstances, layoutSpecSchema, newBoxItem, readLayoutSpec, type LayoutSpec } from "./scene-layout";
 
 const one = (over: Parameters<typeof newBoxItem>[0]): LayoutSpec => ({ ...defaultLayoutSpec("single"), items: [newBoxItem(over)] });
 
@@ -64,6 +64,15 @@ describe("arrangements", () => {
     const list = layoutInstances(defaultLayoutSpec("flat-stack"));
     expect(list.filter((i) => i.pitchDeg === 90)).toHaveLength(3);
     expect(list.filter((i) => i.pitchDeg === 0)).toHaveLength(1);
+  });
+});
+
+describe("default zoom", () => {
+  it("is 1.2 for new layouts, presets and starter layouts", () => {
+    expect(DEFAULT_ZOOM).toBe(1.2);
+    expect(defaultLayoutSpec("row").zoom).toBe(1.2);
+    for (const p of PRESETS) expect(presetSpec(p.id)!.zoom, p.id).toBe(1.2);
+    for (const l of STARTER_LAYOUTS) expect(l.spec.zoom, l.name).toBe(1.2);
   });
 });
 

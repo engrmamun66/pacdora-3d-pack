@@ -135,3 +135,15 @@ export async function setIconStyle(id: unknown): Promise<ActionResult> {
   refresh();
   return { ok: true, message: "Icon style saved." };
 }
+
+/** Put the layouts in this order (the order of the Sample tabs). `ids` must be all the layouts, each once. */
+export async function reorderLayouts(ids: unknown): Promise<ActionResult> {
+  await requireSuperAdmin();
+  const p = z.array(idParam).max(MAX_LAYOUTS).safeParse(ids);
+  if (!p.success) return { ok: false, message: "Invalid request." };
+  const rows = await db.templateLayout.findMany({ select: { id: true } });
+  if (rows.length !== p.data.length || new Set(p.data).size !== p.data.length || !rows.every((r) => p.data.includes(r.id))) return { ok: false, message: "The list changed. Reload the page and try again." };
+  await db.$transaction(p.data.map((rowId, i) => db.templateLayout.update({ where: { id: rowId }, data: { sortOrder: i + 1 } })));
+  refresh();
+  return { ok: true, message: "Order saved." };
+}

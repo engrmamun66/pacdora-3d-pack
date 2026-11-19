@@ -109,7 +109,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   const [name, setName] = useState(initialName);
   const [unit, setUnit] = useState<Unit>("mm");
   const [tab, setTab] = useState<TabId>("basic");
-  const [toggles, setToggles] = useState<ViewToggles>({ bleed: true, safe: false, glue: true, dimensions: true, partSizes: false, labels: false, reference: false });
+  const [toggles, setToggles] = useState<ViewToggles>({ bleed: true, safe: false, glue: true, dimensions: true, partSizes: true, labels: false, reference: false });
   const [progress, setProgress] = useState(initialView?.progress ?? 1);
   const thickness = gen.params.find((p): p is ParamDescriptor & { kind: "number" } => p.key === "thickness" && p.kind === "number");
   const materialTypes = useMemo(() => (thickness ? materialsFor(thickness.min, thickness.max) : []), [thickness]);

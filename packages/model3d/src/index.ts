@@ -313,8 +313,11 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
   // A chosen ground panel decides which way is down. Otherwise, with extra parts (a lid on a box) the
   // parts are stacked along the sheet's normal, so that is "up": the model stands on its base.
   // Without parts the sheet's own y axis is up, as always.
-  const turn = groundTurn(geo, closedWorld);
-  const turnedBox = turn ? foldedBounds(geo, closedWorld, turn) : null;
+  const closedTurn = groundTurn(geo, closedWorld);
+  const turnedBox = closedTurn ? foldedBounds(geo, closedWorld, closedTurn) : null;
+  // The ground panel is what lies on the floor at every fold amount, so the turn follows where it is NOW. When it is the
+  // base nothing changes; when it is another panel the flat sheet still lies on the floor (it is not hung from the closed box).
+  const turn = closedTurn ? groundTurn(geo, world) ?? closedTurn : null;
   const standUp = !turn && (geo.foldTree.parts?.length ?? 0) > 0;
   const sizeFlat = turnedBox ? turnedBox.getSize(new THREE.Vector3()) : standUp ? new THREE.Vector3(flatSize.x, flatSize.z, flatSize.y) : flatSize;
   const board = Number.isFinite(opts.thickness) && (opts.thickness as number) > 0 ? (opts.thickness as number) : 0;
@@ -352,10 +355,23 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
   });
 
   const inner = new THREE.Group();
-  if (turn && turnedBox) {
-    // Centre the turned carton: undo the turn on its bounding-box centre.
-    const c = turnedBox.getCenter(new THREE.Vector3()).applyQuaternion(turn.clone().invert());
-    inner.position.set(-c.x, -c.y, -c.z);
+  if (turn && closedTurn && turnedBox) {
+    // Centre the turned carton on the closed box, with the ground panel held where it sits in the closed box.
+    const anchor = (w: Map<string, Mat4>, q: THREE.Quaternion) => {
+      const id = geo.foldTree.groundId;
+      const panel = geo.foldTree.panels.find((x) => x.id === id);
+      const m = id ? w.get(id) : undefined;
+      if (!panel || !m) return null;
+      const pts = panel.polygon.map((v) => transformPoint(m, flatPoint(v)));
+      const mean = pts.reduce<THREE.Vector3>((a, t) => a.add(new THREE.Vector3(t.x, t.y, t.z)), new THREE.Vector3()).divideScalar(Math.max(1, pts.length));
+      return mean.applyQuaternion(q);
+    };
+    const now = anchor(world, turn);
+    const closed = anchor(closedWorld, closedTurn);
+    const want = closed ? closed.sub(turnedBox.getCenter(new THREE.Vector3())) : turnedBox.getCenter(new THREE.Vector3()).negate();
+    const offset = now ? want.sub(now) : turnedBox.getCenter(new THREE.Vector3()).negate();
+    const c = offset.applyQuaternion(turn.clone().invert());
+    inner.position.set(c.x, c.y, c.z);
   } else {
     inner.position.set(-centre.x, -centre.y, -centre.z);
   }
@@ -461,6 +477,8 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
   if (turn) object.quaternion.copy(turn);
   else object.rotation.x = standUp ? -Math.PI / 2 : Math.PI;
   object.add(inner);
+  // The turn the model was built with, so a viewer that re-aims the object (a layout) can keep it standing the right way up.
+  object.userData.stand = object.quaternion.clone();
   return { object, size };
 }
 
