@@ -273,7 +273,10 @@ export function ArtworkEditor({
   layouts = [],
   previewLink = null,
   viewer = null,
+  embedded = false,
 }: {
+  /** Shown inside a box of another page: no link back to the dieline page, no profile menu. */
+  embedded?: boolean;
   projectId: string;
   name: string;
   generatorId: string;
@@ -797,12 +800,16 @@ export function ArtworkEditor({
       <EditorSkeletonOverlay show={!loaded} />
       {/* Top bar */}
       <header className="flex items-center gap-1 border-b px-2">
+        {embedded ? null : (
+          <>
         <Link href="/" aria-label={`${site.name} home`} className="mr-1 grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
           <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden><path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z" /><path d="M3 7.5 12 12l9-4.5M12 12v9" /></svg>
         </Link>
         <Link href={`/projects/${projectId}`} title={`Back to the dieline page of ${name}`} className="mr-2 rounded-md px-2 py-1 text-sm hover:bg-muted">
           ← <span className="font-medium">Back to dieline page</span>
         </Link>
+          </>
+        )}
         <div className="mx-1 h-5 w-px bg-border" />
         <ToolButton label="Add text" onClick={() => void c?.add("text")}><Type className="size-4" /></ToolButton>
         <ToolButton label="Add rectangle" onClick={() => void c?.add("rect")}><Square className="size-4" /></ToolButton>
@@ -859,9 +866,10 @@ export function ArtworkEditor({
             <Download className="size-3.5" /> Export
           </button>
           {/* Empty when all is saved: then it is out of the row (sr-only), so Export, Save and the profile icon keep the same gaps. */}
-          <span className={saveLabel ? `text-xs ${saveState === "error" ? "text-destructive" : "text-muted-foreground"}` : "sr-only"} aria-live="polite">{saveLabel}</span>
-          <button type="button" onClick={saveNow} className="h-8 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/80">Save</button>
-          {viewer ? <UserMenuClient name={viewer.name} email={viewer.email} image={viewer.image} /> : null}
+          {/* The state is said on the button itself (Save / Saving…); screen readers still hear it here. A failed save also shows an error message. */}
+          <span className="sr-only" aria-live="polite">{saveLabel}</span>
+          <button type="button" onClick={saveNow} disabled={saveState === "saving"} className="h-8 min-w-[4.5rem] rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/80 disabled:cursor-wait disabled:opacity-80">{saveState === "saving" ? "Saving…" : "Save"}</button>
+          {viewer && !embedded ? <UserMenuClient name={viewer.name} email={viewer.email} image={viewer.image} /> : null}
         </div>
       </header>
 

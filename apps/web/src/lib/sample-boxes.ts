@@ -37,3 +37,8 @@ export const SAMPLE_STYLES: readonly SampleStyle[] = [
 
 /** The CSS background of a style (for a swatch). */
 export const styleCss = (x: SampleStyle) => (x.gradient ? `linear-gradient(${x.gradient.angleDeg}deg, ${x.gradient.from}, ${x.gradient.to})` : x.outside);
+
+/** A style value that names a custom design is "design:<id>"; the others are the ready-made styles above. */
+export const designStyle = (id: string) => `design:${id}`;
+export const isDesignStyle = (v: string) => v.startsWith("design:");
+export const designIdOf = (v: string) => v.slice("design:".length);

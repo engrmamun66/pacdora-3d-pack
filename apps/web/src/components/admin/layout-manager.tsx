@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, Copy, GripVertical, ImageIcon, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { generateDieline } from "@packaging/dieline-engine";
@@ -8,11 +8,14 @@ import { Button } from "@/components/ui/button";
 import { RangeSlider } from "@/components/ui/range-slider";
 import { SortableList } from "@/components/ui/sortable-list";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
-import { addStarterLayouts, clearLayoutIcon, createLayout, deleteLayout, reorderLayouts, setIconBox, setIconStyle, setLayoutIcon, updateLayout } from "@/app/doraadmin/template-layout-actions";
+import { addStarterLayouts, clearLayoutIcon, createLayout, deleteLayout, getLayoutDesignLook, reorderLayouts, setIconBox, setIconStyle, setLayoutIcon, updateLayout } from "@/app/doraadmin/template-layout-actions";
 import { MAX_BOXES, MAX_ITEMS, MAX_REPEAT, PRESETS, defaultLayoutSpec, layoutInstances, newBoxItem, presetSpec, type BoxItem, type LayoutItem, type LayoutSpec, type Repeat } from "@/lib/scene-layout";
 import { notify } from "@/lib/notify";
-import { SAMPLE_BOXES, SAMPLE_STYLES, styleCss } from "@/lib/sample-boxes";
+import { SAMPLE_BOXES, SAMPLE_STYLES, designIdOf, designStyle, isDesignStyle, styleCss, type SampleStyle } from "@/lib/sample-boxes";
 import { gradientTexture } from "./sample-look";
+import { renderArtwork, type RasterRect } from "@/components/editor/artwork-raster";
+import { LayoutDesignsDialog } from "./layout-designs-dialog";
+import type { LayoutDesignItem } from "@/server/layouts";
 import { confirmAction } from "@/lib/confirm";
 
 /** Icons are square pictures of this many pixels. */
@@ -60,7 +63,7 @@ function Setting({ label, value, min, max, step, unit, onChange }: { label: stri
  * Admin: the layouts customers can pick on a shared template page ("Sample 1", "Sample 2" ...). Pick or add one on the left;
  * set the arrangement and the camera on the right and watch the result on a sample box. The same list serves every template.
  */
-export function LayoutManager({ layouts, iconBox, iconStyle }: { layouts: LayoutItem[]; /** The sample box and colour style all icons (and the preview) use. */ iconBox: string; iconStyle: string }) {
+export function LayoutManager({ layouts, designs, iconBox, iconStyle }: { layouts: LayoutItem[]; /** Custom designs the sample box can be dressed in (the style "design:<id>"). */ designs: LayoutDesignItem[]; /** The sample box and colour style all icons (and the preview) use. */ iconBox: string; iconStyle: string }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [draft, setDraft] = useState<Draft>(() => {
@@ -70,10 +73,15 @@ export function LayoutManager({ layouts, iconBox, iconStyle }: { layouts: Layout
   const view = useRef<CartonViewHandle>(null);
   /** The box being edited (an index into the layout's boxes). */
   const [sel, setSel] = useState(0);
+  /** The form is split in two tabs (the boxes, and the floor and camera), and the settings of one box in four, so there is little to scroll. */
+  const [tab, setTab] = useState<"boxes" | "scene">("boxes");
+  const [boxTab, setBoxTab] = useState<"place" | "turn" | "size" | "repeat">("place");
 
   // The box the preview shows (the layouts work on any box, so the admin can try them on different shapes).
-  const [styleId, setStyleId] = useState(SAMPLE_STYLES.some((x) => x.id === iconStyle) ? iconStyle : SAMPLE_STYLES[0]!.id);
-  const style = SAMPLE_STYLES.find((x) => x.id === styleId) ?? SAMPLE_STYLES[0]!;
+  const [styleId, setStyleId] = useState(SAMPLE_STYLES.some((x) => x.id === iconStyle) || designs.some((d) => designStyle(d.id) === iconStyle) ? iconStyle : SAMPLE_STYLES[0]!.id);
+  const design = isDesignStyle(styleId) ? (designs.find((d) => d.id === designIdOf(styleId)) ?? null) : null;
+  // A design is a plain light board with its picture painted over it.
+  const style = useMemo<SampleStyle>(() => (design ? { id: styleId, label: design.name, outside: "#f4f1ea", inside: "#e6e0d2" } : (SAMPLE_STYLES.find((x) => x.id === styleId) ?? SAMPLE_STYLES[0]!)), [design, styleId]);
   const [boxId, setBoxId] = useState(SAMPLE_BOXES.some((b) => b.id === iconBox) ? iconBox : SAMPLE_BOXES[0]!.id);
   const sample = useMemo(() => {
     const b = SAMPLE_BOXES.find((x) => x.id === boxId) ?? SAMPLE_BOXES[0]!;
@@ -84,8 +92,31 @@ export function LayoutManager({ layouts, iconBox, iconStyle }: { layouts: Layout
     }
   }, [boxId]);
 
-  // The gradient of the chosen style, painted on the flat sheet of the sample box (null for the plain board and solid colours).
-  const look = useMemo(() => (sample ? gradientTexture(sample, style) : null), [sample, style]);
+  // What the sample box is dressed in. A gradient style is painted at once; a design is its artwork drawn on the sheet (fetched and rendered, so it takes a moment).
+  const [designVersion, setDesignVersion] = useState(0);
+  const [designLook, setDesignLook] = useState<{ key: string; canvas: HTMLCanvasElement; rect: RasterRect } | null>(null);
+  const designKey = design ? `${design.id}:${boxId}:${designVersion}` : null;
+  /** Draw a design's artwork on the flat sheet of a sample box: the texture the box is dressed in. */
+  const makeDesignLook = async (d: LayoutDesignItem, forBox: string, version: number) => {
+    const b = SAMPLE_BOXES.find((x) => x.id === forBox) ?? SAMPLE_BOXES[0]!;
+    const data = await getLayoutDesignLook(d.id);
+    if (!data) return null;
+    const r = await renderArtwork(generateDieline(b.generatorId, b.params), data.artwork, { pxPerMm: 4, background: data.outsideColor });
+    return { key: `${d.id}:${forBox}:${version}`, canvas: r.canvas, rect: r.rect };
+  };
+  useEffect(() => {
+    if (!design || !designKey || designLook?.key === designKey) return;
+    let live = true;
+    makeDesignLook(design, boxId, designVersion)
+      .then((l) => live && l && setDesignLook(l))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuilt when the design, the box or the version changes
+  }, [designKey]);
+  const gradient = useMemo(() => (sample && !design ? gradientTexture(sample, style) : null), [sample, style, design]);
+  const look = design ? (designLook?.key === designKey ? designLook : null) : gradient;
 
   // The order the list is shown in. It changes at once when a layout is dragged or moved (the page is told afterwards).
   const [ids, setIds] = useState(() => layouts.map((l) => l.id));
@@ -173,14 +204,32 @@ export function LayoutManager({ layouts, iconBox, iconStyle }: { layouts: Layout
   const redrawView = useRef<CartonViewHandle>(null);
 
   /** Save the box or the style, then redraw every saved icon with it. */
-  const changeLook = (what: "box" | "style", id: string) => {
+  const changeLook = (what: "box" | "style", id: string, alsoBox?: string) => {
+    const nextBox = alsoBox ?? (what === "box" ? id : boxId);
+    if (alsoBox) setBoxId(alsoBox);
     if (what === "box") setBoxId(id);
     else setStyleId(id);
     start(async () => {
-      const r = await (what === "box" ? setIconBox(id) : setIconStyle(id)).catch(() => ({ ok: false, message: "Could not save." }));
-      if (!r.ok) return void notify.error(r.message);
-      const queue = layouts.filter((l) => l.iconUrl);
-      if (queue.length > 0) setRedraw({ queue, at: 0 });
+      try {
+        // A design is drawn on the box first, so the icons are redrawn with it at once.
+        const nowStyle = what === "style" ? id : styleId;
+        const d = isDesignStyle(nowStyle) ? designs.find((x) => x.id === designIdOf(nowStyle)) : undefined;
+        if (d) {
+          const l = await makeDesignLook(d, nextBox, designVersion);
+          if (!l) return void notify.error("The design could not be read.");
+          setDesignLook(l);
+        }
+        if (alsoBox) {
+          const rb = await setIconBox(alsoBox);
+          if (!rb.ok) return void notify.error(rb.message);
+        }
+        const r = await (what === "box" ? setIconBox(id) : setIconStyle(id));
+        if (!r.ok) return void notify.error(r.message);
+        const queue = layouts.filter((l) => l.iconUrl);
+        if (queue.length > 0) setRedraw({ queue, at: 0 });
+      } catch {
+        notify.error("Could not save.");
+      }
     });
   };
 
@@ -204,19 +253,40 @@ export function LayoutManager({ layouts, iconBox, iconStyle }: { layouts: Layout
     set({ azimuthDeg: turn, elevationDeg: Math.max(-89, Math.min(89, Math.round(v.elevationDeg))), zoom: Math.max(0.2, Math.min(10, Math.round(v.zoom * 100) / 100)) });
   };
 
-  /** Keep a small picture of the preview, as it is now, as the icon of this layout (shown where the layout is listed). */
+  /**
+   * Keep a small picture of the preview, as it is now, as the icon of this layout, and save the layout itself in the same go (its name,
+   * on/off switch and settings as they are on screen). A layout that is not saved yet is added first.
+   */
   const setIcon = () => {
-    if (!draft.id) return notify.error("Save the layout first, then set its icon.");
     const png = view.current?.snapshot({ width: ICON_PX, height: ICON_PX });
     if (!png) return notify.error("The 3D view is not ready yet.");
-    run(() => setLayoutIcon(draft.id, png));
+    const body = { name: draft.name, active: draft.active, spec };
+    if (draft.id) {
+      run(async () => {
+        const saved = await updateLayout({ id: draft.id, ...body });
+        if (!saved.ok) return saved;
+        return setLayoutIcon(draft.id, png);
+      });
+      return;
+    }
+    run(
+      async () => {
+        const made = await createLayout(body);
+        if (!made.ok || !made.id) return made;
+        return setLayoutIcon(made.id, png);
+      },
+      () => {
+        setDraft(newDraft(layouts.length + 2));
+        setSel(0);
+      },
+    );
   };
   const iconUrl = layouts.find((l) => l.id === draft.id)?.iconUrl ?? null;
 
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border bg-card px-4 py-3 shadow-xs">
+      <div className="z-10 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border bg-card px-4 py-3 shadow-xs md:sticky md:top-[4.5rem]">
         <label className="flex items-center gap-2 text-sm font-medium">
           Box
           <select value={boxId} disabled={pending || redraw !== null} onChange={(e) => changeLook("box", e.target.value)} aria-label="Box shape for the preview and the icons" className={`${input} font-normal`}>
@@ -225,11 +295,13 @@ export function LayoutManager({ layouts, iconBox, iconStyle }: { layouts: Layout
         </label>
         <label className="flex items-center gap-2 text-sm font-medium">
           Style
-          <span aria-hidden className="size-5 shrink-0 rounded-full border" style={{ background: styleCss(style) }} />
+          <span aria-hidden className="size-5 shrink-0 rounded-full border bg-[conic-gradient(from_0deg,#f2c14e,#e0577a,#5b8def,#4fbf8f,#f2c14e)]" style={design ? undefined : { background: styleCss(style) }} />
           <select value={styleId} disabled={pending || redraw !== null} onChange={(e) => changeLook("style", e.target.value)} aria-label="Colour style of the box in the preview and the icons" className={`${input} font-normal`}>
             {SAMPLE_STYLES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+            {designs.length > 0 ? <optgroup label="Custom designs">{designs.map((d) => <option key={d.id} value={designStyle(d.id)}>{d.name}</option>)}</optgroup> : null}
           </select>
         </label>
+        <LayoutDesignsDialog designs={designs} activeId={design?.id ?? null} boxId={boxId} disabled={pending || redraw !== null} onUse={(d) => changeLook("style", designStyle(d.id), d.boxId)} onEdited={() => setDesignVersion((n) => n + 1)} />
         <p className="text-xs text-muted-foreground">{redraw ? `Redrawing icons ${redraw.at + 1} of ${redraw.queue.length}…` : "The preview and the icons of all samples are drawn with this box and style. Changing either redraws the saved icons."}</p>
       </div>
       {redraw ? (
@@ -238,7 +310,7 @@ export function LayoutManager({ layouts, iconBox, iconStyle }: { layouts: Layout
         </div>
       ) : null}
     <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)] lg:items-start">
-      <aside className="flex flex-col gap-3">
+      <aside className="flex flex-col gap-3 lg:sticky lg:top-[9.75rem] lg:max-h-[calc(100dvh-10.5rem)] lg:overflow-y-auto">
         <SortableList
           label="Layouts"
           className="flex flex-col gap-1 rounded-xl border bg-card p-1.5 shadow-xs"
@@ -284,7 +356,7 @@ export function LayoutManager({ layouts, iconBox, iconStyle }: { layouts: Layout
       </aside>
 
       <section aria-label="Layout settings" className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start">
-        <div className="overflow-hidden rounded-xl border bg-muted/40 xl:order-2 xl:sticky xl:top-24">
+        <div className="overflow-hidden rounded-xl border bg-muted/40 xl:order-2 xl:sticky xl:top-[9.75rem]">
           {sample ? <CartonView ref={view} className="h-[22rem] w-full" geo={sample} texture={look?.canvas ?? null} textureRect={look?.rect ?? null} progress={1} outsideColor={style.outside} insideColor={style.inside} layout={spec} boardGrain={1} onUserView={takeView} /> : null}
           <div className="flex items-center justify-between gap-2 border-t bg-background px-3 py-2">
             {iconUrl ? (
@@ -296,7 +368,7 @@ export function LayoutManager({ layouts, iconBox, iconStyle }: { layouts: Layout
               </span>
             ) : <span />}
             <div className="flex flex-wrap justify-end gap-1.5">
-              <Button type="button" variant="outline" size="sm" disabled={pending} onClick={setIcon} title={draft.id ? "Use the 3D view as it is now as the icon of this layout" : "Save the layout first"}><ImageIcon className="size-3.5" /> Set this view as icon</Button>
+              <Button type="button" variant="outline" size="sm" disabled={pending} onClick={setIcon} title="Use the 3D view as it is now as the icon of this layout, and save the layout"><ImageIcon className="size-3.5" /> Set this view as icon</Button>
             </div>
           </div>
         </div>
@@ -323,9 +395,15 @@ export function LayoutManager({ layouts, iconBox, iconStyle }: { layouts: Layout
           </div>
           <p className="-mt-2 text-xs text-muted-foreground">A preset only fills in the boxes below. Change anything after it.</p>
 
-          <div className="flex flex-col gap-3 border-t pt-4">
+          <div role="tablist" aria-label="Settings" className="flex gap-1 rounded-lg bg-muted p-1">
+            <button type="button" role="tab" aria-selected={tab === "boxes"} onClick={() => setTab("boxes")} className={`h-8 flex-1 rounded-md px-3 text-sm transition-colors ${tab === "boxes" ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>Boxes <span className="text-muted-foreground">({total})</span></button>
+            <button type="button" role="tab" aria-selected={tab === "scene"} onClick={() => setTab("scene")} className={`h-8 flex-1 rounded-md px-3 text-sm transition-colors ${tab === "scene" ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>Floor and camera</button>
+          </div>
+
+          {tab === "boxes" ? (
+          <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-medium">Boxes <span className="font-normal text-muted-foreground">({total} on screen)</span></p>
+              <p className="text-xs text-muted-foreground">{total} on screen. Pick a box, then set it below.</p>
               <div className="flex gap-1.5">
                 <Button type="button" variant="outline" size="sm" onClick={addBox}><Plus className="size-3.5" /> Add box</Button>
                 <Button type="button" variant="outline" size="sm" onClick={dupBox}><Copy className="size-3.5" /> Duplicate</Button>
@@ -348,28 +426,45 @@ export function LayoutManager({ layouts, iconBox, iconStyle }: { layouts: Layout
             </div>
 
             <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3">
-              <p className="text-xs font-medium text-muted-foreground">Place (1 = one box size)</p>
+              <div role="tablist" aria-label="Settings of this box" className="flex gap-1 rounded-lg bg-muted p-1">
+                <button type="button" role="tab" aria-selected={boxTab === "place"} onClick={() => setBoxTab("place")} className={`h-8 flex-1 rounded-md px-3 text-sm transition-colors ${boxTab === "place" ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>Place{}</button>
+                <button type="button" role="tab" aria-selected={boxTab === "turn"} onClick={() => setBoxTab("turn")} className={`h-8 flex-1 rounded-md px-3 text-sm transition-colors ${boxTab === "turn" ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>Turn{}</button>
+                <button type="button" role="tab" aria-selected={boxTab === "size"} onClick={() => setBoxTab("size")} className={`h-8 flex-1 rounded-md px-3 text-sm transition-colors ${boxTab === "size" ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>Size{}</button>
+                <button type="button" role="tab" aria-selected={boxTab === "repeat"} onClick={() => setBoxTab("repeat")} className={`h-8 flex-1 rounded-md px-3 text-sm transition-colors ${boxTab === "repeat" ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>Repeat{}</button>
+              </div>
+              {boxTab === "place" ? (
+                <>
+              <p className="text-xs text-muted-foreground">Where this box stands. 1 = one box size.</p>
               <Setting label="Left / right" value={item.x} min={-12} max={12} step={0.05} onChange={(v) => setItem({ x: v })} />
               <Setting label="Up (on the floor = 0)" value={item.y} min={-5} max={12} step={0.05} onChange={(v) => setItem({ y: v })} />
               <Setting label="Front / back" value={item.z} min={-12} max={12} step={0.05} onChange={(v) => setItem({ z: v })} />
-              <p className="pt-1 text-xs font-medium text-muted-foreground">Turn</p>
+                </>
+              ) : null}
+              {boxTab === "turn" ? (
+                <>
               <Setting label="Spin" value={item.yawDeg} min={-180} max={180} step={1} unit="°" onChange={(v) => setItem({ yawDeg: Math.round(v) })} />
               <Setting label="Lean forward" value={item.pitchDeg} min={-180} max={180} step={1} unit="°" onChange={(v) => setItem({ pitchDeg: Math.round(v) })} />
               <Setting label="Lean sideways" value={item.rollDeg} min={-180} max={180} step={1} unit="°" onChange={(v) => setItem({ rollDeg: Math.round(v) })} />
-              <p className="pt-1 text-xs font-medium text-muted-foreground">Size</p>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                <Button type="button" variant="outline" size="sm" onClick={() => setItem({ pitchDeg: 90, rollDeg: 0 })}>Lay flat</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setItem({ pitchDeg: 0, rollDeg: 0, yawDeg: 0 })}>Stand up</Button>
+              </div>
+                </>
+              ) : null}
+              {boxTab === "size" ? (
+                <>
               <Setting label="Size" value={item.scale} min={0.2} max={3} step={0.05} unit="×" onChange={(v) => setItem({ scale: Math.round(v * 100) / 100 })} />
               <Setting label="Wider" value={item.stretchX} min={0.2} max={3} step={0.05} unit="×" onChange={(v) => setItem({ stretchX: Math.round(v * 100) / 100 })} />
               <Setting label="Taller" value={item.stretchY} min={0.2} max={3} step={0.05} unit="×" onChange={(v) => setItem({ stretchY: Math.round(v * 100) / 100 })} />
               <Setting label="Deeper" value={item.stretchZ} min={0.2} max={3} step={0.05} unit="×" onChange={(v) => setItem({ stretchZ: Math.round(v * 100) / 100 })} />
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                <Button type="button" variant="outline" size="sm" onClick={() => setItem({ pitchDeg: 90, rollDeg: 0 })}>Lay flat</Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => setItem({ pitchDeg: 0, rollDeg: 0, yawDeg: 0 })}>Stand up</Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => setItem({ stretchX: 1, stretchY: 1, stretchZ: 1, scale: 1 })}>Reset size</Button>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3">
-              <p className="text-xs font-medium text-muted-foreground">Repeat this box: a line of copies, then rows of lines (for grids)</p>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setItem({ stretchX: 1, stretchY: 1, stretchZ: 1, scale: 1 })}>Reset size</Button>
+                  </div>
+                </>
+              ) : null}
+              {boxTab === "repeat" ? (
+                <>
+              <p className="text-xs text-muted-foreground">A line of copies, then rows of lines (for grids).</p>
               <Setting label="Copies in a line" value={item.repeat.count} min={1} max={Math.min(MAX_REPEAT, Math.max(1, room))} step={1} onChange={(v) => setRepeat({ count: Math.round(v) })} />
               {item.repeat.count > 1 ? (
                 <>
@@ -395,10 +490,13 @@ export function LayoutManager({ layouts, iconBox, iconStyle }: { layouts: Layout
                   <Setting label="Row step forward" value={item.repeat.rowDz} min={-4} max={4} step={0.05} onChange={(v) => setRepeat({ rowDz: v })} />
                 </>
               ) : null}
+                </>
+              ) : null}
             </div>
           </div>
-
-          <div className="flex flex-col gap-3 border-t pt-4">
+          ) : (
+          <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3">
             <label className="flex items-center gap-2 text-sm font-medium">
               <input type="checkbox" checked={spec.mirror.on} onChange={(e) => set({ mirror: { ...spec.mirror, on: e.target.checked } })} />
               Glossy floor (reflection)
@@ -409,14 +507,15 @@ export function LayoutManager({ layouts, iconBox, iconStyle }: { layouts: Layout
                 <Setting label="Reflection length" value={spec.mirror.fade} min={0.1} max={3} step={0.05} unit="×" onChange={(v) => set({ mirror: { ...spec.mirror, fade: Math.round(v * 100) / 100 } })} />
               </>
             ) : null}
-          </div>
-
-          <div className="flex flex-col gap-3 border-t pt-4">
+            </div>
+            <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3">
             <p className="text-sm font-medium">Camera</p>
             <Setting label="Turn around" value={spec.azimuthDeg} min={-180} max={180} step={1} unit="°" onChange={(v) => set({ azimuthDeg: Math.round(v) })} />
             <Setting label="Look from" value={spec.elevationDeg} min={-89} max={89} step={1} unit="°" onChange={(v) => set({ elevationDeg: Math.round(v) })} />
             <Setting label="Zoom" value={spec.zoom} min={0.2} max={4} step={0.05} unit="×" onChange={(v) => set({ zoom: Math.round(v * 100) / 100 })} />
+            </div>
           </div>
+          )}
 
           <div className="sticky bottom-0 z-10 -mx-4 -mb-4 flex flex-wrap items-center justify-between gap-3 rounded-b-xl border-t bg-card px-4 py-3 shadow-[0_-8px_12px_-10px_rgba(0,0,0,0.18)]">
             <label className="flex items-center gap-2 text-sm">

@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { STARTER_LAYOUTS, layoutSpecSchema } from "@/lib/scene-layout";
-import { SAMPLE_BOXES, SAMPLE_STYLES } from "@/lib/sample-boxes";
+import { SAMPLE_BOXES, SAMPLE_STYLES, designIdOf, isDesignStyle } from "@/lib/sample-boxes";
 import { saveIconSettings } from "@/server/layouts";
+import { createDesignProject, loadDesignLook } from "@/server/layout-designs";
 import { randomUUID } from "node:crypto";
 import { sniffImage } from "@/lib/image-sniff";
 import { storage } from "@/server/storage";
@@ -22,15 +23,15 @@ function refresh() {
 }
 
 /** Add a layout at the end of the list. */
-export async function createLayout(input: unknown): Promise<ActionResult> {
+export async function createLayout(input: unknown): Promise<ActionResult & { id?: string }> {
   await requireSuperAdmin();
   const p = saveSchema.safeParse(input);
   if (!p.success) return { ok: false, message: p.error.issues[0]!.message };
   if ((await db.templateLayout.count()) >= MAX_LAYOUTS) return { ok: false, message: `At most ${MAX_LAYOUTS} layouts.` };
   const last = await db.templateLayout.aggregate({ _max: { sortOrder: true } });
-  await db.templateLayout.create({ data: { name: p.data.name, active: p.data.active, spec: p.data.spec, sortOrder: (last._max.sortOrder ?? 0) + 1 } });
+  const row = await db.templateLayout.create({ data: { name: p.data.name, active: p.data.active, spec: p.data.spec, sortOrder: (last._max.sortOrder ?? 0) + 1 }, select: { id: true } });
   refresh();
-  return { ok: true, message: "Layout added." };
+  return { ok: true, message: "Layout added.", id: row.id };
 }
 
 /** Change the name, the settings or the on/off switch of a layout. */
@@ -129,11 +130,60 @@ export async function setIconBox(id: unknown): Promise<ActionResult> {
 /** Choose the colour style the sample box is dressed in (the page then redraws the saved icons with it). */
 export async function setIconStyle(id: unknown): Promise<ActionResult> {
   const admin = await requireSuperAdmin();
-  const p = z.string().refine((v) => SAMPLE_STYLES.some((x) => x.id === v)).safeParse(id);
-  if (!p.success) return { ok: false, message: "Unknown style." };
-  await saveIconSettings({ style: p.data }, admin.id);
+  if (typeof id !== "string" || id.length > 80) return { ok: false, message: "Unknown style." };
+  const known = SAMPLE_STYLES.some((x) => x.id === id) || (isDesignStyle(id) && (await db.layoutDesign.count({ where: { id: designIdOf(id) } })) > 0);
+  if (!known) return { ok: false, message: "Unknown style." };
+  await saveIconSettings({ style: id }, admin.id);
   refresh();
   return { ok: true, message: "Icon style saved." };
+}
+
+const MAX_DESIGNS = 30;
+const designName = z.string().trim().min(1, "Give the design a name.").max(40, "The name is too long (40 characters max).");
+
+/** Start a design on a sample box: its project is made, and the page opens the online design editor on it. */
+export async function createLayoutDesign(input: unknown): Promise<ActionResult & { id?: string; projectId?: string }> {
+  const admin = await requireSuperAdmin();
+  const p = z.object({ name: designName, boxId: z.string().refine((v) => SAMPLE_BOXES.some((b) => b.id === v)) }).safeParse(input);
+  if (!p.success) return { ok: false, message: p.error.issues[0]!.message };
+  if ((await db.layoutDesign.count()) >= MAX_DESIGNS) return { ok: false, message: `At most ${MAX_DESIGNS} designs.` };
+  const made = await createDesignProject(admin.id, p.data.name, p.data.boxId);
+  if ("error" in made) return { ok: false, message: made.error };
+  const last = await db.layoutDesign.aggregate({ _max: { sortOrder: true } });
+  const row = await db.layoutDesign.create({ data: { name: p.data.name, boxId: p.data.boxId, projectId: made.projectId, sortOrder: (last._max.sortOrder ?? 0) + 1 }, select: { id: true } });
+  refresh();
+  return { ok: true, message: "Design added.", id: row.id, projectId: made.projectId };
+}
+
+export async function renameLayoutDesign(input: unknown): Promise<ActionResult> {
+  await requireSuperAdmin();
+  const p = z.object({ id: idParam, name: designName }).safeParse(input);
+  if (!p.success) return { ok: false, message: p.error.issues[0]!.message };
+  const r = await db.layoutDesign.updateMany({ where: { id: p.data.id }, data: { name: p.data.name } });
+  if (r.count === 0) return { ok: false, message: "Design not found." };
+  refresh();
+  return { ok: true, message: "Design saved." };
+}
+
+/** Delete a design and its project (not the one the icons are drawn with now: choose another style first). */
+export async function deleteLayoutDesign(id: unknown): Promise<ActionResult> {
+  await requireSuperAdmin();
+  const p = idParam.safeParse(id);
+  if (!p.success) return { ok: false, message: "Invalid request." };
+  const row = await db.layoutDesign.findUnique({ where: { id: p.data }, select: { projectId: true } });
+  if (!row) return { ok: false, message: "Design not found." };
+  const setting = await db.siteSetting.findUnique({ where: { key: "layout-icon-box" }, select: { value: true } });
+  if ((setting?.value as { style?: unknown } | null)?.style === `design:${p.data}`) return { ok: false, message: "The icons are drawn with this design now. Choose another style first." };
+  await db.project.delete({ where: { id: row.projectId } }); // the design goes with it
+  refresh();
+  return { ok: true, message: "Design deleted." };
+}
+
+/** What the sample box is dressed in for a design (its artwork and colours), for the browser to paint the box texture. */
+export async function getLayoutDesignLook(id: unknown) {
+  await requireSuperAdmin();
+  const p = idParam.safeParse(id);
+  return p.success ? loadDesignLook(p.data) : null;
 }
 
 /** Put the layouts in this order (the order of the Sample tabs). `ids` must be all the layouts, each once. */

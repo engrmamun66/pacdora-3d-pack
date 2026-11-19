@@ -5,7 +5,7 @@ import { parseProjectDoc, type ProjectDoc } from "@packaging/schema";
 /** Projects of one user, newest first. Always scoped by userId. */
 export async function listProjects(userId: string) {
   const rows = await db.project.findMany({
-    where: { userId },
+    where: { userId, layoutDesign: null }, // a layout design (made by the admin for the icons) is not one of their projects
     orderBy: { updatedAt: "desc" },
     select: { id: true, name: true, templateId: true, projectData: true, updatedAt: true, template: { select: { name: true, source: true, thumbnail: true } } },
     take: 200,

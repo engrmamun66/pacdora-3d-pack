@@ -151,6 +151,7 @@ export async function listPortalTemplates(owner: PortalOwner, scope: PortalScope
   const rows = await db.project.findMany({
     where: {
       userId: owner.userId,
+      layoutDesign: null,
       ...(hidden.length ? { id: { notIn: hidden } } : {}),
       ...(link?.scope === "category" ? { categoryId: link.targetId } : link?.scope === "tag" ? { tags: { some: { tagId: link.targetId ?? "" } } } : {}),
     },
@@ -213,7 +214,7 @@ export async function findOrderableTemplates(owner: PortalOwner, hashes: string[
   const ids = await db.project.findMany({ where: { userId: owner.userId }, select: { id: true } });
   const pick = ids.filter((p) => wanted.has(templateHash(p.id))).map((p) => p.id);
   const hidden = new Set(await hiddenTemplateIds(owner.userId));
-  const rows = await db.project.findMany({ where: { userId: owner.userId, id: { in: pick.filter((i) => !hidden.has(i)) } }, select: projectSelect });
+  const rows = await db.project.findMany({ where: { userId: owner.userId, layoutDesign: null, id: { in: pick.filter((i) => !hidden.has(i)) } }, select: projectSelect });
   return new Map(rows.map((r) => [templateHash(r.id), toTemplate(r)]));
 }
 

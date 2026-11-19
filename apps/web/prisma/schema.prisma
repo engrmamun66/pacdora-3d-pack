@@ -167,25 +167,26 @@ model Template {
 /// A user's packaging project. `projectData` holds the full versioned
 /// ProjectDoc JSON (parameters, artwork, 3D and export settings).
 model Project {
-  id           String        @id @default(cuid())
+  id           String           @id @default(cuid())
   userId       String
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   name         String
   /// Short address-friendly name, unique among the Client's own projects (see lib/slug.ts).
   slug         String
   templateId   String
-  template     Template      @relation(fields: [templateId], references: [id], onDelete: Restrict)
-  projectData  Json          @db.JsonB
+  template     Template         @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  projectData  Json             @db.JsonB
   /// The customer's own category for this project (one at most), see UserCategory.
   categoryId   String?
-  category     UserCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  category     UserCategory?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   tags         ProjectTag[]
   shareLinks   ShareLink[]
   captures     ProjectCapture[]
+  layoutDesign LayoutDesign?
   orderItems   OrderItem[]
   thumbnailUrl String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
   assets       Asset[]
 
   @@unique([userId, slug])
@@ -371,6 +372,21 @@ model TemplateLayout {
 
   @@index([sortOrder])
   @@map("template_layout")
+}
+
+/// A design the super admin made in the online design editor, on a sample box, to dress the box the layout icons are drawn with (Template Layouts). The design itself is a normal project of the admin (artwork, backgrounds, colours); it is left out of every list of projects.
+model LayoutDesign {
+  id        String   @id @default(cuid())
+  name      String
+  /// The sample box it was made on (an id of SAMPLE_BOXES): icons drawn with it use that box.
+  boxId     String
+  projectId String   @unique
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([sortOrder])
+  @@map("layout_design")
 }
 
 model ArtworkFavorite {

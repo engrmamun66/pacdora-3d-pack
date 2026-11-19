@@ -39,6 +39,8 @@ const nextConfig: NextConfig = {
       { source: "/:path*", headers: securityHeaders },
       { source: `/:userHash(${portal})/templates/:templateHash`, headers: sameOriginFrame },
       { source: `/:userHash(${portal})/:linkHash/templates/:templateHash`, headers: sameOriginFrame },
+      // The online design page is shown inside the admin's Template Layouts page (designs for the layout icons).
+      { source: "/editor/:id", headers: sameOriginFrame },
     ];
   },
   cacheComponents: true,

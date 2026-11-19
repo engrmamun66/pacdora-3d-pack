@@ -52,6 +52,7 @@ export default async function AdminCustomerTemplates({ searchParams }: PageProps
   const wantedHashes = new Set((q.toLowerCase().match(/[a-z0-9]{12}/g) ?? []).filter(isHash));
   const hashIds = wantedHashes.size ? (await db.project.findMany({ select: { id: true } })).filter((p) => wantedHashes.has(templateHash(p.id))).map((p) => p.id) : [];
   const where = {
+    layoutDesign: null, // the designs made for the layout icons are not client designs
     ...(tpl ? { templateId: tpl } : {}),
     ...(tid ? { templateId: tpl ? { equals: tpl, contains: tid, mode: "insensitive" as const } : { contains: tid, mode: "insensitive" as const } } : {}),
     ...(from || to ? { createdAt: created } : {}),

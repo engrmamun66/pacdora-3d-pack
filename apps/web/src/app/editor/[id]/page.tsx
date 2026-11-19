@@ -19,8 +19,10 @@ import { portalTemplate } from "@/lib/portal-paths";
 /** Tab title "<site name> | Online design": the site name is added by the root layout template. */
 export const metadata: Metadata = { title: "Online design" };
 
-async function EditorView({ params }: { params: PageProps<"/editor/[id]">["params"] }) {
+async function EditorView({ params, searchParams }: { params: PageProps<"/editor/[id]">["params"]; searchParams: PageProps<"/editor/[id]">["searchParams"] }) {
   const { id } = await params;
+  // ?embed=1: the page is shown inside a box of another page (the layout designs of the admin): no way out of it.
+  const embedded = (await searchParams).embed === "1";
   const user = await requireUser();
   const project = await getProject(user.id, id);
   if (!project) notFound();
@@ -53,6 +55,7 @@ async function EditorView({ params }: { params: PageProps<"/editor/[id]">["param
     <SessionGuardHost email={user.email} />
     <EditorLoader
       projectId={project.id}
+      embedded={embedded}
       viewer={{ name: user.name, email: user.email, image: user.image ?? null }}
       name={project.name}
       generatorId={project.doc.template.generatorId}
@@ -67,16 +70,16 @@ async function EditorView({ params }: { params: PageProps<"/editor/[id]">["param
       threeD={project.doc.threeD}
       watermark={await getWatermark(user)}
       layouts={await listLayouts(true)}
-      previewLink={allLink ? { path: portalTemplate(allLink.hash, null, templateHash(project.id)), active: allLink.active && !offLink } : null}
+      previewLink={allLink && !embedded ? { path: portalTemplate(allLink.hash, null, templateHash(project.id)), active: allLink.active && !offLink } : null}
     />
     </>
   );
 }
 
-export default function EditorPage({ params }: PageProps<"/editor/[id]">) {
+export default function EditorPage({ params, searchParams }: PageProps<"/editor/[id]">) {
   return (
     <Suspense fallback={<EditorSkeleton />}>
-      <EditorView params={params} />
+      <EditorView params={params} searchParams={searchParams} />
     </Suspense>
   );
 }

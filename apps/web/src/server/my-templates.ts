@@ -50,7 +50,7 @@ export async function loadMyDashboard(userId: string): Promise<MyDashboard> {
   await ensureLinks(userId);
   const [rows, total, categories, tags, links, hidden, me] = await Promise.all([
     db.project.findMany({
-      where: { userId },
+      where: { userId, layoutDesign: null },
       orderBy: { updatedAt: "desc" },
       take: MAX_LISTED,
       select: {
@@ -64,7 +64,7 @@ export async function loadMyDashboard(userId: string): Promise<MyDashboard> {
         captures: { where: { cover: true }, select: { id: true, storageKey: true }, take: 1 },
       },
     }),
-    db.project.count({ where: { userId } }),
+    db.project.count({ where: { userId, layoutDesign: null } }),
     db.userCategory.findMany({ where: { userId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.userTag.findMany({ where: { userId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.shareLink.findMany({ where: { userId, scope: { in: ["all", "category", "tag"] } }, select: { scope: true, targetId: true, hash: true, active: true } }),
