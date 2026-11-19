@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, Copy, GripVertical, ImageIcon, Plus, Sparkles, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, GripVertical, ImageIcon, LayoutGrid, Plus, Sparkles, Trash2 } from "lucide-react";
 import { generateDieline } from "@packaging/dieline-engine";
 import { Button } from "@/components/ui/button";
 import { RangeSlider } from "@/components/ui/range-slider";
@@ -74,6 +74,8 @@ export function LayoutManager({ layouts, designs, iconBox, iconStyle }: { layout
   const view = useRef<CartonViewHandle>(null);
   /** The box being edited (an index into the layout's boxes). */
   const [sel, setSel] = useState(0);
+  /** Nothing is open for editing when the page loads: the right side shows an overview until a layout is picked or a new one is started. */
+  const [open, setOpen] = useState(false);
   /** The form is split in two tabs (the boxes, and the floor and camera), and the settings of one box in four, so there is little to scroll. */
   const [tab, setTab] = useState<"boxes" | "scene">("boxes");
   const [boxTab, setBoxTab] = useState<"place" | "turn" | "size" | "repeat">("place");
@@ -160,6 +162,7 @@ export function LayoutManager({ layouts, designs, iconBox, iconStyle }: { layout
   const pick = (l: LayoutItem) => {
     setDraft({ id: l.id, name: l.name, active: l.active, spec: l.spec });
     setSel(0);
+    setOpen(true);
   };
   const spec = draft.spec;
   const total = layoutInstances(spec).length;
@@ -312,10 +315,10 @@ export function LayoutManager({ layouts, designs, iconBox, iconStyle }: { layout
           className="flex flex-col gap-1 rounded-xl border bg-card p-1.5 shadow-xs"
           items={ordered}
           onReorder={reorder}
-          itemClass={(l, dragging) => `flex items-center gap-1 rounded-lg ${dragging ? "bg-card ring-1 ring-border" : draft.id === l.id ? "bg-accent" : "hover:bg-muted/60"}`}
+          itemClass={(l, dragging) => `flex items-center gap-1 rounded-lg ${dragging ? "bg-card ring-1 ring-border" : open && draft.id === l.id ? "bg-accent" : "hover:bg-muted/60"}`}
           empty={<li className="px-3 py-4 text-center text-sm text-muted-foreground">No layouts yet.</li>}
           renderItem={(l, { handleProps, index }) => {
-            const active = draft.id === l.id;
+            const active = open && draft.id === l.id;
             return (
               <>
                 <span {...handleProps} role="img" aria-label={`Drag ${l.name} to re-order`} title="Drag to re-order" className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground">
@@ -343,7 +346,7 @@ export function LayoutManager({ layouts, designs, iconBox, iconStyle }: { layout
           }}
         />
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" className="h-9" onClick={() => { setDraft(newDraft(layouts.length + 1)); setSel(0); }}><Plus className="size-4" /> New layout</Button>
+          <Button type="button" variant="outline" className="h-9" onClick={() => { setDraft(newDraft(layouts.length + 1)); setSel(0); setOpen(true); }}><Plus className="size-4" /> New layout</Button>
           {layouts.length === 0 ? (
             <Button type="button" variant="outline" className="h-9" disabled={pending} onClick={() => run(() => addStarterLayouts(), () => undefined)}><Sparkles className="size-4" /> Add starter layouts</Button>
           ) : null}
@@ -351,6 +354,7 @@ export function LayoutManager({ layouts, designs, iconBox, iconStyle }: { layout
         <p className="text-xs text-muted-foreground">Customers see the layouts that are switched on, in this order, as Sample 1, Sample 2 and so on.</p>
       </aside>
 
+      {open ? (
       <section aria-label="Layout settings" className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start">
         <div className="overflow-hidden rounded-xl border bg-muted/40 xl:order-2 xl:sticky xl:top-[9.75rem]">
           {sample ? <CartonView ref={view} className="h-[22rem] w-full" geo={sample} texture={look?.canvas ?? null} textureRect={look?.rect ?? null} progress={1} outsideColor={style.outside} insideColor={style.inside} layout={spec} boardGrain={1} onUserView={takeView} /> : null}
@@ -515,7 +519,7 @@ export function LayoutManager({ layouts, designs, iconBox, iconStyle }: { layout
                   className="h-9"
                   disabled={pending}
                   onClick={async () => {
-                    if (await confirmAction({ title: `Delete "${draft.name}"?`, description: "Customers will no longer see this layout." })) run(() => deleteLayout(draft.id), () => { setDraft(newDraft(layouts.length)); setSel(0); });
+                    if (await confirmAction({ title: `Delete "${draft.name}"?`, description: "Customers will no longer see this layout." })) run(() => deleteLayout(draft.id), () => { setDraft(newDraft(layouts.length)); setSel(0); setOpen(false); });
                   }}
                 >
                   <Trash2 className="size-4" /> Delete
@@ -526,6 +530,30 @@ export function LayoutManager({ layouts, designs, iconBox, iconStyle }: { layout
           </div>
         </div>
       </section>
+      ) : (
+      <section aria-label="Layouts overview" className="flex min-h-[24rem] flex-col items-center justify-center gap-5 rounded-xl border border-dashed bg-card/60 px-6 py-12 text-center">
+        <span className="grid size-14 place-items-center rounded-full bg-muted text-muted-foreground"><LayoutGrid className="size-6" aria-hidden /></span>
+        <div className="flex max-w-md flex-col gap-1.5">
+          <h2 className="text-lg font-semibold">{layouts.length === 0 ? "No layouts yet" : "Pick a layout to edit"}</h2>
+          <p className="text-sm text-muted-foreground">
+            {layouts.length === 0
+              ? "A layout is how the box is shown to customers: one box, a row, a stack, a grid. Start with ready-made ones, or make your own."
+              : "Choose one on the left to change its boxes, floor and camera, or start a new one. Customers see the layouts that are switched on as Sample tabs next to the 3D view."}
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button type="button" className="h-9" onClick={() => { setDraft(newDraft(layouts.length + 1)); setSel(0); setOpen(true); }}><Plus className="size-4" /> New layout</Button>
+          {layouts.length === 0 ? (
+            <Button type="button" variant="outline" className="h-9" disabled={pending} onClick={() => run(() => addStarterLayouts(), () => undefined)}><Sparkles className="size-4" /> Add starter layouts</Button>
+          ) : null}
+        </div>
+        {layouts.length > 0 ? (
+          <p className="text-xs text-muted-foreground">
+            {layouts.length} {layouts.length === 1 ? "layout" : "layouts"}, {layouts.filter((l) => l.active).length} shown to customers
+          </p>
+        ) : null}
+      </section>
+      )}
     </div>
     </div>
   );
