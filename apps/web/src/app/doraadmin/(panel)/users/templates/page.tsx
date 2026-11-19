@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
+import { BulkProvider, HeaderCheck, RowCheck } from "@/components/admin/client-project-bulk";
 import { ClientProjectFilters } from "@/components/admin/client-project-filters";
 import { PageHeader } from "@/components/admin/page-header";
 import { ClientProjectActions, type ProjectLink } from "@/components/admin/client-project-actions";
@@ -20,9 +21,12 @@ const SORTS = {
   name: "Design name",
   client: "Client name",
   template: "Made from (template)",
+  templateId: "Template ID",
   images: "Number of images",
 } as const;
 type SortKey = keyof typeof SORTS;
+/** Sorts on text start A to Z; the others (dates, counts) start with the newest or biggest. */
+const TEXT_SORTS = new Set<SortKey>(["name", "client", "template", "templateId"]);
 const isSort = (v: string): v is SortKey => v in SORTS;
 
 /** Every project any client made (each one is the client's own copy of a template). A super admin can sort, search, rename, delete and copy the links the client opens. */
@@ -37,7 +41,7 @@ export default async function AdminCustomerTemplates({ searchParams }: PageProps
   const to = parseDay(str("to")) ? str("to") : "";
   const img = ["with", "none"].includes(str("img")) ? str("img") : "";
   const sort: SortKey = isSort(str("sort")) ? (str("sort") as SortKey) : "updated";
-  const dir: "asc" | "desc" = str("dir") === "asc" ? "asc" : str("dir") === "desc" ? "desc" : sort === "name" || sort === "client" || sort === "template" ? "asc" : "desc";
+  const dir: "asc" | "desc" = str("dir") === "asc" ? "asc" : str("dir") === "desc" ? "desc" : TEXT_SORTS.has(sort) ? "asc" : "desc";
   const page = Math.min(10_000, Math.max(1, Math.floor(Number(str("page") || "1")) || 1));
 
   const created = {
@@ -63,6 +67,7 @@ export default async function AdminCustomerTemplates({ searchParams }: PageProps
     sort === "name" ? { name: dir }
     : sort === "client" ? { user: { name: dir } }
     : sort === "template" ? { template: { name: dir } }
+    : sort === "templateId" ? { templateId: dir }
     : sort === "images" ? { assets: { _count: dir } }
     : sort === "created" ? { createdAt: dir }
     : { updatedAt: dir };
@@ -120,7 +125,7 @@ export default async function AdminCustomerTemplates({ searchParams }: PageProps
     const Icon = on ? (dir === "asc" ? ArrowUp : ArrowDown) : ChevronsUpDown;
     return (
       <th scope="col" aria-sort={on ? (dir === "asc" ? "ascending" : "descending") : "none"} className={th}>
-        <Link href={params({ sort: key, dir: on ? (dir === "asc" ? "desc" : "asc") : key === "name" || key === "client" || key === "template" ? "asc" : "desc", page: "1" })} className={`inline-flex items-center gap-1 hover:text-foreground ${on ? "text-foreground" : ""}`}>
+        <Link href={params({ sort: key, dir: on ? (dir === "asc" ? "desc" : "asc") : TEXT_SORTS.has(key) ? "asc" : "desc", page: "1" })} className={`inline-flex items-center gap-1 hover:text-foreground ${on ? "text-foreground" : ""}`}>
           {label} <Icon className="size-3.5" aria-hidden />
         </Link>
       </th>
@@ -142,14 +147,16 @@ export default async function AdminCustomerTemplates({ searchParams }: PageProps
         changed={filtered || sort !== "updated" || Boolean(str("dir"))}
       />
 
+      <BulkProvider ids={rows.map((r) => r.id)} links={Object.fromEntries(rows.map((r) => [r.id, linksOf(r)]))}>
       <div className="overflow-x-auto rounded-xl border bg-card shadow-xs">
         <table className="w-full text-left text-sm">
           <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
+              <th scope="col" className="w-10 py-2.5 pr-0 pl-4"><HeaderCheck /></th>
               {sortHead("name", "Design")}
               {sortHead("client", "Client")}
               {sortHead("template", "Made from")}
-              <th scope="col" className={th}>Template ID</th>
+              {sortHead("templateId", "Template ID")}
               {sortHead("images", "Images")}
               {sortHead("created", "Created")}
               {sortHead("updated", "Updated")}
@@ -158,7 +165,8 @@ export default async function AdminCustomerTemplates({ searchParams }: PageProps
           </thead>
           <tbody>
             {rows.map((p) => (
-              <tr key={p.id} className="border-b transition-colors last:border-0 hover:bg-muted/40">
+              <tr key={p.id} className="border-b transition-colors last:border-0 hover:bg-muted/40 has-[[data-row-check]:checked]:bg-muted/60">
+                <td className="py-3 pr-0 pl-4"><RowCheck id={p.id} name={p.name} /></td>
                 <td className="px-4 py-3 font-medium">{p.name}</td>
                 <td className="px-4 py-3">
                   <p><Link href={`/doraadmin/users/${p.userId}`} className="underline-offset-4 hover:underline">{p.user.name}</Link>{p.user.banned ? <span className="ml-1.5 rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive">Suspended</span> : null}</p>
@@ -172,10 +180,11 @@ export default async function AdminCustomerTemplates({ searchParams }: PageProps
                 <td className="px-4 py-3"><ClientProjectActions id={p.id} name={p.name} links={linksOf(p)} /></td>
               </tr>
             ))}
-            {rows.length === 0 ? <tr><td colSpan={8} className="px-3 py-8 text-center text-muted-foreground">No client designs match.</td></tr> : null}
+            {rows.length === 0 ? <tr><td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">No client designs match.</td></tr> : null}
           </tbody>
         </table>
       </div>
+      </BulkProvider>
 
       {pages > 1 ? (
         <nav aria-label="Pages" className="flex items-center justify-between text-sm">

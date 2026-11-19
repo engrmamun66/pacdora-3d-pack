@@ -42,3 +42,18 @@ export async function deleteClientProject(id: unknown): Promise<ActionResult> {
   refresh();
   return { ok: true, message: "Project deleted." };
 }
+
+const MAX_BULK = 100;
+
+/** Delete several client projects at once (super admin). Same clean-up as deleting one. */
+export async function deleteClientProjects(ids: unknown): Promise<ActionResult> {
+  await requireSuperAdmin();
+  const p = z.array(idParam).min(1).max(MAX_BULK).safeParse(ids);
+  if (!p.success) return { ok: false, message: `Pick between 1 and ${MAX_BULK} projects.` };
+  const list = [...new Set(p.data)];
+  const pictures = await db.projectCapture.findMany({ where: { projectId: { in: list } }, select: { storageKey: true } });
+  const r = await db.project.deleteMany({ where: { id: { in: list } } });
+  for (const c of pictures) await storage.delete(c.storageKey).catch(() => undefined);
+  refresh();
+  return { ok: true, message: `${r.count} ${r.count === 1 ? "project" : "projects"} deleted.` };
+}

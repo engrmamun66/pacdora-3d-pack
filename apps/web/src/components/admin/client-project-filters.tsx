@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { DateRangePicker } from "@/components/ui/date-picker";
+import { SearchSelect } from "@/components/ui/search-select";
 
 export interface ProjectFilters {
   q: string;
@@ -89,10 +90,15 @@ export function ClientProjectFilters({ values, sorts, templates, changed }: { va
       </div>
       <div className="flex flex-col gap-1">
         <label className="text-xs text-muted-foreground" htmlFor="template">Made from</label>
-        <select id="template" value={values.template} className={field} onChange={(e) => go({ template: e.target.value })}>
-          <option value="">Any template</option>
-          {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
+        <SearchSelect
+          id="template"
+          className="w-64"
+          value={values.template}
+          placeholder="Any template"
+          emptyText="No template matches."
+          options={templates.map((t) => ({ value: t.id, label: t.name, hint: t.id }))}
+          onChange={(v) => go({ template: v })}
+        />
       </div>
       <div className="flex flex-col gap-1">
         <span className="text-xs text-muted-foreground">Created between</span>
