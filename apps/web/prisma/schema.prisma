@@ -33,6 +33,9 @@ model User {
   /// The Client's logo (PNG or JPEG) shown on their shared pages: a storage key, and its MIME type. Both null = no logo.
   businessLogoKey  String?
   businessLogoMime String?
+  /// How the Client's shared pages show their templates: cards per row (2 to 6) and which picture is on a card ("dieline" or "3d").
+  cardColumns      Int               @default(4)
+  cardImage        String            @default("dieline")
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   sessions         Session[]
@@ -46,6 +49,7 @@ model User {
   favoriteArtworks ArtworkFavorite[]
   shareLinks       ShareLink[]
   clientOrders     Order[]
+  captures         ProjectCapture[]
 
   @@map("user")
 }
@@ -175,6 +179,7 @@ model Project {
   category     UserCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   tags         ProjectTag[]
   shareLinks   ShareLink[]
+  captures     ProjectCapture[]
   orderItems   OrderItem[]
   thumbnailUrl String?
   createdAt    DateTime      @default(now())
@@ -221,6 +226,26 @@ model ProjectTag {
   @@id([projectId, tagId])
   @@index([tagId])
   @@map("project_tag")
+}
+
+/// A 3D picture of a project taken in the online design page (a layout and a fold amount of the Client's choice). The cover one is shown on the cards of the shared pages.
+model ProjectCapture {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Where the PNG is kept (see the storage provider).
+  storageKey String   @unique
+  sizeBytes  Int
+  /// Name of the layout it was taken with ("Sample 2"), if any, and how far folded (0 flat to 1 closed).
+  layoutName String?
+  progress   Float    @default(1)
+  cover      Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@map("project_capture")
 }
 
 /// Uploaded or generated file. Bytes live in object storage; only the key/URL here.
@@ -309,17 +334,35 @@ model ArtworkItem {
   heightPx    Int
   sizeBytes   Int
   createdById String?
+  /// Background pictures only: shown under the 3D view on the shared (portal) template pages, for a customer to try behind the box.
+  featured    Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   favorites ArtworkFavorite[]
 
+  @@index([featured])
   @@index([category])
   @@index([createdAt(sort: Desc)])
   @@map("artwork_item")
 }
 
 /// A library picture a customer starred (the editor's "Favorites" tab). Private to the customer.
+/// How the box is shown on the shared template pages ("Sample 1", "Sample 2" ...): an arrangement of copies of the box and a camera.
+/// The same list for every template. `spec` is a LayoutSpec (lib/scene-layout.ts).
+model TemplateLayout {
+  id        String   @id @default(cuid())
+  name      String
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  spec      Json     @db.JsonB
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sortOrder])
+  @@map("template_layout")
+}
+
 model ArtworkFavorite {
   userId    String
   user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)

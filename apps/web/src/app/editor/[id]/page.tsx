@@ -10,6 +10,7 @@ import { IMPORTED_GENERATOR_ID, type WindowSpec } from "@packaging/dieline-engin
 import { loadImportedSource } from "@/server/imported-templates";
 import { readViewSettings } from "@/lib/view-settings";
 import { getWatermark } from "@/server/site-settings";
+import { listLayouts } from "@/server/layouts";
 
 /** Tab title "<site name> | Online design": the site name is added by the root layout template. */
 export const metadata: Metadata = { title: "Online design" };
@@ -53,6 +54,7 @@ async function EditorView({ params }: { params: PageProps<"/editor/[id]">["param
       favoriteIds={favorites.map((f) => f.artworkId)}
       threeD={project.doc.threeD}
       watermark={await getWatermark(user)}
+      layouts={await listLayouts(true)}
     />
   );
 }

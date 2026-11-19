@@ -6,18 +6,20 @@ import { CustomerProfileForm } from "@/components/app/customer-profile-form";
 import { BusinessLogoField } from "@/components/app/business-logo-field";
 import { BrandProvider } from "@/components/my-dashboard/brand-context";
 import { getBrand } from "@/server/portal";
-import { loadMyDashboard } from "@/server/my-templates";
+import { loadMyDashboard, loadMyLabels } from "@/server/my-templates";
+import { LabelSettings } from "@/components/my-dashboard/label-settings";
+import { DisplaySettings } from "@/components/my-dashboard/display-settings";
 import { DashboardClient } from "@/components/my-dashboard/dashboard-client";
 import { AddSystemDialog } from "@/components/my-dashboard/add-system-dialog";
 import { OrdersTab, OverviewTab, ShareTab } from "@/components/my-dashboard/portal-tabs";
 import { orderCounts } from "@/server/orders";
 import { StudioBand } from "@/components/studio/studio-band";
-import { ClipboardList, LayoutGrid, QrCode, Settings, Shapes } from "lucide-react";
+import { ClipboardList, Folder, LayoutGrid, QrCode, Settings, Shapes, Tag, UserRound } from "lucide-react";
 
 export const metadata = { title: "My dashboard" };
 
-/** Profile settings: the customer's own contact details, plus how they sign in. */
-async function ProfileTab() {
+/** Settings > Profile settings: the Client's own contact details, plus how they sign in. */
+async function ProfileSection() {
   const user = await requireUser();
   const [row, accounts] = await Promise.all([
     db.user.findUnique({ where: { id: user.id }, select: { name: true, phone: true, altPhone: true, businessName: true, businessAddress: true } }),
@@ -26,7 +28,7 @@ async function ProfileTab() {
   const brand = await getBrand(user.id);
   const methods = accounts.map((a) => (a.providerId === "credential" ? "Email & password" : a.providerId === "google" ? "Google" : a.providerId));
   return (
-    <section className="grid items-start gap-5 lg:grid-cols-2" aria-label="Profile settings">
+    <div className="grid items-start gap-5 xl:grid-cols-2">
       <div className="sheet marks flex flex-col gap-4 p-6">
         <div>
           <h2 className="font-display text-xl font-semibold">Your brand</h2>
@@ -46,27 +48,84 @@ async function ProfileTab() {
         <p>Email: {user.email} {user.emailVerified ? "(confirmed)" : "(not confirmed)"}</p>
         <p>Sign-in methods: {methods.join(", ") || "none"}</p>
       </div>
-    </section>
+    </div>
   );
 }
 
-const TABS = ["overview", "templates", "orders", "share", "profile"] as const;
+const SECTIONS = [
+  { id: "profile", label: "Profile settings", icon: UserRound },
+  { id: "categories", label: "Manage Categories", icon: Folder },
+  { id: "tags", label: "Manage Tags", icon: Tag },
+  { id: "display", label: "Product Display Settings", icon: LayoutGrid },
+] as const;
+type Section = (typeof SECTIONS)[number]["id"];
+
+/** Settings: sections on the left (like the admin settings), the chosen one on the right. */
+async function SettingsTab({ section }: { section: Section }) {
+  const user = await requireUser();
+  const labels = section === "categories" || section === "tags" ? await loadMyLabels(user.id) : null;
+  const display = section === "display" ? await db.user.findUnique({ where: { id: user.id }, select: { cardColumns: true, cardImage: true } }) : null;
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 md:grid-cols-[208px_minmax(0,1fr)] md:items-start">
+      <nav aria-label="Settings sections" className="flex gap-1 overflow-x-auto rounded-xl border bg-card p-1.5 shadow-xs md:sticky md:top-6 md:flex-col md:overflow-visible">
+        {SECTIONS.map(({ id, label, icon: Icon }) => (
+          <Link
+            key={id}
+            href={`/my-dashboard?tab=settings&section=${id}`}
+            aria-current={section === id ? "page" : undefined}
+            className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm whitespace-nowrap transition-colors ${section === id ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"}`}
+          >
+            <Icon className="size-4" aria-hidden />
+            {label}
+          </Link>
+        ))}
+      </nav>
+      <div className="min-w-0">
+        {section === "profile" ? <ProfileSection /> : null}
+        {display ? (
+          <div className="sheet flex flex-col gap-5 p-6">
+            <div>
+              <h2 className="font-display text-xl font-semibold">Product Display Settings</h2>
+              <p className="text-sm text-muted-foreground">How your templates look as cards on your shared pages.</p>
+            </div>
+            <DisplaySettings columns={display.cardColumns} image={display.cardImage === "3d" ? "3d" : "dieline"} />
+          </div>
+        ) : null}
+        {labels ? (
+          <div className="sheet flex flex-col gap-5 p-6">
+            <div>
+              <h2 className="font-display text-xl font-semibold">{section === "tags" ? "Manage Tags" : "Manage Categories"}</h2>
+              <p className="text-sm text-muted-foreground">{section === "tags" ? "Your own tags for your templates. Put them on a template under My templates." : "Your own categories for sorting your templates. Pick one on a template under My templates."}</p>
+            </div>
+            <LabelSettings key={section} kind={section === "tags" ? "tag" : "category"} labels={section === "tags" ? labels.tags : labels.categories} />
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+const TABS = ["overview", "templates", "orders", "share", "settings"] as const;
 type Tab = (typeof TABS)[number];
-const TAB_ICON = { overview: LayoutGrid, templates: Shapes, orders: ClipboardList, share: QrCode, profile: Settings } as const;
-const TAB_LABEL: Record<Tab, string> = { overview: "Overview", templates: "My templates", orders: "Orders", share: "Share", profile: "Profile settings" };
+const TAB_ICON = { overview: LayoutGrid, templates: Shapes, orders: ClipboardList, share: QrCode, settings: Settings } as const;
+const TAB_LABEL: Record<Tab, string> = { overview: "Overview", templates: "My templates", orders: "Orders", share: "Share", settings: "Settings" };
 const SUBTITLE: Record<Tab, string> = {
   overview: "Your shop at a glance.",
   templates: "Your templates, with your own categories and tags.",
   orders: "Orders your customers sent from your shop page.",
   share: "Links to share your templates. Each one is permanent and can be switched on or off.",
-  profile: "Keep your details up to date.",
+  settings: "Your details, and how your templates are sorted.",
 };
 
 async function Dashboard({ searchParams }: { searchParams: PageProps<"/my-dashboard">["searchParams"] }) {
   const user = await requireUser();
   const sp = await searchParams;
   const str = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : "");
-  const tab: Tab = (TABS as readonly string[]).includes(str("tab")) ? (str("tab") as Tab) : "overview";
+  // "profile" is the old name of the Settings tab (kept so old links work).
+  const asked = str("tab") === "profile" ? "settings" : str("tab");
+  const tab: Tab = (TABS as readonly string[]).includes(asked) ? (asked as Tab) : "overview";
+  // "projects" was the old name of the categories section (kept so old links work).
+  const section: Section = str("section") === "tags" ? "tags" : str("section") === "display" ? "display" : str("section") === "categories" || str("section") === "projects" ? "categories" : "profile";
   const data = tab === "templates" ? await loadMyDashboard(user.id) : null;
   const counts = await orderCounts(user.id);
   const brand = await getBrand(user.id);
@@ -98,7 +157,7 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/my-dashbo
       {tab === "overview" ? <OverviewTab userId={user.id} /> : null}
       {tab === "orders" ? <OrdersTab userId={user.id} status={str("status")} q={str("q").trim().slice(0, 60)} /> : null}
       {tab === "share" ? <ShareTab userId={user.id} /> : null}
-      {tab === "profile" ? <ProfileTab /> : null}
+      {tab === "settings" ? <SettingsTab section={section} /> : null}
       {data ? (
         <DashboardClient
           templates={data.templates}

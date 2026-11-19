@@ -9,6 +9,7 @@ import { portalHome, portalOrder } from "@/lib/portal-paths";
 import { TemplateGrid } from "./template-grid";
 import { AddToCart } from "./add-to-cart";
 import { TemplatePreview } from "./template-preview";
+import { listFeaturedBackgrounds, listLayouts } from "@/server/layouts";
 import { Crumbs, PortalCrumbs, RememberList } from "./crumbs";
 import { StudioBand } from "@/components/studio/studio-band";
 import { Checkout } from "./checkout";
@@ -42,7 +43,7 @@ export async function ListPage({ params }: { params: Promise<{ userHash: string;
         title={scope.kind === "all" ? owner.title : scope.label}
         description={scope.kind === "all" ? "Pick a box, set the quantity, and send your order. Open a template to see it in 3D." : `${scope.kind === "category" ? "Category" : "Tag"} from ${owner.title}. Pick a box, set the quantity, and send your order.`}
       />
-      <TemplateGrid userHash={userHash} scopeHash={scope.linkHash} templates={templates} />
+      <TemplateGrid userHash={userHash} scopeHash={scope.linkHash} templates={templates} columns={owner.cardColumns} image={owner.cardImage} />
     </div>
   );
 }
@@ -56,7 +57,7 @@ export async function DetailPage({ params }: { params: Promise<{ userHash: strin
   if (!scope) return <Unavailable />;
   const t = await findPortalTemplate(owner, scope, templateHash);
   if (!t) return <Unavailable title="This template is not available" />;
-  const scene = await loadPortalScene(owner, t.id);
+  const [scene, layouts, backgrounds] = await Promise.all([loadPortalScene(owner, t.id), listLayouts(true), listFeaturedBackgrounds()]);
   return (
     <div className="flex flex-col gap-5">
       <RememberList userHash={userHash} path={portalHome(userHash, scope.linkHash)} label={scope.kind === "all" ? "Templates" : `Templates: ${scope.label}`} />
@@ -69,7 +70,7 @@ export async function DetailPage({ params }: { params: Promise<{ userHash: strin
         ]}
       />
       <div className="grid gap-6 md:grid-cols-[1fr_24rem]">
-        <TemplatePreview userHash={userHash} name={t.name} thumbnail={t.thumbnail} scene={scene} />
+        <TemplatePreview userHash={userHash} name={t.name} thumbnail={t.thumbnail} scene={scene} layouts={layouts} backgrounds={backgrounds} />
         <div className="flex flex-col gap-4">
           <div>
             <h1 className="text-3xl leading-tight">{t.name}</h1>

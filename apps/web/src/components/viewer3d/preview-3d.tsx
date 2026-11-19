@@ -10,6 +10,8 @@ import { CartonView, type CartonViewHandle } from "./carton-view";
 import { GridToggle } from "./grid-toggle";
 import { RotationControls } from "./rotation-controls";
 import { RangeSlider } from "@/components/ui/range-slider";
+import type { LayoutItem } from "@/lib/scene-layout";
+import { CaptureBar } from "./capture-bar";
 
 export type ThreeDSettings = ProjectDoc["threeD"];
 
@@ -25,7 +27,12 @@ export function Preview3D({
   viewRef,
   initialView = null,
   watermark = null,
+  projectId,
+  layouts = [],
 }: {
+  /** With a saved project: layouts to show the box in, and the button that keeps 3D pictures of it. */
+  projectId?: string;
+  layouts?: LayoutItem[];
   watermark?: WatermarkSpec | null;
   initialView?: ViewSettings | null;
   geo: DielineGeometry;
@@ -39,6 +46,8 @@ export function Preview3D({
   const localRef = useRef<CartonViewHandle>(null);
   const inner = viewRef ?? localRef;
   const anim = useRef<number | null>(null);
+  const [layoutId, setLayoutId] = useState<string | null>(null);
+  const layout = layouts.find((l) => l.id === layoutId)?.spec ?? null;
 
   // Re-render the texture shortly after the artwork or board colour changes.
   useEffect(() => {
@@ -82,9 +91,11 @@ export function Preview3D({
         outsideColor={settings.outsideColor}
         insideColor={settings.insideColor}
         watermark={watermark}
+        layout={layout}
       />
       <GridToggle viewRef={inner} />
       <RotationControls viewRef={inner} />
+      {projectId ? <CaptureBar projectId={projectId} viewRef={inner} layouts={layouts} layoutId={layoutId} onLayout={setLayoutId} progress={progress} /> : null}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t bg-background px-3 py-2 text-xs">
         <label className="flex min-w-[150px] flex-1 items-center gap-2.5">
           <span className="font-medium text-muted-foreground">Fold</span>

@@ -38,6 +38,7 @@ import type { FlatDielineData } from "@packaging/svg-import";
 import type { ViewSettings } from "@/lib/view-settings";
 import { type Artwork, type ArtworkObject, type BoxBackground, MAX_BACKGROUNDS, backgroundsOf, facesOf } from "@packaging/schema";
 import { saveArtwork, saveThreeD } from "@/app/editor/[id]/actions";
+import type { LayoutItem } from "@/lib/scene-layout";
 import { Preview3D, type ThreeDSettings } from "@/components/viewer3d/preview-3d";
 import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { EditorController, type OverlayOptions, type Viewport } from "./editor-controller";
@@ -266,6 +267,7 @@ export function ArtworkEditor({
   favoriteIds = [],
   threeD: initialThreeD,
   watermark = null,
+  layouts = [],
   viewer = null,
 }: {
   projectId: string;
@@ -289,6 +291,8 @@ export function ArtworkEditor({
   threeD: ThreeDSettings;
   /** Put into the PNG and 3D downloads (the server adds it to the other files); null = none. */
   watermark?: WatermarkSpec | null;
+  /** The layouts customers' boxes can be shown in (Sample 1, Sample 2 ...), for the 3D pictures. */
+  layouts?: LayoutItem[];
 }) {
   // Keyed by value: a props refresh with equal params must not rebuild the editor (and lose undo history).
   const paramsKey = JSON.stringify(params);
@@ -1072,7 +1076,7 @@ export function ArtworkEditor({
             {/* Clipped drawer: the preview keeps its full width while the column grows, so it slides in instead of being squeezed (no re-layout of the 3D canvas per frame). */}
             <div className={`absolute inset-0 overflow-hidden border-l transition-opacity motion-reduce:transition-none ${animating ? "duration-300" : "duration-0"} ${show3d && expanded ? "opacity-100" : "opacity-0"}`}>
               <div className="absolute inset-y-0 right-0" style={{ width: openW }}>
-                <Preview3D initialView={initialView} geo={geo} artwork={artworkForPreview} settings={threeD} onSettings={updateThreeD} viewRef={view3d} watermark={watermark} />
+                <Preview3D initialView={initialView} geo={geo} artwork={artworkForPreview} settings={threeD} onSettings={updateThreeD} viewRef={view3d} watermark={watermark} projectId={projectId} layouts={layouts} />
               </div>
             </div>
           </section>

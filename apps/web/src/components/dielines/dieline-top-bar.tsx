@@ -112,7 +112,7 @@ function MainMenu({
           <button type="button" role="menuitem" className={rowLive} onClick={() => go("/templates")}>Create new project</button>
           {rule}
           <button type="button" role="menuitem" className={rowLive} onClick={() => go("/projects")}>My projects</button>
-          <button type="button" role="menuitem" className={rowLive} onClick={() => go("/my-dashboard?tab=profile")}>Profile settings</button>
+          <button type="button" role="menuitem" className={rowLive} onClick={() => go("/my-dashboard?tab=settings")}>Settings</button>
           <button type="button" role="menuitem" className={rowLive} onClick={() => go("/")}>Homepage</button>
           {projectId ? (
             <>

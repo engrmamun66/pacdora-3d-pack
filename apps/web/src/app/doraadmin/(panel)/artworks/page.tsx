@@ -22,7 +22,7 @@ export default async function ArtworksPage({ searchParams }: PageProps<"/doraadm
       },
       orderBy: { createdAt: "desc" },
       take: 200,
-      select: { id: true, name: true, tags: true, category: true, widthPx: true, heightPx: true, sizeBytes: true },
+      select: { id: true, name: true, tags: true, category: true, widthPx: true, heightPx: true, sizeBytes: true, featured: true },
     }),
     db.artworkItem.groupBy({ by: ["category"], _count: { _all: true }, orderBy: { category: "asc" } }),
   ]);

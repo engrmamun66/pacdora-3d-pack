@@ -7,6 +7,7 @@ import { ChevronRight } from "lucide-react";
 const LABELS: Record<string, string> = {
   users: "Clients",
   templates: "Templates",
+  "template-layouts": "Template Layouts",
   "template-categories": "Categories",
   artworks: "Artworks",
   settings: "Settings",

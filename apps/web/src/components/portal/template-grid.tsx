@@ -5,11 +5,14 @@ import { useMemo, useState } from "react";
 import { Check, Search, ShoppingCart } from "lucide-react";
 import { notify } from "@/lib/notify";
 import { portalTemplate } from "@/lib/portal-paths";
-import type { PortalTemplate } from "@/server/portal";
+import type { CardImage, PortalTemplate } from "@/server/portal";
 import { useCart } from "./cart";
 
 /** The templates of a shared page as cards: search, open one, or add it to the cart. */
-export function TemplateGrid({ userHash, scopeHash, templates }: { userHash: string; scopeHash: string | null; templates: PortalTemplate[] }) {
+/** Cards per row on wide screens, as whole class names (Tailwind reads them from the source). */
+const COLUMNS: Record<number, string> = { 2: "lg:grid-cols-2", 3: "lg:grid-cols-3", 4: "lg:grid-cols-4", 5: "lg:grid-cols-5", 6: "lg:grid-cols-6" };
+
+export function TemplateGrid({ userHash, scopeHash, templates, columns = 4, image = "dieline" }: { userHash: string; scopeHash: string | null; templates: PortalTemplate[]; /** Cards per row (from the Client's Product Display Settings). */ columns?: number; /** Which picture is on a card. */ image?: CardImage }) {
   const { lines, add } = useCart(userHash);
   const [q, setQ] = useState("");
   const shown = useMemo(() => {
@@ -27,7 +30,7 @@ export function TemplateGrid({ userHash, scopeHash, templates }: { userHash: str
         </div>
       ) : null}
       {shown.length === 0 ? <p className="rounded-xl border border-dashed border-[var(--crease)]/50 bg-card/60 px-4 py-12 text-center text-sm text-muted-foreground">{templates.length === 0 ? "There are no templates here yet." : "No template matches your search."}</p> : null}
-      <ul className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <ul className={`grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 ${COLUMNS[columns] ?? COLUMNS[4]}`}>
         {shown.map((t) => {
           const href = portalTemplate(userHash, scopeHash, t.hash);
           const added = inCart.has(t.hash);
@@ -35,9 +38,9 @@ export function TemplateGrid({ userHash, scopeHash, templates }: { userHash: str
             <li key={t.hash} className="sheet marks-hover flap group flex flex-col transition-transform duration-200 hover:-translate-y-0.5">
               <span className="flap-corner" aria-hidden />
               <Link href={href} className="paper-grid-soft m-2 flex aspect-[4/3] items-center justify-center rounded-lg border p-3" aria-label={`Open ${t.name}`}>
-                {t.thumbnail ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- generated SVG data URL
-                  <img src={t.thumbnail} alt="" className="max-h-full max-w-full transition-transform duration-300 group-hover:scale-[1.06]" />
+                {(image === "3d" && t.cover) || t.thumbnail ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- generated SVG data URL, or the Client's own 3D picture
+                  <img src={(image === "3d" && t.cover) || t.thumbnail || ""} alt="" className="max-h-full max-w-full transition-transform duration-300 group-hover:scale-[1.06]" />
                 ) : (
                   <span className="text-xs text-muted-foreground">No preview</span>
                 )}

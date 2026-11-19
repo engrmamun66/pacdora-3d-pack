@@ -7,10 +7,11 @@ import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-
 import { renderArtwork, type RasterRect } from "@/components/editor/artwork-raster";
 import { setAssetUrlBase } from "@/components/editor/fabric-map";
 import type { PortalScene } from "@/server/portal";
+import type { LayoutSpec } from "@/lib/scene-layout";
 import { RangeSlider } from "@/components/ui/range-slider";
 
 /** The box of a shared template in 3D: drag to turn, scroll to zoom, a slider (and a button) to fold it. */
-export function Scene3D({ userHash, scene, foldable, onFoldable }: { userHash: string; scene: PortalScene; foldable: boolean; onFoldable: (v: boolean) => void }) {
+export function Scene3D({ userHash, scene, foldable, onFoldable, layout = null, backgroundUrl = null }: { userHash: string; scene: PortalScene; foldable: boolean; onFoldable: (v: boolean) => void; /** Copies of the box in an arrangement (a template layout); null = the one box. */ layout?: LayoutSpec | null; /** A picture behind the box (a featured background); null = the plain studio colour. */ backgroundUrl?: string | null }) {
   const [raster, setRaster] = useState<{ canvas: HTMLCanvasElement; rect: RasterRect } | null>(null);
   const [failed, setFailed] = useState(false);
   const [progress, setProgress] = useState(scene.initialView?.progress ?? scene.threeD.foldProgress);
@@ -64,7 +65,10 @@ export function Scene3D({ userHash, scene, foldable, onFoldable }: { userHash: s
   if (!geo || failed) return <div className="grid h-full place-items-center p-6 text-center text-sm text-muted-foreground">The 3D view is not available for this template.</div>;
   return (
     <div className="flex h-full flex-col">
-      <CartonView ref={view} className="min-h-0 flex-1" geo={geo} texture={raster?.canvas ?? null} textureRect={raster?.rect ?? null} progress={progress} outsideColor={scene.threeD.outsideColor} insideColor={scene.threeD.insideColor} initialView={scene.initialView} watermark={scene.watermark} />
+      {/* The canvas is see-through, so the background picture (or the studio colour) behind it shows, with the box's shadow on it. */}
+      <div className="min-h-0 flex-1 bg-cover bg-center" style={{ backgroundColor: "#f4f4f2", ...(backgroundUrl ? { backgroundImage: `url("${backgroundUrl}")` } : {}) }}>
+        <CartonView ref={view} className="size-full" transparent geo={geo} layout={layout} texture={raster?.canvas ?? null} textureRect={raster?.rect ?? null} progress={progress} outsideColor={scene.threeD.outsideColor} insideColor={scene.threeD.insideColor} initialView={scene.initialView} watermark={scene.watermark} />
+      </div>
       <div className="flex flex-wrap items-center gap-3 border-t bg-background/80 px-3 py-2 text-xs">
         {foldable ? (
           <>

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { cleanCategory, cleanName, parseTags } from "@/lib/artwork-meta";
+import { cleanCategory, cleanName, isBackgroundCategory, parseTags } from "@/lib/artwork-meta";
 import { db } from "@/server/db";
 import { requireSuperAdmin } from "@/server/admin";
 import { storage } from "@/server/storage";
@@ -43,4 +43,18 @@ export async function deleteArtwork(id: unknown): Promise<ActionResult> {
   await storage.delete(row.storageKey).catch(() => undefined);
   revalidatePath("/doraadmin/artworks");
   return { ok: true, message: "Artwork deleted." };
+}
+
+/** Feature a background picture on the shared template pages (customers can try it behind the box), or take it off. */
+export async function setArtworkFeatured(id: unknown, featured: unknown): Promise<ActionResult> {
+  await requireSuperAdmin();
+  const p = idParam.safeParse(id);
+  const f = z.boolean().safeParse(featured);
+  if (!p.success || !f.success) return { ok: false, message: "Invalid request." };
+  const row = await db.artworkItem.findUnique({ where: { id: p.data }, select: { category: true } });
+  if (!row) return { ok: false, message: "Artwork not found." };
+  if (f.data && !isBackgroundCategory(row.category)) return { ok: false, message: "Only background pictures can be featured." };
+  await db.artworkItem.update({ where: { id: p.data }, data: { featured: f.data } });
+  revalidatePath("/doraadmin/artworks");
+  return { ok: true, message: f.data ? "Featured on the template pages." : "No longer featured." };
 }

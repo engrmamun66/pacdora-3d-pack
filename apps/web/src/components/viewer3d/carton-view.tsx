@@ -7,7 +7,8 @@ import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import type { DielineGeometry, WatermarkSpec } from "@packaging/dieline-engine";
 import { buildCartonModel, disposeCartonModel, type CartonModel, type TextureRect } from "@packaging/model3d";
-import { cameraToView, viewToCamera, type ViewSettings } from "@/lib/view-settings";
+import { cameraToView, STANDARD_VIEW, viewToCamera, type ViewSettings } from "@/lib/view-settings";
+import { layoutInstances, layoutView, type LayoutSpec } from "@/lib/scene-layout";
 import { drawWatermark } from "@/lib/watermark-canvas";
 
 /** Fine, repeatable speckle and fibres, so a plain board colour reads as board and not as paint. */
@@ -108,6 +109,8 @@ function fluteTexture(color: string): THREE.CanvasTexture {
 }
 
 export interface CartonViewProps {
+  /** Several copies of the box in an arrangement (a template layout) with its camera. Null/absent = the one box, as always. */
+  layout?: LayoutSpec | null;
   geo: DielineGeometry;
   /** Outside artwork in flat-sheet space (already includes the board colour). */
   texture: HTMLCanvasElement | null;
@@ -232,7 +235,7 @@ export interface CartonViewHandle {
 
 /** Interactive 3D carton built from the engine's fold tree (three.js, no React renderer). */
 export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function CartonView(
-  { geo, texture, textureRect, progress, outsideColor, insideColor, thickness = 0, watermark = null, boardGrain = 0, boardEdge, className, autoRotate = false, transparent = false, shadows = true, frameMm, rotateOnly = false, initialView = null, onViewChange, onReady, onPanelHover },
+  { geo, layout = null, texture, textureRect, progress, outsideColor, insideColor, thickness = 0, watermark = null, boardGrain = 0, boardEdge, className, autoRotate = false, transparent = false, shadows = true, frameMm, rotateOnly = false, initialView = null, onViewChange, onReady, onPanelHover },
   ref,
 ) {
   const host = useRef<HTMLDivElement>(null);
@@ -246,7 +249,15 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   const onPanelHoverRef = useRef(onPanelHover);
   const readyFired = useRef(false);
   const progressRef = useRef(progress);
+  /** The layout (an arrangement of copies), the copies added to the scene besides the main box, and the size and centre of the whole group (null = one box). */
+  const layoutRef = useRef<LayoutSpec | null>(layout);
+  const appliedLayout = useRef<LayoutSpec | null>(layout);
+  const extras = useRef<THREE.Object3D[]>([]);
+  /** The faded materials of the floor reflection (made for it, so they are disposed with it). */
+  const mirrorMats = useRef<THREE.Material[]>([]);
+  const groupBounds = useRef<{ r: number; center: [number, number, number] } | null>(null);
   useEffect(() => {
+    layoutRef.current = layout;
     initialViewRef.current = initialView;
     onViewChangeRef.current = onViewChange;
     onReadyRef.current = onReady;
@@ -295,8 +306,9 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   const frameBase = () => {
     const t = three.current;
     if (!t?.model) return null;
-    const r = frameMm ?? Math.max(t.model.size.x, t.model.size.y, t.model.size.z);
-    return { r, base: [0, t.model.size.y / 2, 0] as [number, number, number] };
+    const g = groupBounds.current;
+    const r = Math.max(frameMm ?? Math.max(t.model.size.x, t.model.size.y, t.model.size.z), g?.r ?? 0);
+    return { r, base: g ? g.center : ([0, t.model.size.y / 2, 0] as [number, number, number]) };
   };
 
   /**
@@ -406,7 +418,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     t.ground.visible = c.on;
     (t.ground.material as THREE.ShadowMaterial).opacity = c.strength;
     t.sun.shadow.radius = 1 + c.softness * 5; // texels of blur on the edge of the shadow
-    const r = frameMm ?? (t.model ? Math.max(t.model.size.x, t.model.size.y, t.model.size.z) : 100);
+    const r = frameBase()?.r ?? 100;
     const az = (c.azimuthDeg * Math.PI) / 180;
     const el = (c.elevationDeg * Math.PI) / 180;
     t.sun.position.set(Math.sin(az) * Math.cos(el) * r * 5, Math.sin(el) * r * 5, Math.cos(az) * Math.cos(el) * r * 5);
@@ -418,27 +430,142 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     if (r) rotationListeners.current.forEach((cb) => cb(r));
   };
 
-  const frame = () => {
+  /** What depends on the size of the picture: grid cells, clip planes and the area the shadow covers. */
+  const fitBounds = () => {
     const t = three.current;
-    if (!t?.model) return;
-    setCameraUp(new THREE.Vector3(0, 1, 0)); // back to upright
-    const r = frameMm ?? Math.max(t.model.size.x, t.model.size.y, t.model.size.z);
+    const fb = frameBase();
+    if (!t || !fb) return;
+    const r = fb.r;
     gridStep.current = Math.max(5, Math.round(r / 4 / 10) * 10);
     rebuildGrid();
-    t.camera.position.set(r * 1.6, r * 1.3, r * 2.2);
     t.camera.near = r / 100;
     t.camera.far = r * 50;
     t.camera.updateProjectionMatrix();
-    t.controls.target.set(0, t.model.size.y / 2, 0);
     applyShadow();
     const sc = t.sun.shadow.camera as THREE.OrthographicCamera;
     sc.left = sc.bottom = -r * 2;
     sc.right = sc.top = r * 2;
     sc.far = r * 10;
     sc.updateProjectionMatrix();
+  };
+
+  const frame = () => {
+    const t = three.current;
+    if (!t?.model) return;
+    setCameraUp(new THREE.Vector3(0, 1, 0)); // back to upright
+    const fb = frameBase();
+    const r = fb?.r ?? 100;
+    t.camera.position.set(r * 1.6, r * 1.3, r * 2.2);
+    t.controls.target.set(...(fb?.base ?? [0, t.model.size.y / 2, 0]));
+    fitBounds();
     t.controls.update();
-    if (initialViewRef.current) applyView(initialViewRef.current);
+    if (layoutRef.current) applyView(layoutView(layoutRef.current, progressRef.current));
+    else if (initialViewRef.current) applyView(initialViewRef.current);
     notifyRotation();
+  };
+
+  /** Take the copies of the box (and the floor reflection) out of the scene. They share the box's geometry, so only the faded materials are disposed. */
+  const clearLayout = () => {
+    for (const o of extras.current) o.parent?.remove(o);
+    extras.current = [];
+    for (const mt of mirrorMats.current) mt.dispose();
+    mirrorMats.current = [];
+  };
+
+  /**
+   * Put the box (and, for a layout, its copies) where they belong: each one turned and leaned, then lowered to the floor (and lifted
+   * by its own height steps). Distances in the layout are in sizes of the box as it stands after its turn, so they fit any box.
+   * With the mirror on, a faded upside-down copy of everything is put under the floor. Copies share the box's geometry and materials.
+   */
+  const placeLayout = () => {
+    const t = three.current;
+    if (!t?.model) return;
+    clearLayout();
+    const m = t.model;
+    const spec = layoutRef.current;
+    appliedLayout.current = spec;
+    const FLOOR = 0.5; // the box's bottom edge, just above the shadow plane
+    const rad = THREE.MathUtils.degToRad;
+    const aim = (obj: THREE.Object3D, o: { yawDeg: number; pitchDeg: number; rollDeg: number; scale: number }, stretch: readonly number[] = [1, 1, 1]) => {
+      obj.rotation.set(rad(o.pitchDeg), rad(o.yawDeg), rad(o.rollDeg), "YXZ");
+      obj.scale.set(o.scale * (stretch[0] ?? 1), o.scale * (stretch[1] ?? 1), o.scale * (stretch[2] ?? 1)); // stretches the box's own width, height and depth
+    };
+    if (!spec) {
+      m.object.rotation.set(0, 0, 0);
+      m.object.scale.setScalar(1);
+      m.object.position.set(0, m.size.y / 2 + FLOOR, 0);
+      groupBounds.current = null;
+      return;
+    }
+    // One unit of distance = the size of that item's box as it stands (measured once per item).
+    const units = spec.items.map((it) => {
+      aim(m.object, it, [it.stretchX, it.stretchY, it.stretchZ]);
+      m.object.position.set(0, 0, 0);
+      m.object.updateMatrixWorld(true);
+      return new THREE.Box3().setFromObject(m.object).getSize(new THREE.Vector3());
+    });
+    const whole = new THREE.Box3();
+    const placed: THREE.Object3D[] = [];
+    layoutInstances(spec).forEach((it, i) => {
+      const u = units[it.item]!;
+      const obj = i === 0 ? m.object : m.object.clone(true);
+      aim(obj, it, it.stretch);
+      obj.position.set(it.x * u.x, 0, it.z * u.z);
+      obj.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(obj);
+      obj.position.y += FLOOR - box.min.y + it.y * u.y;
+      obj.updateMatrixWorld(true);
+      whole.union(box.setFromObject(obj));
+      placed.push(obj);
+      if (i > 0) {
+        t.scene.add(obj);
+        extras.current.push(obj);
+      }
+    });
+    if (spec.mirror.on) {
+      // A glossy floor: everything flipped about the floor, strongest where it touches and fading out further down.
+      const flip = new THREE.Matrix4().makeTranslation(0, FLOOR, 0).multiply(new THREE.Matrix4().makeScale(1, -1, 1)).multiply(new THREE.Matrix4().makeTranslation(0, -FLOOR, 0));
+      const reach = Math.max(1, whole.max.y - FLOOR) * spec.mirror.fade;
+      const strength = spec.mirror.opacity;
+      const faded = new Map<THREE.Material, THREE.Material>();
+      const fade = (mat: THREE.Material) => {
+        let f = faded.get(mat);
+        if (!f) {
+          f = mat.clone();
+          f.transparent = true;
+          f.opacity = mat.opacity;
+          // The fade by depth below the floor is done in the shader, per pixel.
+          f.onBeforeCompile = (sh) => {
+            sh.uniforms.uMirror = { value: new THREE.Vector3(FLOOR, reach, strength) };
+            sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying float vMirrorY;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvMirrorY = (modelMatrix * vec4(position, 1.0)).y;");
+            sh.fragmentShader = sh.fragmentShader
+              .replace("#include <common>", "#include <common>\nvarying float vMirrorY;\nuniform vec3 uMirror;")
+              .replace("#include <dithering_fragment>", "#include <dithering_fragment>\nfloat mirrorDepth = clamp((uMirror.x - vMirrorY) / uMirror.y, 0.0, 1.0);\ngl_FragColor.a *= uMirror.z * (1.0 - mirrorDepth) * (1.0 - mirrorDepth);");
+          };
+          f.customProgramCacheKey = () => "floor-mirror";
+          faded.set(mat, f);
+          mirrorMats.current.push(f);
+        }
+        return f;
+      };
+      for (const obj of placed) {
+        const ghost = obj.clone(true);
+        ghost.matrixAutoUpdate = false;
+        ghost.matrix.multiplyMatrices(flip, obj.matrixWorld);
+        ghost.traverse((o) => {
+          if (!(o instanceof THREE.Mesh)) return;
+          o.castShadow = false;
+          o.receiveShadow = false;
+          if (o.material instanceof THREE.MeshBasicMaterial) o.visible = false; // the blink marks are not reflected
+          else o.material = Array.isArray(o.material) ? o.material.map(fade) : fade(o.material);
+        });
+        t.scene.add(ghost);
+        extras.current.push(ghost);
+      }
+    }
+    const size = whole.getSize(new THREE.Vector3());
+    const c = whole.getCenter(new THREE.Vector3());
+    groupBounds.current = { r: Math.max(size.x, size.y, size.z), center: [c.x, c.y, c.z] };
   };
 
   /** Put the blink overlays on the panel named in `blinkId` (after the model changed, or the choice did). */
@@ -868,7 +995,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     sun.shadow.bias = -0.0005; // scene units are mm
     sun.shadow.normalBias = 0.6;
     scene.add(sun);
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(20000, 20000), new THREE.ShadowMaterial({ opacity: 0.18 }));
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(20000, 20000), new THREE.ShadowMaterial({ opacity: 0.18, depthWrite: false }));
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
     ground.visible = shadowsAtStart.current;
@@ -969,6 +1096,9 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
         (gridObj.current.material as THREE.Material).dispose();
         gridObj.current = null;
       }
+      for (const mt of mirrorMats.current) mt.dispose();
+      mirrorMats.current = [];
+      extras.current = [];
       if (t?.model) disposeCartonModel(t.model);
       scene.environment = null;
       studio.dispose();
@@ -1043,6 +1173,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       if (t.model) {
         for (const m of blinkMeshes.current) m.parent?.remove(m); // shared geometry and materials stay alive
         blinkMeshes.current = [];
+        clearLayout(); // the copies share what is disposed below
         t.scene.remove(t.model.object);
         disposeCartonModel(t.model);
       }
@@ -1057,8 +1188,8 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
         thickness,
         ...(boardEdge ? { boardEdgeColor: boardEdge.color, ...(boardEdge.flute ? { boardEdgeTexture: fluteTexture(boardEdge.color) } : {}) } : {}),
       });
-      t.model.object.position.y = t.model.size.y / 2 + 0.5;
       t.scene.add(t.model.object);
+      placeLayout();
       applyBlink();
     };
     build(progress);
@@ -1078,6 +1209,19 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   // `frame` only reads frameMm, which stays constant for the life of a view.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geo, texture, textureRect, progress, outsideColor, insideColor, thickness, watermark, grainAmount, boardEdge?.color, boardEdge?.flute]);
+
+  // A different layout (or none): arrange the copies and glide the camera to the layout's view (or back to the standard one).
+  useEffect(() => {
+    const t = three.current;
+    if (!t?.model || appliedLayout.current === layout) return;
+    placeLayout();
+    fitBounds();
+    if (layout) smoothTo(layoutView(layout, progressRef.current), 700);
+    else if (initialViewRef.current) smoothTo(initialViewRef.current, 700);
+    else smoothTo({ ...STANDARD_VIEW, progress: progressRef.current }, 700);
+  // The helpers only read refs and three.current.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout]);
 
   return <div ref={host} className={className} data-testid="carton-3d" />;
 });

@@ -6,6 +6,7 @@ import { getPreset } from "@packaging/dieline-engine";
 import { db } from "@/server/db";
 import { requireUser } from "@/server/session";
 import { MAX_CATEGORIES, MAX_TAGS } from "@/server/my-templates";
+import { CARD_IMAGES, MAX_COLUMNS, MIN_COLUMNS } from "@/server/portal";
 import { importedStartParams, loadImportedSource } from "@/server/imported-templates";
 import { createProjectDraft } from "@/app/(app)/projects/actions";
 
@@ -173,4 +174,16 @@ export async function addSystemTemplate(templateId: string, categoryId: string |
   if (categoryId) await db.project.updateMany({ where: { id: r.id, userId: user.id }, data: { categoryId } });
   refresh();
   return { ok: true, message: `"${row.name}" added to your templates.`, id: r.id };
+}
+
+const displaySchema = z.object({ columns: z.number().int().min(MIN_COLUMNS).max(MAX_COLUMNS), image: z.enum(CARD_IMAGES as unknown as [string, ...string[]]) });
+
+/** Product Display Settings: cards per row, and which picture a card shows, on the Client's shared pages. */
+export async function saveDisplaySettings(input: unknown): Promise<MyResult> {
+  const user = await requireUser();
+  const p = displaySchema.safeParse(input);
+  if (!p.success) return { ok: false, message: "Choose a number of cards from 2 to 6 and a picture." };
+  await db.user.update({ where: { id: user.id }, data: { cardColumns: p.data.columns, cardImage: p.data.image } });
+  refresh();
+  return { ok: true, message: "Display settings saved." };
 }

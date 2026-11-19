@@ -2,10 +2,10 @@
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ImagePlus, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
+import { Check, ImagePlus, Pencil, Plus, Star, Trash2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { deleteArtwork, updateArtwork } from "@/app/doraadmin/artwork-actions";
-import { MAX_CATEGORY, MAX_NAME, numberedNames, parseTags } from "@/lib/artwork-meta";
+import { deleteArtwork, setArtworkFeatured, updateArtwork } from "@/app/doraadmin/artwork-actions";
+import { MAX_CATEGORY, MAX_NAME, isBackgroundCategory, numberedNames, parseTags } from "@/lib/artwork-meta";
 import { MAX_UPLOAD_BYTES } from "@/lib/image-sniff";
 import { notify } from "@/lib/notify";
 
@@ -17,6 +17,8 @@ export interface ArtworkRow {
   widthPx: number;
   heightPx: number;
   sizeBytes: number;
+  /** Shown under the 3D view on the shared template pages (background pictures only). */
+  featured: boolean;
 }
 
 const input = "h-9 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
@@ -334,6 +336,19 @@ export function ArtworkGrid({ rows, categories, filtered, view }: { rows: Artwor
   );
   const actions = (r: ArtworkRow) => (
     <div className="flex justify-end gap-1">
+      {isBackgroundCategory(r.category) ? (
+        <button
+          type="button"
+          aria-label={r.featured ? `Remove ${r.name} from the featured backgrounds` : `Feature ${r.name} on the template pages`}
+          aria-pressed={r.featured}
+          title={r.featured ? "Featured on the template pages (click to remove)" : "Feature on the template pages"}
+          disabled={pending}
+          className={`${iconBtn} ${r.featured ? "border-amber-400 bg-amber-50 text-amber-600 hover:bg-amber-100" : ""}`}
+          onClick={() => run(() => setArtworkFeatured(r.id, !r.featured))}
+        >
+          <Star className={`size-4 ${r.featured ? "fill-current" : ""}`} />
+        </button>
+      ) : null}
       <button type="button" aria-label={`Edit ${r.name}`} className={iconBtn} onClick={() => startEdit(r)}><Pencil className="size-4" /></button>
       <button type="button" aria-label={`Delete ${r.name}`} disabled={pending} className={`${iconBtn} border-destructive/40 text-destructive hover:bg-destructive/10`} onClick={() => del(r)}><Trash2 className="size-4" /></button>
     </div>

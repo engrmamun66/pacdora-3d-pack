@@ -9,6 +9,7 @@ import { loadImportedSource } from "./imported-templates";
 import { readViewSettings, type ViewSettings } from "@/lib/view-settings";
 import { getWatermark } from "./site-settings";
 import { businessLogoUrl } from "./business-logo";
+import { captureUrl } from "./captures";
 
 /**
  * The public side of a Client (a signed-in user): their shared template pages.
@@ -29,7 +30,16 @@ export interface PortalOwner {
   allActive: boolean;
   /** Address of the Client's logo for the header, or null when they have none. */
   logoUrl: string | null;
+  /** How the pages show the templates: cards per row (2 to 6), and which picture is on a card. */
+  cardColumns: number;
+  cardImage: CardImage;
 }
+
+/** What a card shows: the flat dieline, or the 3D picture the Client took in the online design page (the dieline when there is none). */
+export type CardImage = "dieline" | "3d";
+export const CARD_IMAGES: readonly CardImage[] = ["dieline", "3d"];
+export const MIN_COLUMNS = 2;
+export const MAX_COLUMNS = 6;
 
 export interface PortalTemplate {
   id: string;
@@ -37,6 +47,8 @@ export interface PortalTemplate {
   name: string;
   templateName: string;
   thumbnail: string | null;
+  /** The cover 3D picture (an address), if the Client took one. */
+  cover: string | null;
   category: string | null;
   tags: string[];
 }
@@ -62,9 +74,9 @@ export async function ensureLinks(userId: string): Promise<void> {
 /** The Client behind a user hash (the hash of their "all" link). Null when no such Client, or the account is suspended. */
 export async function findOwner(userHash: string): Promise<PortalOwner | null> {
   if (!isHash(userHash)) return null;
-  const link = await db.shareLink.findUnique({ where: { hash: userHash }, select: { scope: true, active: true, user: { select: { id: true, name: true, businessName: true, businessLogoKey: true, banned: true } } } });
+  const link = await db.shareLink.findUnique({ where: { hash: userHash }, select: { scope: true, active: true, user: { select: { id: true, name: true, businessName: true, businessLogoKey: true, banned: true, cardColumns: true, cardImage: true } } } });
   if (!link || link.scope !== "all" || link.user.banned) return null;
-  return { userId: link.user.id, title: link.user.businessName?.trim() || link.user.name, userHash, allActive: link.active, logoUrl: businessLogoUrl(userHash, link.user.businessLogoKey) };
+  return { userId: link.user.id, title: link.user.businessName?.trim() || link.user.name, userHash, allActive: link.active, logoUrl: businessLogoUrl(userHash, link.user.businessLogoKey), cardColumns: Math.min(MAX_COLUMNS, Math.max(MIN_COLUMNS, link.user.cardColumns)), cardImage: link.user.cardImage === "3d" ? "3d" : "dieline" };
 }
 
 /** `findOwner`, once per request (the layout and the page both ask). */
@@ -101,6 +113,7 @@ const projectSelect = {
   template: { select: { name: true, source: true, thumbnail: true } },
   category: { select: { name: true } },
   tags: { select: { tag: { select: { name: true } } } },
+  captures: { where: { cover: true }, select: { id: true }, take: 1 },
 } as const;
 
 type Row = {
@@ -110,6 +123,7 @@ type Row = {
   template: { name: string; source: string; thumbnail: string | null };
   category: { name: string } | null;
   tags: { tag: { name: string } }[];
+  captures: { id: string }[];
 };
 
 function toTemplate(r: Row): PortalTemplate {
@@ -120,7 +134,7 @@ function toTemplate(r: Row): PortalTemplate {
   } catch {
     // a project file from a newer version: no preview
   }
-  return { id: r.id, hash: templateHash(r.id), name: r.name, templateName: r.template.name, thumbnail, category: r.category?.name ?? null, tags: r.tags.map((t) => t.tag.name) };
+  return { id: r.id, hash: templateHash(r.id), name: r.name, templateName: r.template.name, thumbnail, cover: r.captures[0] ? captureUrl(r.captures[0].id) : null, category: r.category?.name ?? null, tags: r.tags.map((t) => t.tag.name) };
 }
 
 /** Ids of this Client's templates that were switched off one by one (a template link that is off hides it everywhere). */

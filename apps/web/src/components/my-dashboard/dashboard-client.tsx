@@ -4,13 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutGrid, List, Search, X } from "lucide-react";
 import {
-  createCategory,
-  createTag,
-  deleteCategory,
   deleteMyTemplate,
-  deleteTag,
-  renameCategory,
-  renameTag,
   setTemplateCategory,
   setTemplateTags,
   type MyResult,
@@ -122,55 +116,6 @@ export function DashboardClient({ templates, categories, tags, total, share, ini
     return change(t.id, () => setItems((l) => l.filter((x) => x.id !== t.id)), () => setItems((l) => (l.some((x) => x.id === t.id) ? l : [...l, t])), () => deleteMyTemplate(t.id));
   };
 
-  // ---- categories and tags
-  const createCat = async (name: string) => {
-    const r = await createCategory(name).catch(() => FAIL);
-    if (r.ok && r.id) {
-      setCats((l) => [...l, { id: r.id!, name: name.trim() }].sort((a, b) => a.name.localeCompare(b.name)));
-      notify.success(r.message);
-    } else if (!r.ok) notify.error(r.message);
-    return r;
-  };
-  const createTg = async (name: string) => {
-    const r = await createTag(name).catch(() => FAIL);
-    if (r.ok && r.id) {
-      setTagList((l) => [...l, { id: r.id!, name: name.trim() }].sort((a, b) => a.name.localeCompare(b.name)));
-      notify.success(r.message);
-    } else if (!r.ok) notify.error(r.message);
-    return r;
-  };
-  const rename = async (kind: "category" | "tag", id: string) => {
-    const list = kind === "category" ? cats : tagList;
-    const current = list.find((x) => x.id === id);
-    if (!current) return;
-    const next = window.prompt(`Rename the ${kind} "${current.name}" to:`, current.name)?.trim();
-    if (!next || next === current.name) return;
-    const r = await (kind === "category" ? renameCategory(id, next) : renameTag(id, next)).catch(() => FAIL);
-    if (!r.ok) return void notify.error(r.message);
-    const apply = (l: MyLabel[]) => l.map((x) => (x.id === id ? { ...x, name: next } : x)).sort((a, b) => a.name.localeCompare(b.name));
-    if (kind === "category") setCats(apply);
-    else setTagList(apply);
-    notify.success(r.message);
-  };
-  const removeLabel = async (kind: "category" | "tag", id: string) => {
-    const label = (kind === "category" ? cats : tagList).find((x) => x.id === id);
-    if (!label) return;
-    const used = items.filter((x) => (kind === "category" ? x.categoryId === id : x.tagIds.includes(id))).length;
-    if (!window.confirm(`Delete the ${kind} "${label.name}"? Your templates are kept${used ? ` (${used} will lose it)` : ""}.`)) return;
-    const r = await (kind === "category" ? deleteCategory(id) : deleteTag(id)).catch(() => FAIL);
-    if (!r.ok) return void notify.error(r.message);
-    if (kind === "category") {
-      setCats((l) => l.filter((x) => x.id !== id));
-      setItems((l) => l.map((x) => (x.categoryId === id ? { ...x, categoryId: null } : x)));
-      if (cat === id) setCat("");
-    } else {
-      setTagList((l) => l.filter((x) => x.id !== id));
-      setItems((l) => l.map((x) => ({ ...x, tagIds: x.tagIds.filter((g) => g !== id) })));
-      if (tag === id) setTag("");
-    }
-    notify.success(r.message);
-  };
-
   // ---- what is shown
   const counts = useMemo(() => {
     const byCat = new Map<string, number>();
@@ -216,12 +161,6 @@ export function DashboardClient({ templates, categories, tags, total, share, ini
         uncategorised={counts.none}
         categories={cats.map((c) => ({ ...c, count: counts.byCat.get(c.id) ?? 0 }))}
         tags={tagList.map((t) => ({ ...t, count: counts.byTag.get(t.id) ?? 0 }))}
-        onCreateCategory={createCat}
-        onCreateTag={createTg}
-        onRenameCategory={(id) => void rename("category", id)}
-        onRenameTag={(id) => void rename("tag", id)}
-        onDeleteCategory={(id) => void removeLabel("category", id)}
-        onDeleteTag={(id) => void removeLabel("tag", id)}
         share={share}
       />
 
