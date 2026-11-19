@@ -147,6 +147,8 @@ export interface CartonViewProps {
   onViewChange?: (v: ViewSettings) => void;
   /** Called once, on the frame after the box is first built and drawn (so a loading placeholder can go away). */
   onReady?: () => void;
+  /** Called while the person moves the camera with the mouse or touch (drag, zoom), not for glides the view makes itself. */
+  onUserView?: (v: ViewSettings) => void;
   /** Called with the id of the panel under the mouse (null when none, while dragging, or when the mouse leaves). */
   onPanelHover?: (id: string | null) => void;
 }
@@ -235,7 +237,7 @@ export interface CartonViewHandle {
 
 /** Interactive 3D carton built from the engine's fold tree (three.js, no React renderer). */
 export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function CartonView(
-  { geo, layout = null, texture, textureRect, progress, outsideColor, insideColor, thickness = 0, watermark = null, boardGrain = 0, boardEdge, className, autoRotate = false, transparent = false, shadows = true, frameMm, rotateOnly = false, initialView = null, onViewChange, onReady, onPanelHover },
+  { geo, layout = null, texture, textureRect, progress, outsideColor, insideColor, thickness = 0, watermark = null, boardGrain = 0, boardEdge, className, autoRotate = false, transparent = false, shadows = true, frameMm, rotateOnly = false, initialView = null, onViewChange, onUserView, onReady, onPanelHover },
   ref,
 ) {
   const host = useRef<HTMLDivElement>(null);
@@ -245,6 +247,9 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   const rotateOnlyAtStart = useRef(rotateOnly);
   const initialViewRef = useRef(initialView);
   const onViewChangeRef = useRef(onViewChange);
+  const onUserViewRef = useRef(onUserView);
+  /** True while the person moves the camera (and a moment after, while it settles). */
+  const interacting = useRef(false);
   const onReadyRef = useRef(onReady);
   const onPanelHoverRef = useRef(onPanelHover);
   const readyFired = useRef(false);
@@ -260,6 +265,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     layoutRef.current = layout;
     initialViewRef.current = initialView;
     onViewChangeRef.current = onViewChange;
+    onUserViewRef.current = onUserView;
     onReadyRef.current = onReady;
     onPanelHoverRef.current = onPanelHover;
     progressRef.current = progress;
@@ -1015,17 +1021,35 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     };
     let notifyQueued = false;
     const onChange = () => {
-      if ((!onViewChangeRef.current && !rotationListeners.current.size) || notifyQueued) return;
+      if ((!onViewChangeRef.current && !onUserViewRef.current && !rotationListeners.current.size) || notifyQueued) return;
       notifyQueued = true;
       requestAnimationFrame(() => {
         notifyQueued = false;
         const v = getView();
         if (!v) return;
         onViewChangeRef.current?.(v);
+        if (interacting.current) onUserViewRef.current?.(v);
         rotationListeners.current.forEach((cb) => cb({ x: v.elevationDeg, y: v.azimuthDeg, z: v.rollDeg }));
       });
     };
     controls.addEventListener("change", onChange);
+    // The person starts and stops moving the camera; the view keeps settling for a moment after (damping), so "stopped" is a little later.
+    let settle: ReturnType<typeof setTimeout> | null = null;
+    const onStart = () => {
+      if (settle) clearTimeout(settle);
+      settle = null;
+      interacting.current = true;
+    };
+    const onEnd = () => {
+      if (settle) clearTimeout(settle);
+      settle = setTimeout(() => {
+        interacting.current = false;
+        const v = getView();
+        if (v) onUserViewRef.current?.(v);
+      }, 400);
+    };
+    controls.addEventListener("start", onStart);
+    controls.addEventListener("end", onEnd);
     const ro = new ResizeObserver(resize);
     ro.observe(el);
     resize();
@@ -1214,9 +1238,18 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   useEffect(() => {
     const t = three.current;
     if (!t?.model || appliedLayout.current === layout) return;
+    const before = appliedLayout.current;
     placeLayout();
     fitBounds();
-    if (layout) smoothTo(layoutView(layout, progressRef.current), 700);
+    if (layout) {
+      // Only the camera numbers changed and the camera is already there (the person moved it): nothing to glide to.
+      const now = getView();
+      const sameTurn = (a: number, b: number) => Math.abs((((a - b) % 360) + 540) % 360 - 180) < 1.5;
+      const sameBoxes = before && JSON.stringify(before.items) === JSON.stringify(layout.items) && JSON.stringify(before.mirror) === JSON.stringify(layout.mirror);
+      const there = now && sameTurn(now.azimuthDeg, layout.azimuthDeg) && Math.abs(now.elevationDeg - layout.elevationDeg) < 1.5 && Math.abs(now.zoom / layout.zoom - 1) < 0.02;
+      if (sameBoxes && there) return;
+      smoothTo(layoutView(layout, progressRef.current), 700);
+    }
     else if (initialViewRef.current) smoothTo(initialViewRef.current, 700);
     else smoothTo({ ...STANDARD_VIEW, progress: progressRef.current }, 700);
   // The helpers only read refs and three.current.

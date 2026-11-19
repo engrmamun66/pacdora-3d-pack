@@ -358,6 +358,8 @@ model TemplateLayout {
   sortOrder Int      @default(0)
   active    Boolean  @default(true)
   spec      Json     @db.JsonB
+  /// A small picture of the layout (a PNG in storage, "layouts/<id>.png"), shown where the layout is listed. Null = none.
+  iconKey   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -2,16 +2,20 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, Camera, Copy, Plus, Sparkles, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, ImageIcon, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { generateDieline } from "@packaging/dieline-engine";
 import { Button } from "@/components/ui/button";
 import { RangeSlider } from "@/components/ui/range-slider";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
-import { addStarterLayouts, createLayout, deleteLayout, moveLayout, updateLayout } from "@/app/doraadmin/template-layout-actions";
+import { addStarterLayouts, clearLayoutIcon, createLayout, deleteLayout, moveLayout, setIconBox, setIconStyle, setLayoutIcon, updateLayout } from "@/app/doraadmin/template-layout-actions";
 import { MAX_BOXES, MAX_ITEMS, MAX_REPEAT, PRESETS, layoutInstances, newBoxItem, presetSpec, type BoxItem, type LayoutItem, type LayoutSpec, type Repeat } from "@/lib/scene-layout";
 import { notify } from "@/lib/notify";
-import { SAMPLE_BOXES } from "@/lib/sample-boxes";
+import { SAMPLE_BOXES, SAMPLE_STYLES, styleCss } from "@/lib/sample-boxes";
+import { gradientTexture } from "./sample-look";
 import { confirmAction } from "@/lib/confirm";
+
+/** Icons are square pictures of this many pixels. */
+const ICON_PX = 300;
 
 const input = "h-9 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 
@@ -55,7 +59,7 @@ function Setting({ label, value, min, max, step, unit, onChange }: { label: stri
  * Admin: the layouts customers can pick on a shared template page ("Sample 1", "Sample 2" ...). Pick or add one on the left;
  * set the arrangement and the camera on the right and watch the result on a sample box. The same list serves every template.
  */
-export function LayoutManager({ layouts }: { layouts: LayoutItem[] }) {
+export function LayoutManager({ layouts, iconBox, iconStyle }: { layouts: LayoutItem[]; /** The sample box and colour style all icons (and the preview) use. */ iconBox: string; iconStyle: string }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [draft, setDraft] = useState<Draft>(() => {
@@ -67,7 +71,9 @@ export function LayoutManager({ layouts }: { layouts: LayoutItem[] }) {
   const [sel, setSel] = useState(0);
 
   // The box the preview shows (the layouts work on any box, so the admin can try them on different shapes).
-  const [boxId, setBoxId] = useState(SAMPLE_BOXES[0]!.id);
+  const [styleId, setStyleId] = useState(SAMPLE_STYLES.some((x) => x.id === iconStyle) ? iconStyle : SAMPLE_STYLES[0]!.id);
+  const style = SAMPLE_STYLES.find((x) => x.id === styleId) ?? SAMPLE_STYLES[0]!;
+  const [boxId, setBoxId] = useState(SAMPLE_BOXES.some((b) => b.id === iconBox) ? iconBox : SAMPLE_BOXES[0]!.id);
   const sample = useMemo(() => {
     const b = SAMPLE_BOXES.find((x) => x.id === boxId) ?? SAMPLE_BOXES[0]!;
     try {
@@ -76,6 +82,9 @@ export function LayoutManager({ layouts }: { layouts: LayoutItem[] }) {
       return null;
     }
   }, [boxId]);
+
+  // The gradient of the chosen style, painted on the flat sheet of the sample box (null for the plain board and solid colours).
+  const look = useMemo(() => (sample ? gradientTexture(sample, style) : null), [sample, style]);
 
   const run = (fn: () => Promise<{ ok: boolean; message: string }>, after?: () => void) =>
     start(async () => {
@@ -135,14 +144,75 @@ export function LayoutManager({ layouts }: { layouts: LayoutItem[] }) {
     else run(() => createLayout(body), () => { setDraft(newDraft(layouts.length + 2)); setSel(0); });
   };
 
-  const useCamera = () => {
-    const v = view.current?.getView();
-    if (!v) return;
-    set({ azimuthDeg: Math.round(v.azimuthDeg), elevationDeg: Math.round(v.elevationDeg), zoom: Math.round(v.zoom * 100) / 100 });
-    notify.success("Camera taken from the preview.");
+  // Changing the box redraws every saved icon with it: one hidden 3D view is shown for each layout in turn, and its picture is saved.
+  const [redraw, setRedraw] = useState<{ queue: LayoutItem[]; at: number } | null>(null);
+  const redrawView = useRef<CartonViewHandle>(null);
+
+  /** Save the box or the style, then redraw every saved icon with it. */
+  const changeLook = (what: "box" | "style", id: string) => {
+    if (what === "box") setBoxId(id);
+    else setStyleId(id);
+    start(async () => {
+      const r = await (what === "box" ? setIconBox(id) : setIconStyle(id)).catch(() => ({ ok: false, message: "Could not save." }));
+      if (!r.ok) return void notify.error(r.message);
+      const queue = layouts.filter((l) => l.iconUrl);
+      if (queue.length > 0) setRedraw({ queue, at: 0 });
+    });
   };
 
+  /** The hidden view of the current layout is ready: keep its picture as the icon, then go to the next layout. */
+  const iconReady = async () => {
+    if (!redraw) return;
+    const cur = redraw.queue[redraw.at]!;
+    const png = redrawView.current?.snapshot({ width: ICON_PX, height: ICON_PX });
+    if (png) await setLayoutIcon(cur.id, png).catch(() => undefined);
+    if (redraw.at + 1 < redraw.queue.length) setRedraw({ queue: redraw.queue, at: redraw.at + 1 });
+    else {
+      setRedraw(null);
+      notify.success(`Redrew ${redraw.queue.length} ${redraw.queue.length === 1 ? "icon" : "icons"}.`);
+      router.refresh();
+    }
+  };
+
+  /** The person moved the camera in the preview: Turn around, Look from and Zoom follow it. */
+  const takeView = (v: { azimuthDeg: number; elevationDeg: number; zoom: number }) => {
+    const turn = ((((Math.round(v.azimuthDeg) + 180) % 360) + 360) % 360) - 180;
+    set({ azimuthDeg: turn, elevationDeg: Math.max(-89, Math.min(89, Math.round(v.elevationDeg))), zoom: Math.max(0.2, Math.min(10, Math.round(v.zoom * 100) / 100)) });
+  };
+
+  /** Keep a small picture of the preview, as it is now, as the icon of this layout (shown where the layout is listed). */
+  const setIcon = () => {
+    if (!draft.id) return notify.error("Save the layout first, then set its icon.");
+    const png = view.current?.snapshot({ width: ICON_PX, height: ICON_PX });
+    if (!png) return notify.error("The 3D view is not ready yet.");
+    run(() => setLayoutIcon(draft.id, png));
+  };
+  const iconUrl = layouts.find((l) => l.id === draft.id)?.iconUrl ?? null;
+
+
   return (
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border bg-card px-4 py-3 shadow-xs">
+        <label className="flex items-center gap-2 text-sm font-medium">
+          Box
+          <select value={boxId} disabled={pending || redraw !== null} onChange={(e) => changeLook("box", e.target.value)} aria-label="Box shape for the preview and the icons" className={`${input} font-normal`}>
+            {SAMPLE_BOXES.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm font-medium">
+          Style
+          <span aria-hidden className="size-5 shrink-0 rounded-full border" style={{ background: styleCss(style) }} />
+          <select value={styleId} disabled={pending || redraw !== null} onChange={(e) => changeLook("style", e.target.value)} aria-label="Colour style of the box in the preview and the icons" className={`${input} font-normal`}>
+            {SAMPLE_STYLES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+          </select>
+        </label>
+        <p className="text-xs text-muted-foreground">{redraw ? `Redrawing icons ${redraw.at + 1} of ${redraw.queue.length}…` : "The preview and the icons of all samples are drawn with this box and style. Changing either redraws the saved icons."}</p>
+      </div>
+      {redraw ? (
+        <div aria-hidden className="pointer-events-none fixed top-0 -left-[2000px] size-[300px]">
+          {sample ? <CartonView key={`${redraw.queue[redraw.at]!.id}-${boxId}`} ref={redrawView} className="size-full" geo={sample} texture={look?.canvas ?? null} textureRect={look?.rect ?? null} progress={1} outsideColor={style.outside} insideColor={style.inside} layout={redraw.queue[redraw.at]!.spec} boardGrain={1} onReady={() => void iconReady()} /> : null}
+        </div>
+      ) : null}
     <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)] lg:items-start">
       <aside className="flex flex-col gap-3">
         <ol aria-label="Layouts" className="flex flex-col gap-1 rounded-xl border bg-card p-1.5 shadow-xs">
@@ -150,12 +220,20 @@ export function LayoutManager({ layouts }: { layouts: LayoutItem[] }) {
             const active = draft.id === l.id;
             return (
               <li key={l.id} className={`flex items-center gap-1 rounded-lg ${active ? "bg-accent" : "hover:bg-muted/60"}`}>
-                <button type="button" onClick={() => pick(l)} aria-current={active ? "true" : undefined} className="min-w-0 flex-1 px-3 py-2 text-left">
+                <button type="button" onClick={() => pick(l)} aria-current={active ? "true" : undefined} className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-1.5 text-left">
+                  {l.iconUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- the layout's own small PNG
+                    <img src={l.iconUrl} alt="" className="size-10 shrink-0 rounded border bg-muted object-cover" />
+                  ) : (
+                    <span className="grid size-10 shrink-0 place-items-center rounded border border-dashed text-muted-foreground"><ImageIcon className="size-4" aria-hidden /></span>
+                  )}
+                  <span className="min-w-0">
                   <span className={`block truncate text-sm ${active ? "font-medium" : ""}`}>{l.name}</span>
                   <span className="block truncate text-xs text-muted-foreground">{(() => {
                       const n = layoutInstances(l.spec).length;
                       return `${n} ${n === 1 ? "box" : "boxes"}${l.spec.mirror.on ? ", mirror" : ""}`;
                     })()}</span>
+                  </span>
                 </button>
                 <button type="button" aria-label={`Move ${l.name} up`} disabled={pending || i === 0} className="grid size-7 place-items-center rounded-md hover:bg-background disabled:opacity-30" onClick={() => run(() => moveLayout(l.id, "up"))}><ArrowUp className="size-3.5" /></button>
                 <button type="button" aria-label={`Move ${l.name} down`} disabled={pending || i === layouts.length - 1} className="mr-1 grid size-7 place-items-center rounded-md hover:bg-background disabled:opacity-30" onClick={() => run(() => moveLayout(l.id, "down"))}><ArrowDown className="size-3.5" /></button>
@@ -174,17 +252,20 @@ export function LayoutManager({ layouts }: { layouts: LayoutItem[] }) {
       </aside>
 
       <section aria-label="Layout settings" className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start">
-        <div className="relative overflow-hidden rounded-xl border bg-muted/40 xl:order-2 xl:sticky xl:top-24">
-          <label className="absolute top-2 right-2 z-10 flex items-center gap-1.5 rounded-lg bg-background/90 px-2 py-1 text-xs font-medium shadow-sm ring-1 ring-black/5 backdrop-blur-sm">
-            <span className="text-muted-foreground">Box</span>
-            <select value={boxId} onChange={(e) => setBoxId(e.target.value)} aria-label="Box shape of the preview" className="h-7 rounded-md border border-input bg-background px-1.5 text-xs font-normal">
-              {SAMPLE_BOXES.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
-            </select>
-          </label>
-          {sample ? <CartonView ref={view} className="h-[22rem] w-full" geo={sample} texture={null} textureRect={null} progress={1} outsideColor="#c9a574" insideColor="#bd9763" layout={spec} boardGrain={1} /> : null}
+        <div className="overflow-hidden rounded-xl border bg-muted/40 xl:order-2 xl:sticky xl:top-24">
+          {sample ? <CartonView ref={view} className="h-[22rem] w-full" geo={sample} texture={look?.canvas ?? null} textureRect={look?.rect ?? null} progress={1} outsideColor={style.outside} insideColor={style.inside} layout={spec} boardGrain={1} onUserView={takeView} /> : null}
           <div className="flex items-center justify-between gap-2 border-t bg-background px-3 py-2">
-            <p className="text-xs text-muted-foreground">Drag to look around, then take the camera.</p>
-            <Button type="button" variant="outline" size="sm" onClick={useCamera}><Camera className="size-3.5" /> Use this camera</Button>
+            {iconUrl ? (
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                {/* eslint-disable-next-line @next/next/no-img-element -- the layout's own small PNG */}
+                <img src={iconUrl} alt="" className="size-10 rounded border object-cover" />
+                Icon
+                <button type="button" aria-label="Remove the icon" title="Remove the icon" disabled={pending} onClick={() => draft.id && run(() => clearLayoutIcon(draft.id))} className="grid size-6 place-items-center rounded-md hover:bg-muted"><X className="size-3.5" aria-hidden /></button>
+              </span>
+            ) : <span />}
+            <div className="flex flex-wrap justify-end gap-1.5">
+              <Button type="button" variant="outline" size="sm" disabled={pending} onClick={setIcon} title={draft.id ? "Use the 3D view as it is now as the icon of this layout" : "Save the layout first"}><ImageIcon className="size-3.5" /> Set this view as icon</Button>
+            </div>
           </div>
         </div>
 
@@ -329,6 +410,7 @@ export function LayoutManager({ layouts }: { layouts: LayoutItem[] }) {
           </div>
         </div>
       </section>
+    </div>
     </div>
   );
 }

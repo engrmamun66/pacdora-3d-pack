@@ -53,9 +53,13 @@ export function TemplatePreview({
                 aria-selected={on}
                 title={l.name}
                 onClick={() => setLayoutId(l.id)}
-                className={`h-9 shrink-0 rounded-lg px-3 text-left text-sm font-medium whitespace-nowrap transition-colors ${on ? "bg-[var(--ink)] text-white" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                className={`flex shrink-0 flex-col gap-1 rounded-lg px-1.5 py-1.5 text-left text-sm font-medium whitespace-nowrap transition-colors ${l.iconUrl ? "w-20 sm:w-full" : "h-9 justify-center px-3"} ${on ? "bg-[var(--ink)] text-white" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
               >
-                Sample {i + 1}
+                {l.iconUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- the layout's icon, a small PNG
+                  <img src={l.iconUrl} alt="" className={`aspect-square w-full rounded-md object-cover ${on ? "ring-1 ring-white/40" : "border"}`} />
+                ) : null}
+                <span className={l.iconUrl ? "px-1" : ""}>Sample {i + 1}</span>
               </button>
             );
           })}

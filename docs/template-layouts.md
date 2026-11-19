@@ -21,3 +21,9 @@ The shared (portal) template page shows the box in 3D only. Two admin-managed th
 - A customer's pick is shown at once as the CSS background behind the (see-through) 3D canvas, with the box's shadow on it. It is not saved: not in the order, not in the project.
 
 Layouts are our own arrangements. No third-party mock-up images or layouts are copied.
+
+## Layout icons
+
+- Each layout can have an icon: a square 3D picture (300 x 300 PNG), kept in storage as `layouts/<uuid>.png` (`template_layout.iconKey`) and served publicly by `/api/portal/layout-icons/[id]`. It shows in the admin list and in the Sample tabs of the shared template page.
+- "Set this view as icon" (admin, under the preview) takes the preview as it is now. The layout must be saved first.
+- The "Box" drop-down above the preview chooses the sample box (`lib/sample-boxes.ts`) the preview and all icons use. It is saved in `site_setting` (`layout-icon-box`). Changing it redraws every saved icon with the new box: a hidden 3D view shows each layout in turn (with the layout's own camera) and its picture replaces the icon.

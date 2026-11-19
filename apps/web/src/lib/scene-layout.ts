@@ -280,4 +280,6 @@ export interface LayoutItem {
   /** Switched on for customers. */
   active: boolean;
   spec: LayoutSpec;
+  /** Address of the layout's icon (a small 3D picture the admin took), or null. */
+  iconUrl: string | null;
 }
