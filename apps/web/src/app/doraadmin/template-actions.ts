@@ -41,21 +41,26 @@ export async function setTemplateStatus(slug: string, status: string): Promise<A
 /**
  * Delete an imported (SVG) template. Built-in templates come from code and would
  * return on the next seed, so they can only be hidden. Templates that already
- * have client projects are kept (hide them instead).
+ * have client projects are kept (hide them instead), unless `force` is set (the "Delete from everywhere" button
+ * of the developer view): then the client projects that use it go too, with their 3D pictures and share links.
+ * Orders keep their lines (the link to the project is just cleared).
  */
-export async function deleteTemplate(slug: string): Promise<ActionResult> {
+export async function deleteTemplate(slug: string, force = false): Promise<ActionResult & { inUse?: number }> {
   await requireSuperAdmin();
   const s = slugParam.safeParse(slug);
   if (!s.success) return { ok: false, message: "Invalid request." };
   const t = await db.template.findUnique({ where: { id: s.data }, select: { source: true, backgroundKey: true, productImageKey: true, _count: { select: { projects: true } } } });
   if (!t) return { ok: false, message: "Template not found." };
   if (t.source !== "svg") return { ok: false, message: "Built-in templates cannot be deleted. Hide it instead." };
-  if (t._count.projects > 0) return { ok: false, message: `${t._count.projects} client project(s) use this template. Hide it instead of deleting.` };
-  await db.template.delete({ where: { id: s.data } });
-  if (t.backgroundKey) await storage.delete(t.backgroundKey).catch(() => undefined); // the picture goes with the template
-  if (t.productImageKey) await storage.delete(t.productImageKey).catch(() => undefined);
+  const inUse = t._count.projects;
+  if (inUse > 0 && force !== true) return { ok: false, message: `${inUse} client project(s) use this template. Hide it instead of deleting.`, inUse };
+  const pictures = inUse > 0 ? await db.projectCapture.findMany({ where: { project: { templateId: s.data } }, select: { storageKey: true } }) : [];
+  await db.$transaction([db.project.deleteMany({ where: { templateId: s.data } }), db.template.delete({ where: { id: s.data } })]);
+  for (const key of [t.backgroundKey, t.productImageKey, ...pictures.map((c) => c.storageKey)]) {
+    if (key) await storage.delete(key).catch(() => undefined); // the pictures go with the template
+  }
   refresh(s.data);
-  return { ok: true, message: "Template deleted." };
+  return { ok: true, message: inUse > 0 ? `Template and ${inUse} client project(s) deleted.` : "Template deleted." };
 }
 
 /** A copy of a stored picture under a new key (the copy owns its file, so deleting one template never breaks the other). */

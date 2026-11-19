@@ -4,7 +4,7 @@ import { db } from "@/server/db";
 import { requireSuperAdmin } from "@/server/admin";
 import { fmtDateTime } from "@/lib/format-date";
 
-export const metadata = { title: "Client Customers" };
+export const metadata = { title: "Clients Customers" };
 
 const PAGE_SIZE = 25;
 
@@ -40,7 +40,7 @@ export default async function AdminClientCustomers({ searchParams }: PageProps<"
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Client Customers"
+        title="Clients Customers"
         description={`${total} ${total === 1 ? "customer" : "customers"} signed up on Clients' portals${q ? ` matching "${q}"` : ""}. Times are Bangladesh time.`}
         actions={
           <form className="flex gap-2" role="search">

@@ -36,7 +36,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
           { href: "/doraadmin/users", label: "All Clients", icon: Users },
           { href: "/doraadmin/users/templates", label: "Client Templates", icon: LayoutTemplate },
           { href: "/doraadmin/users/orders", label: "Client Orders", icon: ClipboardList },
-          { href: "/doraadmin/users/customers", label: "Client Customers", icon: UserRound },
+          { href: "/doraadmin/users/customers", label: "Clients Customers", icon: UserRound },
         ],
       },
     ],

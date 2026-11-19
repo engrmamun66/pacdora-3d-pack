@@ -127,7 +127,7 @@ export default async function AdminTemplates({ searchParams }: PageProps<"/doraa
                   <td className="px-4 py-3 text-xs">{t.source === "svg" ? "Imported SVG" : "Built-in"}</td>
                   <td className="px-4 py-3"><span className={`rounded-full px-2 py-0.5 text-xs ${t.status === "published" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300" : "bg-muted text-muted-foreground"}`}>{templateStatusLabel(t.status)}</span></td>
                   <td className="px-4 py-3 whitespace-nowrap text-xs">{date(t.updatedAt)}</td>
-                  <td className="px-4 py-3"><TemplateRowActions slug={t.id} name={t.name} source={t.source} status={templateStatus(t.status)} has3d={t.source === "builtin" || t.hasFold} /></td>
+                  <td className="px-4 py-3"><TemplateRowActions slug={t.id} name={t.name} source={t.source} status={templateStatus(t.status)} has3d={t.source === "builtin" || t.hasFold} dev={str("dev") === "true"} /></td>
                 </tr>
               );
             })}

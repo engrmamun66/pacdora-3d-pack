@@ -10,7 +10,7 @@ import { notify } from "@/lib/notify";
 import { TEMPLATE_STATUSES, type TemplateStatus } from "@/lib/template-status";
 import { ViewSettingsButton } from "@/components/templates-admin/view-settings-dialog";
 
-export function TemplateRowActions({ slug, name, source, status, has3d }: { slug: string; name: string; source: string; status: TemplateStatus; has3d: boolean }) {
+export function TemplateRowActions({ slug, name, source, status, has3d, dev = false }: { slug: string; name: string; source: string; status: TemplateStatus; has3d: boolean; /** The page was opened with ?dev=true: a template in use can be deleted from everywhere. */ dev?: boolean }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const run = (fn: () => Promise<{ ok: boolean; message: string }>) =>
@@ -71,7 +71,28 @@ export function TemplateRowActions({ slug, name, source, status, has3d }: { slug
           aria-label={`Delete ${name}`}
           className="grid size-8 place-items-center rounded-md border border-destructive/40 text-destructive hover:bg-destructive/10 disabled:opacity-50"
           onClick={async () => {
-            if (await confirmAction({ title: `Delete "${name}"?`, description: "The template is removed. This cannot be undone." })) run(() => deleteTemplate(slug));
+            if (!(await confirmAction({ title: `Delete "${name}"?`, description: "The template is removed. This cannot be undone." }))) return;
+            if (!dev) return run(() => deleteTemplate(slug));
+            // Developer view: when client projects use it, say so in a box and offer to delete it from everywhere.
+            start(async () => {
+              try {
+                const r = await deleteTemplate(slug);
+                if (r.ok) {
+                  notify.success(r.message);
+                  router.refresh();
+                } else if (r.inUse) {
+                  if (await confirmAction({ title: "Template is in use", description: `${r.message} "Delete from everywhere" also deletes those client projects, with their 3D pictures and share links. This cannot be undone.`, confirmLabel: "Delete from everywhere" })) {
+                    const f = await deleteTemplate(slug, true);
+                    if (f.ok) {
+                      notify.success(f.message);
+                      router.refresh();
+                    } else notify.error(f.message);
+                  }
+                } else notify.error(r.message);
+              } catch {
+                notify.error("Could not complete the action. Please try again.");
+              }
+            });
           }}
         >
           <Trash2 className="size-4" />
