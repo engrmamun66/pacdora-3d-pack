@@ -29,13 +29,21 @@ export function Preview3D({
   watermark = null,
   projectId,
   layouts = [],
+  layoutId,
+  onLayoutId,
   onPanelHover,
+  beforeCapture,
 }: {
+  /** Saves the design before a 3D picture is taken (the picture keeps a copy of the design). */
+  beforeCapture?: () => Promise<void>;
   /** The pointer is over a panel of the box in the 3D view (null = over none). */
   onPanelHover?: (id: string | null) => void;
   /** With a saved project: layouts to show the box in, and the button that keeps 3D pictures of it. */
   projectId?: string;
   layouts?: LayoutItem[];
+  /** The layout shown (null = one box) and how to change it: the page picks it in its own bar. */
+  layoutId: string | null;
+  onLayoutId: (id: string | null) => void;
   watermark?: WatermarkSpec | null;
   initialView?: ViewSettings | null;
   geo: DielineGeometry;
@@ -49,7 +57,6 @@ export function Preview3D({
   const localRef = useRef<CartonViewHandle>(null);
   const inner = viewRef ?? localRef;
   const anim = useRef<number | null>(null);
-  const [layoutId, setLayoutId] = useState<string | null>(null);
   const layout = layouts.find((l) => l.id === layoutId)?.spec ?? null;
 
   // Re-render the texture shortly after the artwork or board colour changes.
@@ -99,7 +106,7 @@ export function Preview3D({
       />
       <GridToggle viewRef={inner} />
       <RotationControls viewRef={inner} />
-      {projectId ? <CaptureBar projectId={projectId} viewRef={inner} layouts={layouts} layoutId={layoutId} onLayout={setLayoutId} progress={progress} onProgress={setProgress} /> : null}
+      {projectId ? <CaptureBar projectId={projectId} viewRef={inner} layouts={layouts} layoutId={layoutId} onLayout={onLayoutId} progress={progress} onProgress={setProgress} {...(beforeCapture ? { beforeShot: beforeCapture } : {})} /> : null}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t bg-background px-3 py-2 text-xs">
         <label className="flex min-w-[150px] flex-1 items-center gap-2.5">
           <span className="font-medium text-muted-foreground">Fold</span>

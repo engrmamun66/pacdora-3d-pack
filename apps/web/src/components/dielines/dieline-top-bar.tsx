@@ -357,7 +357,6 @@ export function DielineTopBar({
   const share = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
-      notify.success("Link copied", { description: "Anyone with an account can open this template." });
     } catch {
       notify.error("Could not copy the link", { description: window.location.href });
     }

@@ -1,8 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
-import type { PortalScene } from "@/server/portal";
+import { useEffect, useMemo, useState } from "react";
+import type { CaptureDesign, PortalScene } from "@/server/portal";
+import { getCaptureDesign } from "./capture-actions";
+import { useSampleDesign } from "./sample-design";
 import type { FeaturedBackground } from "@/server/layouts";
 import type { LayoutItem } from "@/lib/scene-layout";
 
@@ -36,14 +38,48 @@ export function TemplatePreview({
   const [foldable, setFoldable] = useState(true);
   const [layoutId, setLayoutId] = useState<string | null>(layouts[0]?.id ?? null);
   const [backgroundId, setBackgroundId] = useState<string | null>(null);
-  const layout = layouts.find((l) => l.id === layoutId) ?? null;
   const background = backgrounds.find((b) => b.id === backgroundId) ?? null;
+
+  // A design sample picked under the name: its design is fetched, and the 3D view shows it (box size, artwork, backgrounds, colours), with its layout, fold and camera.
+  const { selected } = useSampleDesign();
+  const sample = scene?.captures.find((c) => c.id === selected) ?? null;
+  const [loaded, setLoaded] = useState<{ id: string; design: CaptureDesign | null } | null>(null);
+  useEffect(() => {
+    if (!sample) return;
+    let live = true;
+    getCaptureDesign(userHash, sample.id)
+      .then((design) => live && setLoaded({ id: sample.id, design }))
+      .catch(() => live && setLoaded({ id: sample.id, design: null }));
+    return () => {
+      live = false;
+    };
+  }, [userHash, sample]);
+  const ready = sample !== null && loaded?.id === sample.id;
+  // One object while nothing changes: the 3D view rebuilds its box whenever it gets a new one.
+  const shown = useMemo<PortalScene | null>(
+    () => {
+      if (!scene || !sample || !ready) return scene;
+      // The sample's design (box size, artwork, backgrounds, colours), folded, with the template's own camera.
+      const design = loaded.design;
+      return { ...scene, ...(design ?? {}), threeD: { ...(design?.threeD ?? scene.threeD), foldProgress: 1 }, initialView: scene.initialView ? { ...scene.initialView, progress: 1 } : null };
+    },
+    [scene, sample, ready, loaded],
+  );
+  // The layout is the visitor's pick in the tabs below: it stays whichever design sample is open.
+  const layout = layouts.find((l) => l.id === layoutId) ?? null;
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <div className="paper-grid sheet marks relative aspect-[4/3] overflow-hidden">
-        {scene ? (
-          <Scene3D userHash={userHash} scene={scene} onFoldable={setFoldable} foldable={foldable} layout={layout?.spec ?? null} backgroundUrl={background ? `/api/portal/backgrounds/${background.id}` : null} />
+        {sample && ready && !loaded.design ? (
+          // A sample taken before samples kept their design: only its picture is true to it, so that is what is shown.
+          <div className="flex h-full flex-col items-center justify-center gap-2 p-3">
+            {/* eslint-disable-next-line @next/next/no-img-element -- the saved picture, exactly as the Client took it */}
+            <img src={sample.url} alt="Design sample" className="min-h-0 max-w-full flex-1 object-contain" />
+            <p className="text-xs text-muted-foreground">This sample is a picture only.</p>
+          </div>
+        ) : shown ? (
+          <Scene3D key={sample && ready ? sample.id : "current"} userHash={userHash} scene={shown} onFoldable={setFoldable} foldable={foldable} layout={layout?.spec ?? null} backgroundUrl={background ? `/api/portal/backgrounds/${background.id}` : null} />
         ) : (
           <div className="flex h-full items-center justify-center p-6">
             {thumbnail ? (
@@ -115,7 +151,7 @@ export function TemplatePreview({
 }
 
 /** The picture of a Sample that has no icon yet: a soft tile with a line drawing of a box. */
-function SamplePlaceholder() {
+export function SamplePlaceholder() {
   return (
     <svg viewBox="0 0 64 64" className="size-full" role="img" aria-label="No preview picture yet">
       <defs>

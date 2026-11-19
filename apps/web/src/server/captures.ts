@@ -3,6 +3,8 @@ import "server-only";
 import { sniffImage } from "@/lib/image-sniff";
 import { readViewSettings, type ViewSettings } from "@/lib/view-settings";
 import { imageSize, imageSizeProblem } from "@packaging/vector-scene/images";
+import { parseProjectDoc } from "@packaging/schema";
+import { db } from "./db";
 
 /** Most 3D pictures one project keeps, and the biggest one (a PNG at card size is far smaller). */
 export const MAX_CAPTURES = 12;
@@ -80,4 +82,20 @@ export async function readCaptureForm(request: Request): Promise<CaptureForm | R
     }
   }
   return { bytes, layoutName, progress, view };
+}
+
+/**
+ * The design a project has now, kept with a 3D picture so a shared page can show that sample as it was designed (box size, windows,
+ * artwork, backgrounds, colours). Read from the saved project on the server, so it is never taken on the client's word. Null when the
+ * project file cannot be read.
+ */
+export async function captureDesign(projectId: string, userId: string): Promise<object | null> {
+  const row = await db.project.findFirst({ where: { id: projectId, userId }, select: { projectData: true } });
+  if (!row) return null;
+  try {
+    const doc = parseProjectDoc(row.projectData);
+    return { params: doc.template.params, windows: doc.windows ?? [], artwork: doc.artwork, threeD: doc.threeD };
+  } catch {
+    return null;
+  }
 }

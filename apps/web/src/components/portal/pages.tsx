@@ -9,6 +9,7 @@ import { portalHome, portalOrder } from "@/lib/portal-paths";
 import { TemplateGrid } from "./template-grid";
 import { AddToCart } from "./add-to-cart";
 import { TemplatePreview } from "./template-preview";
+import { DesignSamples, SampleDesignProvider } from "./sample-design";
 import { listFeaturedBackgrounds, listLayouts } from "@/server/layouts";
 import { Crumbs, PortalCrumbs, RememberList } from "./crumbs";
 import { StudioBand } from "@/components/studio/studio-band";
@@ -69,6 +70,7 @@ export async function DetailPage({ params }: { params: Promise<{ userHash: strin
           { label: t.name },
         ]}
       />
+      <SampleDesignProvider>
       <div className="grid gap-6 md:grid-cols-[1fr_24rem]">
         <TemplatePreview userHash={userHash} name={t.name} thumbnail={t.thumbnail} scene={scene} layouts={layouts} backgrounds={backgrounds} />
         <div className="flex flex-col gap-4">
@@ -76,6 +78,7 @@ export async function DetailPage({ params }: { params: Promise<{ userHash: strin
             <h1 className="text-3xl leading-tight">{t.name}</h1>
             <p className="mt-1 font-mono text-sm text-muted-foreground">{t.templateName}</p>
           </div>
+          <DesignSamples captures={scene?.captures ?? []} />
           {t.category || t.tags.length ? (
             <div className="flex flex-wrap gap-1.5">
               {t.category ? <span className="rounded-full bg-[var(--cut)]/10 px-2.5 py-0.5 text-xs text-[var(--cut)]">{t.category}</span> : null}
@@ -86,6 +89,7 @@ export async function DetailPage({ params }: { params: Promise<{ userHash: strin
           <p className="px-1 text-xs text-muted-foreground">No payment now. Send your order and {owner.title} will contact you to agree the details.</p>
         </div>
       </div>
+      </SampleDesignProvider>
     </div>
   );
 }

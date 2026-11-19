@@ -39,7 +39,7 @@ import type { ViewSettings } from "@/lib/view-settings";
 import { type Artwork, type ArtworkObject, type BoxBackground, MAX_BACKGROUNDS, backgroundsOf, facesOf } from "@packaging/schema";
 import { saveArtwork, saveThreeD } from "@/app/editor/[id]/actions";
 import type { LayoutItem } from "@/lib/scene-layout";
-import { PreviewLinkButton, PreviewOpenButton } from "./preview-link-button";
+import { PreviewLinkButton, PreviewModalButton, PreviewOpenButton } from "./preview-link-button";
 import { confirmAction } from "@/lib/confirm";
 import { Preview3D, type ThreeDSettings } from "@/components/viewer3d/preview-3d";
 import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
@@ -51,6 +51,7 @@ import { UserMenuClient } from "@/components/app/user-menu-client";
 import { EditorSkeletonOverlay } from "./editor-skeleton";
 import { ArtworkPicker, canDrop, readDragged, type Dragged, type PickerLibraryItem } from "./artwork-picker";
 import { PropertiesPanel } from "./properties-panel";
+import { LayoutPicker } from "./layout-picker";
 import { RULER_SIZE, Ruler } from "./rulers";
 
 type Asset = { id: string; fileName: string };
@@ -320,6 +321,8 @@ export function ArtworkEditor({
   const hostEl = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const bgFileInput = useRef<HTMLInputElement>(null);
+  /** The background picture whose image the next chosen file replaces (null = the file is added as a new one). */
+  const bgReplace = useRef<number | null>(null);
   const ctl = useRef<EditorController | null>(null);
 
   const [objects, setObjects] = useState<ArtworkObject[]>(initialArtwork.objects);
@@ -410,6 +413,8 @@ export function ArtworkEditor({
   const [showExport, setShowExport] = useState(false);
   const [threeD, setThreeD] = useState<ThreeDSettings>(initialThreeD);
   const view3d = useRef<CartonViewHandle>(null);
+  /** The layout the 3D view shows (null = one box); picked in the right bar. */
+  const [layoutId, setLayoutId] = useState<string | null>(null);
   // 3D on/off is animated: the 3D column grows or shrinks (drawer-like), the dieline follows and is re-fitted on every frame.
   // `expanded` drives the column width, `animating` switches the CSS transition on (never while dragging the divider),
   // `exited` keeps the preview mounted until the closing animation is over.
@@ -684,7 +689,6 @@ export function ArtworkEditor({
       const json = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(json.error ?? `Delete failed (${res.status}).`);
       setAssets((a) => a.filter((x) => x.id !== id));
-      notify.success("Picture deleted.");
     } catch (e) {
       notify.error((e as Error).message);
     }
@@ -696,22 +700,21 @@ export function ArtworkEditor({
     if (ok.length < files.length) notify.error(`${files.length - ok.length} file${files.length - ok.length > 1 ? "s were" : " was"} skipped: only PNG or JPEG can be added.`);
     if (ok.length === 0) return;
     setUploading(true);
-    let added = 0;
     for (const [i, f] of ok.entries()) {
       const a = await uploadOne(f);
       if (!a) continue;
-      added++;
       if (opts.place) await ctl.current?.addImage(a.id, a.fileName, opts.at ? { x: opts.at.x + i * 24, y: opts.at.y + i * 24 } : undefined);
     }
     setUploading(false);
-    if (added > 1 || (added === 1 && !opts.place)) notify.success(added === 1 ? "Picture added to Uploads." : `${added} pictures added to Uploads.`);
   };
 
   const uploadBackground = async (file: File) => {
     setUploading(true);
+    const replace = bgReplace.current ?? undefined;
+    bgReplace.current = null;
     const a = await uploadOne(file);
     setUploading(false);
-    if (a) await addBackground(a.id);
+    if (a) await addBackground(a.id, replace);
   };
 
   /** Put a picture on the dieline: an upload directly, a library picture after its private copy is made. */
@@ -728,20 +731,22 @@ export function ArtworkEditor({
   };
 
   /** Put a picture on top of the background stack. The first one fills the box; later ones start smaller (fit inside, 60 %) so the ones below still show. */
-  const addBackground = async (assetId: string) => {
+  const addBackground = async (assetId: string, replace?: number) => {
+    // Replace: only the image changes; fit, size, place, repeat and opacity of that background stay.
+    if (replace !== undefined) return void (await ctl.current?.patchBackground(replace, { assetId }));
     const first = backgrounds.length === 0;
     await ctl.current?.addBackground({ assetId, fit: first ? "cover" : "contain", scale: first ? 1 : 0.6, dx: 0, dy: 0, opacity: 1 });
   };
 
   /** A ready-made background picture: its private copy is made first, like for any library picture, then it joins the stack. */
-  const pickLibraryBackground = async (pictureId: string) => {
+  const pickLibraryBackground = async (pictureId: string, replace?: number) => {
     try {
       const res = await fetch("/api/assets/from-library", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ artworkId: pictureId, projectId }) });
       const json = (await res.json().catch(() => ({}))) as { asset?: Asset; error?: string };
       if (!res.ok || !json.asset) throw new Error(json.error ?? `Could not use this picture (${res.status}).`);
       const copy = json.asset;
       setLibNames((n) => ({ ...n, [copy.id]: copy.fileName }));
-      await addBackground(copy.id);
+      await addBackground(copy.id, replace);
     } catch (e) {
       notify.error((e as Error).message);
     }
@@ -845,6 +850,7 @@ export function ArtworkEditor({
         <div className="ml-auto flex items-center gap-2">
           {previewLink ? (
             <>
+              <PreviewModalButton path={previewLink.path} active={previewLink.active} beforeOpen={() => saver.settle(ctl.current?.toArtwork()).catch(() => undefined)} />
               <PreviewLinkButton path={previewLink.path} active={previewLink.active} />
               <PreviewOpenButton path={previewLink.path} active={previewLink.active} />
             </>
@@ -1089,7 +1095,7 @@ export function ArtworkEditor({
             {/* Clipped drawer: the preview keeps its full width while the column grows, so it slides in instead of being squeezed (no re-layout of the 3D canvas per frame). */}
             <div className={`absolute inset-0 overflow-hidden border-l transition-opacity motion-reduce:transition-none ${animating ? "duration-300" : "duration-0"} ${show3d && expanded ? "opacity-100" : "opacity-0"}`}>
               <div className="absolute inset-y-0 right-0" style={{ width: openW }}>
-                <Preview3D initialView={initialView} geo={geo} artwork={artworkForPreview} settings={threeD} onSettings={updateThreeD} viewRef={view3d} watermark={watermark} projectId={projectId} layouts={layouts} onPanelHover={(id) => ctl.current?.setHighlight(id)} />
+                <Preview3D initialView={initialView} geo={geo} artwork={artworkForPreview} settings={threeD} onSettings={updateThreeD} viewRef={view3d} watermark={watermark} projectId={projectId} layouts={layouts} layoutId={layoutId} onLayoutId={setLayoutId} beforeCapture={() => saver.settle(ctl.current?.toArtwork()).catch(() => undefined)} onPanelHover={(id) => ctl.current?.setHighlight(id)} />
               </div>
             </div>
           </section>
@@ -1127,14 +1133,18 @@ export function ArtworkEditor({
               library: backgroundLibrary,
               uploading,
               onPatch: (i, p) => void c?.patchBackground(i, p),
-              onPick: (assetId) => void addBackground(assetId),
-              onPickLibrary: (id) => void pickLibraryBackground(id),
+              onPick: (assetId, replace) => void addBackground(assetId, replace),
+              onPickLibrary: (id, _name, replace) => void pickLibraryBackground(id, replace),
               editing: bgEditing,
               onToggleEdit: () => ctl.current?.setBackgroundEdit(!ctl.current.isBackgroundEditing()),
-              onUpload: () => bgFileInput.current?.click(),
+              onUpload: (replace) => {
+                bgReplace.current = replace ?? null;
+                bgFileInput.current?.click();
+              },
               onDeleteAsset: (id, name) => void deleteAsset(id, name),
             }}
           />
+          {threeVisible && layouts.length > 0 ? <LayoutPicker layouts={layouts} layoutId={layoutId} onPick={setLayoutId} /> : null}
         </aside>
       </div>
       {showExport ? (

@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { ClientProjectActions, type ProjectLink } from "@/components/admin/client-project-actions";
 import { db } from "@/server/db";
 import { requireSuperAdmin } from "@/server/admin";
-import { templateHash } from "@/server/share-hash";
+import { isHash, templateHash } from "@/server/share-hash";
 import { parseDay } from "@/lib/day";
 import { portalTemplate } from "@/lib/portal-paths";
 
@@ -48,6 +48,9 @@ export default async function AdminCustomerTemplates({ searchParams }: PageProps
     ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
     ...(to ? { lt: new Date(new Date(`${to}T00:00:00.000Z`).getTime() + 86_400_000) } : {}),
   };
+  // A template hash is not stored (it is calculated from the project id), so a search that holds one (or a shared address that ends in one) is matched by calculating the hash of every project.
+  const wantedHashes = new Set((q.toLowerCase().match(/[a-z0-9]{12}/g) ?? []).filter(isHash));
+  const hashIds = wantedHashes.size ? (await db.project.findMany({ select: { id: true } })).filter((p) => wantedHashes.has(templateHash(p.id))).map((p) => p.id) : [];
   const where = {
     ...(tpl ? { templateId: tpl } : {}),
     ...(tid ? { templateId: tpl ? { equals: tpl, contains: tid, mode: "insensitive" as const } : { contains: tid, mode: "insensitive" as const } } : {}),
@@ -59,6 +62,7 @@ export default async function AdminCustomerTemplates({ searchParams }: PageProps
             { name: { contains: q, mode: "insensitive" as const } },
             { user: { email: { contains: q, mode: "insensitive" as const } } },
             { user: { name: { contains: q, mode: "insensitive" as const } } },
+            ...(hashIds.length ? [{ id: { in: hashIds } }] : []),
           ],
         }
       : {}),
@@ -167,7 +171,10 @@ export default async function AdminCustomerTemplates({ searchParams }: PageProps
             {rows.map((p) => (
               <tr key={p.id} className="border-b transition-colors last:border-0 hover:bg-muted/40 has-[[data-row-check]:checked]:bg-muted/60">
                 <td className="py-3 pr-0 pl-4"><RowCheck id={p.id} name={p.name} /></td>
-                <td className="px-4 py-3 font-medium">{p.name}</td>
+                <td className="px-4 py-3">
+                  <p className="font-medium">{p.name}</p>
+                  <p className="text-xs text-muted-foreground" title="Template hash: search for it above, it is the last part of the shared address">T-hash <code className="font-mono">{templateHash(p.id)}</code></p>
+                </td>
                 <td className="px-4 py-3">
                   <p><Link href={`/doraadmin/users/${p.userId}`} className="underline-offset-4 hover:underline">{p.user.name}</Link>{p.user.banned ? <span className="ml-1.5 rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive">Suspended</span> : null}</p>
                   <p className="text-xs text-muted-foreground">{p.user.email}</p>

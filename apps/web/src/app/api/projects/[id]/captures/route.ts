@@ -5,7 +5,8 @@ import { db } from "@/server/db";
 import { isSameOrigin } from "@/server/same-origin";
 import { LIMITS, takeToken } from "@/server/limits";
 import { storage } from "@/server/storage";
-import { MAX_CAPTURES, captureUrl, guarded, readCaptureForm, type CaptureInfo } from "@/server/captures";
+import { MAX_CAPTURES, captureDesign, captureUrl, guarded, readCaptureForm, type CaptureInfo } from "@/server/captures";
+import { Prisma } from "@/generated/prisma/client";
 import { readViewSettings } from "@/lib/view-settings";
 
 const fail = (status: number, message: string) => NextResponse.json({ error: message }, { status });
@@ -43,13 +44,14 @@ async function create(request: Request, ctx: RouteContext<"/api/projects/[id]/ca
   if (form instanceof Response) return form;
   const { bytes, layoutName, progress, view } = form;
 
+  const design = await captureDesign(id, userId);
   const storageKey = `captures/${randomUUID()}.png`;
   const row = await db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`capture:${id}`}, 0))`;
     const count = await tx.projectCapture.count({ where: { projectId: id } });
     if (count >= MAX_CAPTURES) return null;
     return tx.projectCapture.create({
-      data: { projectId: id, userId, storageKey, sizeBytes: bytes.length, layoutName, progress, ...(view ? { view } : {}), cover: count === 0 },
+      data: { projectId: id, userId, storageKey, sizeBytes: bytes.length, layoutName, progress, ...(view ? { view } : {}), ...(design ? { design: design as Prisma.InputJsonObject } : {}), cover: count === 0 },
       select: { id: true, layoutName: true, progress: true, view: true, cover: true },
     });
   });

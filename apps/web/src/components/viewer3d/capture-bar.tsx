@@ -6,10 +6,18 @@ import { notify } from "@/lib/notify";
 import { confirmAction } from "@/lib/confirm";
 import type { LayoutItem } from "@/lib/scene-layout";
 import type { CaptureInfo } from "@/server/captures";
+import { CAMERA_VIEWS } from "@/lib/camera-views";
+import { STANDARD_VIEW } from "@/lib/view-settings";
 import type { CartonViewHandle } from "./carton-view";
 
 /** The size a 3D picture is taken at (the cards of the shared pages show it small). */
 const SHOT = { width: 1200, height: 900 };
+
+/** The camera view every design sample is taken from: Front Left of the camera tool. */
+const SAMPLE_VIEW = CAMERA_VIEWS.find((v) => v.id === "front-left") ?? { azimuthDeg: -40, elevationDeg: 12 };
+
+/** The zoom every design sample is taken at. */
+const SAMPLE_ZOOM = 1.2;
 
 const fail = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 
@@ -25,7 +33,7 @@ async function call(url: string, init?: RequestInit): Promise<unknown> {
  * Under the 3D view of the online design page: pick a layout (Sample), set the fold above, and take a 3D picture.
  * The pictures are kept with the project; the cover one is shown on the cards of the Client's shared pages.
  */
-export function CaptureBar({ projectId, viewRef, layouts, layoutId, onLayout, progress, onProgress }: { projectId: string; viewRef: React.RefObject<CartonViewHandle | null>; layouts: LayoutItem[]; layoutId: string | null; onLayout: (id: string | null) => void; progress: number; onProgress: (p: number) => void }) {
+export function CaptureBar({ projectId, viewRef, layouts, layoutId, onLayout, progress, onProgress, beforeShot }: { /** Called before a picture is taken: the design is saved first, so the sample keeps exactly what is on screen. */ beforeShot?: () => Promise<void>; projectId: string; viewRef: React.RefObject<CartonViewHandle | null>; layouts: LayoutItem[]; layoutId: string | null; onLayout: (id: string | null) => void; progress: number; onProgress: (p: number) => void }) {
   const [shots, setShots] = useState<CaptureInfo[] | null>(null);
   const [busy, setBusy] = useState(false);
   /** The picture picked in the strip (its view is on screen): it can be updated with what the 3D view shows now. */
@@ -42,21 +50,49 @@ export function CaptureBar({ projectId, viewRef, layouts, layoutId, onLayout, pr
     };
   }, [projectId]);
 
-  /** A picture of the 3D view as it is now, with the layout, fold amount and camera (zoom included) it was taken with. */
+  /**
+   * A picture of the design in the default state: one box (the "Default" layout), folded, seen from the Front Left camera view at zoom 1.2, whatever the
+   * 3D view shows now. Samples are all taken the same way, so they sit in a tidy grid on the shared page, which puts them in the layout
+   * and the camera the visitor picks there. The 3D view is put back as it was afterwards.
+   */
   const shot = async (): Promise<FormData | null> => {
-    const png = viewRef.current?.snapshot(SHOT);
-    if (!png) {
+    await beforeShot?.();
+    const h = viewRef.current;
+    if (!h) {
       notify.error("The 3D view is not ready yet.");
       return null;
     }
-    const body = new FormData();
-    body.set("file", await (await fetch(png)).blob(), "capture.png");
-    body.set("progress", String(progress));
-    const view = viewRef.current?.getView();
-    if (view) body.set("view", JSON.stringify(view));
-    const name = layouts.find((l) => l.id === layoutId)?.name;
-    if (name) body.set("layoutName", name);
-    return body;
+    const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+    const before = { layoutId, progress, view: h.getView() };
+    const moved = layoutId !== null || progress !== 1;
+    try {
+      if (moved) {
+        onLayout(null);
+        onProgress(1);
+        await wait(450); // the box is rebuilt
+      }
+      // Always the Front Left camera view (the same angle as that button of the camera tool), at zoom 1.2, centred.
+      h.setView({ ...STANDARD_VIEW, azimuthDeg: SAMPLE_VIEW.azimuthDeg, elevationDeg: SAMPLE_VIEW.elevationDeg, zoom: SAMPLE_ZOOM, panX: 0, panY: 0, progress: 1 });
+      await wait(150);
+      const png = h.snapshot(SHOT);
+      if (!png) {
+        notify.error("The 3D view is not ready yet.");
+        return null;
+      }
+      const body = new FormData();
+      body.set("file", await (await fetch(png)).blob(), "capture.png");
+      body.set("progress", "1");
+      const view = h.getView();
+      if (view) body.set("view", JSON.stringify(view));
+      return body;
+    } finally {
+      if (moved) {
+        onLayout(before.layoutId);
+        onProgress(before.progress);
+      }
+      const back = before.view;
+      if (back) window.setTimeout(() => (moved ? viewRef.current?.setViewSmooth(back, 400) : viewRef.current?.setView(back)), moved ? 200 : 0);
+    }
   };
 
   const take = async () => {
@@ -66,7 +102,6 @@ export function CaptureBar({ projectId, viewRef, layouts, layoutId, onLayout, pr
       if (!body) return;
       const d = (await call(`/api/projects/${projectId}/captures`, { method: "POST", body })) as { capture: CaptureInfo };
       setShots((s) => [d.capture, ...(s ?? [])]);
-      notify.success(d.capture.cover ? "Picture saved, and set as the cover." : "Picture saved.");
     } catch (e) {
       notify.error(fail(e, "Could not save the picture."));
     } finally {
@@ -83,7 +118,6 @@ export function CaptureBar({ projectId, viewRef, layouts, layoutId, onLayout, pr
       if (!body) return;
       const d = (await call(`/api/projects/${projectId}/captures/${selected.id}`, { method: "PUT", body })) as { capture: CaptureInfo };
       setShots((s) => (s ?? []).map((x) => (x.id === selected.id ? d.capture : x)));
-      notify.success("View updated.");
     } catch (e) {
       notify.error(fail(e, "Could not update the view."));
     } finally {
@@ -105,7 +139,6 @@ export function CaptureBar({ projectId, viewRef, layouts, layoutId, onLayout, pr
     try {
       await call(`/api/projects/${projectId}/captures/${id}`, { method: "PATCH" });
       setShots((s) => (s ?? []).map((x) => ({ ...x, cover: x.id === id })));
-      notify.success("Cover picture changed.");
     } catch (e) {
       notify.error(fail(e, "Could not change the cover."));
     }
@@ -130,22 +163,13 @@ export function CaptureBar({ projectId, viewRef, layouts, layoutId, onLayout, pr
   return (
     <div className="flex flex-col gap-2 border-t bg-background px-3 py-2 text-xs">
       <div className="flex flex-wrap items-center gap-2">
-        {layouts.length > 0 ? (
-          <label className="flex items-center gap-2 font-medium text-muted-foreground">
-            Layout
-            <select value={layoutId ?? ""} onChange={(e) => onLayout(e.target.value || null)} className="h-7 rounded-md border border-input bg-background px-1.5 text-xs font-normal text-foreground" aria-label="Layout of the boxes in the 3D view">
-              <option value="">One box</option>
-              {layouts.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
-          </label>
-        ) : null}
         {selected ? (
           <button type="button" disabled={busy} onClick={() => void updateSelected()} className="ml-auto flex h-7 items-center gap-1.5 rounded-md border bg-background px-2.5 font-medium transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-60" data-tip="Replace the picked picture with the 3D view as it is now (fold amount, layout and camera)">
-            <RefreshCw className="size-3.5" aria-hidden /> Update view
+            <RefreshCw className="size-3.5" aria-hidden /> Update selected design
           </button>
         ) : null}
         <button type="button" disabled={busy} onClick={() => void take()} className={`${selected ? "" : "ml-auto "}flex h-7 items-center gap-1.5 rounded-md border bg-background px-2.5 font-medium transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-60`} data-tip="Save a picture of the 3D view as it is now (fold amount, layout and camera)">
-          <Camera className="size-3.5" aria-hidden /> {busy ? "Saving…" : "Capture 3D picture"}
+          <Camera className="size-3.5" aria-hidden /> {busy ? "Saving…" : "Capture this design sample"}
         </button>
       </div>
       {shots === null ? null : shots.length === 0 ? (

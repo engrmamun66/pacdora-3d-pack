@@ -760,3 +760,13 @@ dialog.drop-dialog[open]::backdrop {
 .rdp-root { font-family: inherit; }
 .rdp-month_caption { font-size: 0.9375rem; }
 .rdp-weekday { font-size: 0.75rem; }
+
+/* Text of controls (buttons, checkbox and radio labels, tabs, menu items, toolbars) is not selectable: a drag or a double-click on a tool must not highlight its words. Fields keep their own text selectable. */
+button, label, summary, [role="button"], [role="tab"], [role="menuitem"], [role="radio"], [role="switch"], [role="toolbar"], [role="tooltip"], [data-tip] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+label input, label textarea, label select, [role="toolbar"] input, [role="toolbar"] textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}

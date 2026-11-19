@@ -136,9 +136,9 @@ export function PropertiesPanel({
     editing: boolean;
     onToggleEdit: () => void;
     onPatch: (i: number, p: Partial<BoxBackground>) => void;
-    onPick: (assetId: string) => void;
-    onPickLibrary: (pictureId: string, name: string) => void;
-    onUpload: () => void;
+    onPick: (assetId: string, replace?: number) => void;
+    onPickLibrary: (pictureId: string, name: string, replace?: number) => void;
+    onUpload: (replace?: number) => void;
     onDeleteAsset: (id: string, name: string) => void;
   };
   object: ArtworkObject | null;

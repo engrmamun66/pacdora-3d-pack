@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Move, Plus, RotateCcw, Trash2, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Move, Plus, Replace, RotateCcw, Trash2, Upload, X } from "lucide-react";
 import { BACKGROUND_FITS, BACKGROUND_REPEATS, type BackgroundFit, type BackgroundRepeat, type BoxBackground, backgroundRepeat } from "@packaging/schema";
 import { InfoTip } from "@/components/templates-admin/help-tip";
 import { assetUrl } from "./fabric-map";
@@ -68,9 +68,10 @@ export function BackgroundPanel({
   editing: boolean;
   onToggleEdit: () => void;
   onPatch: (i: number, p: Partial<BoxBackground>) => void;
-  onPick: (assetId: string) => void;
-  onPickLibrary: (pictureId: string, name: string) => void;
-  onUpload: () => void;
+  /** `replace`: the index of the picture to swap the image of (its settings stay); without it the picture is added. */
+  onPick: (assetId: string, replace?: number) => void;
+  onPickLibrary: (pictureId: string, name: string, replace?: number) => void;
+  onUpload: (replace?: number) => void;
   /** Delete one of the user's own uploads. */
   onDeleteAsset?: (id: string, name: string) => void;
 }) {
@@ -81,9 +82,14 @@ export function BackgroundPanel({
 
   // The add area is open while the box has no picture, and folds away once one is added so the settings are in view.
   const [addOpen, setAddOpen] = useState(layers.length === 0);
+  /** The picture whose image is being swapped (null = adding). Its fit, size, place and opacity stay as they are. */
+  const [replacing, setReplacing] = useState<number | null>(null);
+  const target = replacing !== null && layers[replacing] ? replacing : null;
+  const finish = () => {
+    setReplacing(null);
+    setAddOpen(false);
+  };
   const [count, setCount] = useState(layers.length);
-  // Choosing a picture blinks the "Move and resize" button twice, so the next step is easy to see (a new key restarts the animation).
-  const [blink, setBlink] = useState(0);
   const [source, setSource] = useState<"ready" | "mine">("ready");
   const [category, setCategory] = useState("");
   const categories = useMemo(() => [...new Set(library.map((l) => l.category ?? "").filter(Boolean))].sort((a, b) => a.localeCompare(b)), [library]);
@@ -123,14 +129,21 @@ export function BackgroundPanel({
             <Plus className="size-3.5" aria-hidden /> Add a picture
             <ChevronDown className={`size-3.5 transition-transform ${addOpen ? "rotate-180" : ""}`} aria-hidden />
           </button>
-          <button type="button" onClick={onUpload} disabled={uploading || full} className="flex h-8 items-center justify-center gap-1.5 rounded-md border bg-background px-3 text-xs font-medium hover:bg-muted disabled:opacity-50" title="Upload a picture from your computer">
+          <button type="button" onClick={() => onUpload(target ?? undefined)} disabled={uploading || (full && target === null)} className="flex h-8 items-center justify-center gap-1.5 rounded-md border bg-background px-3 text-xs font-medium hover:bg-muted disabled:opacity-50" title="Upload a picture from your computer">
             <Upload className="size-3.5" aria-hidden /> {uploading ? "Uploading…" : "Upload"}
           </button>
         </div>
         {full ? <p className="text-[11px] text-muted-foreground">A box can have {max} pictures at most. Remove one to add another.</p> : null}
 
-        {addOpen && !full ? (
+        {addOpen && (!full || target !== null) ? (
           <div className="flex flex-col gap-2">
+            {target !== null ? (
+              <div className="flex items-center gap-2 rounded-md bg-primary/10 px-2 py-1.5 text-[11px]">
+                <Replace className="size-3.5 shrink-0" aria-hidden />
+                <span className="min-w-0 flex-1">Pick a new picture for <b className="font-medium">{nameOf(layers[target]!, target)}</b>. Its size, place and opacity stay.</span>
+                <button type="button" onClick={finish} className="grid size-6 shrink-0 place-items-center rounded hover:bg-background" title="Cancel" aria-label="Cancel replacing"><X className="size-3.5" aria-hidden /></button>
+              </div>
+            ) : null}
             {library.length > 0 && assets.length > 0 ? (
               <div role="tablist" aria-label="Where the picture comes from" className="flex gap-1 rounded-lg bg-muted p-0.5">
                 <button type="button" role="tab" aria-selected={tab === "ready"} className={tabBtn(tab === "ready")} onClick={() => setSource("ready")}>Ready-made</button>
@@ -154,7 +167,10 @@ export function BackgroundPanel({
             {tab === "ready" && library.length > 0 ? (
               <div className="grid max-h-56 shrink-0 auto-rows-max grid-cols-4 gap-1 overflow-auto">
                 {shownLibrary.map((l) => (
-                  <button key={l.id} type="button" title={`Add ${l.name}`} aria-label={`Add ${l.name} as a background`} onClick={() => onPickLibrary(l.id, l.name)} className="relative block h-0 w-full overflow-hidden rounded border bg-muted pb-[calc(100%-2px)] hover:ring-2 hover:ring-ring">
+                  <button key={l.id} type="button" title={target !== null ? `Use ${l.name}` : `Add ${l.name}`} aria-label={`Add ${l.name} as a background`} onClick={() => {
+                    onPickLibrary(l.id, l.name, target ?? undefined);
+                    if (target !== null) finish();
+                  }} className="relative block h-0 w-full overflow-hidden rounded border bg-muted pb-[calc(100%-2px)] hover:ring-2 hover:ring-ring">
                     {/* eslint-disable-next-line @next/next/no-img-element -- private route, cached by URL */}
                     <img src={`/api/artworks/${l.id}/image`} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
                   </button>
@@ -165,7 +181,10 @@ export function BackgroundPanel({
               <div className="grid max-h-56 shrink-0 auto-rows-max grid-cols-4 gap-1 overflow-auto">
                 {assets.map((a) => (
                   <div key={a.id} className="group relative">
-                    <button type="button" title={`Add ${a.fileName}`} aria-label={`Add ${a.fileName} as a background`} onClick={() => onPick(a.id)} className={`relative block h-0 w-full overflow-hidden rounded border bg-muted pb-[calc(100%-2px)] hover:ring-2 hover:ring-ring ${used.has(a.id) ? "ring-2 ring-primary/60" : ""}`}>
+                    <button type="button" title={`Add ${a.fileName}`} aria-label={`Add ${a.fileName} as a background`} onClick={() => {
+                      onPick(a.id, target ?? undefined);
+                      if (target !== null) finish();
+                    }} className={`relative block h-0 w-full overflow-hidden rounded border bg-muted pb-[calc(100%-2px)] hover:ring-2 hover:ring-ring ${used.has(a.id) ? "ring-2 ring-primary/60" : ""}`}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={assetUrl(a.id)} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
                     </button>
@@ -198,10 +217,7 @@ export function BackgroundPanel({
               <li key={`${i}-${b.assetId}`} className={`flex items-center gap-1 rounded-lg border p-1 ${i === selected ? "border-primary bg-primary/5" : ""}`}>
                 <button
                   type="button"
-                  onClick={() => {
-                    onSelect(i);
-                    setBlink((n) => n + 1);
-                  }}
+                  onClick={() => onSelect(i)}
                   onDoubleClick={() => {
                     // Double-click: choose it and start moving and resizing it on the dieline.
                     onSelect(i);
@@ -216,6 +232,36 @@ export function BackgroundPanel({
                     <img src={assetUrl(b.assetId)} alt="" className="h-full w-full object-cover" />
                   </span>
                   <span className="min-w-0 flex-1 truncate text-xs">{nameOf(b, i)}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Choose it, then switch moving and resizing on the dieline on (or off, when it is already on for this picture).
+                    const on = editing && i === selected;
+                    onSelect(i);
+                    if (on || !editing) onToggleEdit();
+                  }}
+                  aria-pressed={editing && i === selected}
+                  className={`flex size-6 items-center justify-center rounded hover:bg-muted ${editing && i === selected ? "bg-primary text-primary-foreground hover:bg-primary/90" : ""}`}
+                  title="Move and resize on the dieline"
+                  aria-label={`Move and resize ${nameOf(b, i)} on the dieline`}
+                >
+                  <Move className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelect(i);
+                    if (replacing === i) return finish();
+                    setReplacing(i);
+                    setAddOpen(true);
+                  }}
+                  aria-pressed={replacing === i}
+                  className={`flex size-6 items-center justify-center rounded hover:bg-muted ${replacing === i ? "bg-primary/10 text-primary" : ""}`}
+                  title="Replace the picture (keeps its settings)"
+                  aria-label={`Replace the picture of ${nameOf(b, i)}`}
+                >
+                  <Replace className="size-3.5" />
                 </button>
                 <button type="button" onClick={() => onMove(i, 1)} disabled={i === layers.length - 1} className="flex size-6 items-center justify-center rounded hover:bg-muted disabled:opacity-30" title="Bring forward" aria-label={`Move ${nameOf(b, i)} up`}>
                   <ArrowUp className="size-3.5" />
@@ -243,17 +289,6 @@ export function BackgroundPanel({
               <RotateCcw className="size-3.5" aria-hidden />
             </button>
           </div>
-          <button
-            key={blink}
-            type="button"
-            onClick={onToggleEdit}
-            aria-pressed={editing}
-            className={`flex h-8 items-center justify-center gap-1.5 rounded-md border text-xs font-medium ${blink > 0 && !editing ? "soft-blink" : ""} ${editing ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90" : "hover:bg-muted"}`}
-          >
-            {editing ? <Check className="size-3.5" aria-hidden /> : <Move className="size-3.5" aria-hidden />}
-            {editing ? "Done" : "Move and resize on the dieline"}
-          </button>
-          {editing ? <p className="text-[11px] text-muted-foreground">Drag the picture to move it, drag a round grip to resize it. Arrow keys nudge, Alt turns snapping off. Enter, Esc or a double-click on the picture finishes.</p> : null}
 
           <div className="flex flex-col gap-2 border-t pt-2">
             <Choice label="Sizing" value={bg.fit} options={BACKGROUND_FITS} labels={FIT_LABEL} hints={FIT_HINT} onPick={(fit) => onPatch(selected, { fit })} />

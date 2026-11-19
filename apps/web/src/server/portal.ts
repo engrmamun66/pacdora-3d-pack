@@ -3,7 +3,8 @@ import { cache } from "react";
 import { db } from "./db";
 import { isHash, newShareHash, templateHash } from "./share-hash";
 import { projectThumbnail } from "@/lib/dieline-preview";
-import { parseProjectDoc, type Artwork, type ProjectDoc } from "@packaging/schema";
+import { z } from "zod";
+import { artworkSchema, parseProjectDoc, projectDocV1, type Artwork, type ProjectDoc } from "@packaging/schema";
 import { IMPORTED_GENERATOR_ID, type FlatDieline, type FoldSetup, type WatermarkSpec, type WindowSpec } from "@packaging/dieline-engine";
 import { loadImportedSource } from "./imported-templates";
 import { readViewSettings, type ViewSettings } from "@/lib/view-settings";
@@ -226,7 +227,21 @@ export interface PortalScene {
   threeD: ProjectDoc["threeD"];
   initialView: ViewSettings | null;
   watermark: WatermarkSpec | null;
+  /** The design samples (3D pictures the Client kept), newest first. */
+  captures: PortalCapture[];
 }
+
+/** One design sample: its picture (exactly what the Client saw) and how it was set up. Its design is fetched when it is opened (`loadCaptureDesign`). */
+export interface PortalCapture {
+  id: string;
+  url: string;
+  layoutName: string | null;
+  progress: number;
+  view: ViewSettings | null;
+}
+
+/** The design a sample was taken with: what replaces the template's own box size, windows, artwork and colours while the sample is shown. */
+export type CaptureDesign = Pick<PortalScene, "params" | "windows" | "artwork" | "threeD">;
 
 /** The 3D scene of a template the Client shares. Null when the project file cannot be read. */
 export async function loadPortalScene(owner: PortalOwner, projectId: string): Promise<PortalScene | null> {
@@ -238,6 +253,8 @@ export async function loadPortalScene(owner: PortalOwner, projectId: string): Pr
   } catch {
     return null;
   }
+  const captureRows = await db.projectCapture.findMany({ where: { projectId, userId: owner.userId }, orderBy: { createdAt: "desc" }, select: { id: true, storageKey: true, layoutName: true, progress: true, view: true } });
+  const captures: PortalCapture[] = captureRows.map((c) => ({ id: c.id, url: captureUrl(c.id, c.storageKey), layoutName: c.layoutName, progress: c.progress, view: readViewSettings(c.view) }));
   let imported: PortalScene["imported"] = null;
   if (doc.template.generatorId === IMPORTED_GENERATOR_ID) {
     const src = await loadImportedSource(doc.template.presetId);
@@ -253,14 +270,37 @@ export async function loadPortalScene(owner: PortalOwner, projectId: string): Pr
     threeD: doc.threeD,
     initialView: readViewSettings(row.template.viewSettings),
     watermark: await getWatermark(),
+    captures,
   };
+}
+
+const captureDesignSchema = z.object({
+  params: z.record(z.string().max(60), z.union([z.number().finite(), z.string().max(100), z.boolean()])),
+  windows: z.array(z.unknown()).max(50),
+  artwork: artworkSchema,
+  threeD: projectDocV1.shape.threeD,
+});
+
+/**
+ * The design of one sample of a template the Client shares, or null (the template is switched off, the sample is not theirs, or it was
+ * taken before samples kept their design: then the page shows the template as it is, with the sample's fold and camera).
+ */
+export async function loadCaptureDesign(owner: PortalOwner, captureId: string): Promise<CaptureDesign | null> {
+  if (typeof captureId !== "string" || captureId.length > 40) return null;
+  const row = await db.projectCapture.findFirst({ where: { id: captureId, userId: owner.userId }, select: { projectId: true, design: true } });
+  if (!row?.design) return null;
+  if ((await hiddenTemplateIds(owner.userId)).includes(row.projectId)) return null;
+  const parsed = captureDesignSchema.safeParse(row.design);
+  return parsed.success ? (parsed.data as unknown as CaptureDesign) : null;
 }
 
 /** May a picture be shown on this Client's shared pages? It is theirs, and a template that is not switched off uses it. */
 export async function portalAssetAllowed(owner: PortalOwner, assetId: string): Promise<boolean> {
   if (!/^[\w-]{1,64}$/.test(assetId)) return false;
   const hidden = await hiddenTemplateIds(owner.userId);
-  const rows = await db.$queryRaw<{ id: string }[]>`select id from project where "userId" = ${owner.userId} and "projectData"::text like ${`%${assetId}%`} and not (id = any(${hidden}::text[])) limit 1`;
+  const like = `%${assetId}%`;
+  // A picture counts when the template uses it now, or one of its design samples was taken with it.
+  const rows = await db.$queryRaw<{ id: string }[]>`select p.id from project p where p."userId" = ${owner.userId} and not (p.id = any(${hidden}::text[])) and (p."projectData"::text like ${like} or exists (select 1 from project_capture c where c."projectId" = p.id and c.design::text like ${like})) limit 1`;
   return rows.length > 0;
 }
 

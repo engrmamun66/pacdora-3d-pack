@@ -6,7 +6,7 @@ import { isSameOrigin } from "@/server/same-origin";
 import { storage } from "@/server/storage";
 import { randomUUID } from "node:crypto";
 import { LIMITS, takeToken } from "@/server/limits";
-import { captureUrl, guarded, readCaptureForm, type CaptureInfo } from "@/server/captures";
+import { captureDesign, captureUrl, guarded, readCaptureForm, type CaptureInfo } from "@/server/captures";
 import { readViewSettings } from "@/lib/view-settings";
 
 const fail = (status: number, message: string) => NextResponse.json({ error: message }, { status });
@@ -72,13 +72,14 @@ async function update(request: Request, ctx: RouteContext<"/api/projects/[id]/ca
   const form = await readCaptureForm(request);
   if (form instanceof Response) return form;
 
+  const design = await captureDesign(id, userId);
   const storageKey = `captures/${randomUUID()}.png`;
   await storage.put(storageKey, form.bytes);
   let row;
   try {
     row = await db.projectCapture.update({
       where: { id: cid },
-      data: { storageKey, sizeBytes: form.bytes.length, layoutName: form.layoutName, progress: form.progress, view: form.view ?? Prisma.DbNull },
+      data: { storageKey, sizeBytes: form.bytes.length, layoutName: form.layoutName, progress: form.progress, view: form.view ?? Prisma.DbNull, design: design ? (design as Prisma.InputJsonObject) : Prisma.DbNull },
       select: { id: true, layoutName: true, progress: true, view: true, cover: true },
     });
   } catch (e) {

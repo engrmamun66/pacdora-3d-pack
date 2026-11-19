@@ -188,8 +188,19 @@ export class EditorController {
       this.panning = { x: me.clientX, y: me.clientY };
     });
     // A double-click on a background picture, while it is being moved and resized, finishes the editing (same as Done).
-    this.canvas.on("mouse:dblclick", ({ e }) => {
-      if (this.bgEdit && this.bgHit(this.pointerScene(e as MouseEvent)) === "move") this.setBackgroundEdit(false);
+    // A double-click on a background picture chooses it and starts moving and resizing it; a double-click on it again lets go of it.
+    this.canvas.on("mouse:dblclick", ({ e, target }) => {
+      const pt = this.pointerScene(e as MouseEvent);
+      if (this.bgEdit) {
+        if (this.bgHit(pt) === "move") this.setBackgroundEdit(false);
+        return;
+      }
+      if (this.panMode || this.faceMode || (target && metaOf(target))) return;
+      const at = this.bgAt(pt);
+      if (at < 0) return;
+      this.canvas.discardActiveObject();
+      this.selectBackground(at);
+      this.setBackgroundEdit(true);
     });
     this.canvas.on("mouse:out", () => {
       if (this.overPanel === null) return;

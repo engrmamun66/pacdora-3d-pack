@@ -114,7 +114,6 @@ export function ExportDialog({
         download(await res.blob(), `${fileBase(name)}.${ext}`);
         setResult({ ok: true, title: `Downloaded ${ext.toUpperCase()}`, notes: report.losses ?? [] });
         if (report.losses?.length) notify.warning(`Downloaded ${ext.toUpperCase()} with ${report.losses.length} limitation${report.losses.length === 1 ? "" : "s"}`, { description: "See the notes in the export dialog." });
-        else notify.success(`Downloaded ${ext.toUpperCase()}`);
       } else if (format === "glb") {
         download(await getGlb(), `${fileBase(name)}.glb`);
         setResult({ ok: true, title: "Downloaded GLB", notes: ["The model shows the carton at the current fold amount. Panels have zero thickness."] });
@@ -125,7 +124,6 @@ export function ExportDialog({
         const bytes = setPngDpi(new Uint8Array(await r.blob.arrayBuffer()), r.dpi);
         download(new Blob([bytes], { type: "image/png" }), `${fileBase(name)}-${r.dpi}dpi.png`);
         if (r.dpi < want) notify.warning(`PNG saved at ${r.dpi} dpi, not ${want}`, { description: "The browser's canvas size limit was reached." });
-        else notify.success(`Downloaded PNG (${r.width} x ${r.height} px)`);
         setResult({
           ok: true,
           title: `Downloaded PNG (${r.width} x ${r.height} px)`,

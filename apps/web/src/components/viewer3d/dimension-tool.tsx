@@ -43,10 +43,10 @@ export function DimensionTool({ viewRef, unit }: { viewRef: RefObject<CartonView
       {on ? (
         <div role="group" aria-label="What sizes to show" className="flex items-center gap-2.5 rounded-lg border bg-background/90 px-2.5 py-1 shadow-xs backdrop-blur">
           <label data-tip="Sizes of each part of the box" className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium">
-            <input type="checkbox" className="size-3.5 cursor-pointer accent-foreground" checked={showBox} onChange={() => (panels || !showBox) && setShowBox((v) => !v)} /> Box
+            <input type="checkbox" className="size-3.5 cursor-pointer accent-foreground" checked={showBox} onChange={() => setShowBox((v) => !v)} /> Box
           </label>
           <label data-tip="Width and height of every panel" className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium">
-            <input type="checkbox" className="size-3.5 cursor-pointer accent-foreground" checked={panels} onChange={() => (showBox || !panels) && setPanels((v) => !v)} /> Panels
+            <input type="checkbox" className="size-3.5 cursor-pointer accent-foreground" checked={panels} onChange={() => setPanels((v) => !v)} /> Panels
           </label>
         </div>
       ) : null}

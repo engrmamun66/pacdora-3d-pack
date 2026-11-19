@@ -259,8 +259,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   // Tell the user how Save went (the inline banner stays for screen readers and long messages).
   useEffect(() => {
     if (!state.message) return;
-    if (state.ok) notify.success(state.message, { id: "project-save" });
-    else notify.error(state.message, { id: "project-save" });
+    if (!state.ok) notify.error(state.message, { id: "project-save" });
   }, [state]);
 
   const issueFor = (key: string) => [...(result.issues ?? []), ...state.issues].find((i) => i.path === key || i.path.startsWith(`${key}.`))?.message;
@@ -302,7 +301,6 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
     }
     const r = await saveProjectAs(fd);
     if (r.ok && r.id) {
-      notify.success("Saved as a new project", { description: newName });
       router.push(`/projects/${r.id}`);
       return { ok: true, message: null };
     }
@@ -336,7 +334,6 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
     fd.set("name", p.name);
     const r = await updateProject(IDLE, fd);
     if (!r.ok) return { ok: false, message: r.message };
-    notify.success("Project overwritten", { description: p.name });
     router.push(`/projects/${p.id}`);
     return { ok: true, message: null };
   };
@@ -347,7 +344,6 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
     fd.set("strict", "1");
     const r = await createProjectDraft(fd);
     if (!r.ok || !r.id) return { ok: false, message: r.message ?? "Could not save." };
-    notify.success("Saved as a new project", { description: newName });
     router.push(`/projects/${r.id}`);
     return { ok: true, message: null };
   };
@@ -417,7 +413,6 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
       saveBlob(await res.blob(), `${fileBase(name)}.${format}`);
       setDl({ ok: true, title: `Downloaded .${format}`, notes: report.losses ?? [] });
       if (report.losses?.length) notify.warning(`Downloaded .${format} with ${report.losses.length} limitation${report.losses.length === 1 ? "" : "s"}`, { description: report.losses[0] });
-      else notify.success(`Downloaded .${format}`);
       if (mode.kind === "create") router.replace(`/projects/${projectId}`);
     } catch (e) {
       setDl({ ok: false, title: "Download failed", notes: [(e as Error).message] });

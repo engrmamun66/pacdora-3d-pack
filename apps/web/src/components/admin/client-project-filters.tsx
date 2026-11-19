@@ -61,8 +61,8 @@ export function ClientProjectFilters({ values, sorts, templates, changed }: { va
           name="q"
           value={q}
           maxLength={100}
-          placeholder="Design, client name or email"
-          className={`${field} w-64`}
+          placeholder="Design, client name or email, t-hash"
+          className={`${field} w-80`}
           onChange={(e) => {
             const v = e.target.value;
             setQ(v);

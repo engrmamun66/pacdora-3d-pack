@@ -9,7 +9,7 @@ type Image = "dieline" | "3d";
 
 const COLUMNS = [2, 3, 4, 5, 6];
 const IMAGES: { id: Image | "product"; label: string; hint: string; soon?: boolean }[] = [
-  { id: "3d", label: "3D Output", hint: "The cover 3D picture you took in Online design (3D view, Capture 3D picture). A template without one shows its dieline." },
+  { id: "3d", label: "3D Output", hint: "The cover 3D picture you took in Online design (3D view, Capture this design sample). A template without one shows its dieline." },
   { id: "product", label: "Product Image", hint: "A photo of the finished product.", soon: true },
   { id: "dieline", label: "Dieline", hint: "The flat drawing of the box." },
 ];

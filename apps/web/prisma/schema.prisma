@@ -247,6 +247,8 @@ model ProjectCapture {
   progress   Float    @default(1)
   /// The camera when it was taken (turn, tilt, zoom, pan: a ViewSettings), so the same view can be put back.
   view       Json?    @db.JsonB
+  /// The design as it was when taken (box parameters, windows, artwork, 3D colours), so a shared page can show this sample as designed. Null for pictures taken before this existed.
+  design     Json?    @db.JsonB
   cover      Boolean  @default(false)
   createdAt  DateTime @default(now())
 

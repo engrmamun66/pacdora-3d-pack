@@ -32,7 +32,14 @@ const nextConfig: NextConfig = {
     ];
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    // The Client's shared template pages may be shown inside this site (the Preview box of the online design page); no other site may frame anything.
+    const sameOriginFrame = securityHeaders.map((h) => (h.key === "X-Frame-Options" ? { ...h, value: "SAMEORIGIN" } : h.key === "Content-Security-Policy" ? { ...h, value: h.value.replace("frame-ancestors 'none'", "frame-ancestors 'self'") } : h));
+    const portal = "(?!doraadmin|api|_next)[A-Za-z0-9_-]{6,}";
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      { source: `/:userHash(${portal})/templates/:templateHash`, headers: sameOriginFrame },
+      { source: `/:userHash(${portal})/:linkHash/templates/:templateHash`, headers: sameOriginFrame },
+    ];
   },
   cacheComponents: true,
   // Development only: hosts other than localhost that may load /_next assets and HMR (ngrok tunnels).
