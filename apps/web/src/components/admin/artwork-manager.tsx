@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmAction } from "@/lib/confirm";
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ImagePlus, Pencil, Plus, Star, Trash2, Upload, X } from "lucide-react";

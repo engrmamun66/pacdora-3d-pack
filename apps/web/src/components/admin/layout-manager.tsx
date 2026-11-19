@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { RangeSlider } from "@/components/ui/range-slider";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { addStarterLayouts, clearLayoutIcon, createLayout, deleteLayout, moveLayout, setIconBox, setIconStyle, setLayoutIcon, updateLayout } from "@/app/doraadmin/template-layout-actions";
-import { MAX_BOXES, MAX_ITEMS, MAX_REPEAT, PRESETS, layoutInstances, newBoxItem, presetSpec, type BoxItem, type LayoutItem, type LayoutSpec, type Repeat } from "@/lib/scene-layout";
+import { MAX_BOXES, MAX_ITEMS, MAX_REPEAT, PRESETS, defaultLayoutSpec, layoutInstances, newBoxItem, presetSpec, type BoxItem, type LayoutItem, type LayoutSpec, type Repeat } from "@/lib/scene-layout";
 import { notify } from "@/lib/notify";
 import { SAMPLE_BOXES, SAMPLE_STYLES, styleCss } from "@/lib/sample-boxes";
 import { gradientTexture } from "./sample-look";
