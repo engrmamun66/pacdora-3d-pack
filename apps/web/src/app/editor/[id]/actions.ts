@@ -3,13 +3,15 @@
 import { MAX_ARTWORK_JSON_BYTES, artworkSchema, backgroundsOf, parseProjectDoc, projectDocV1 } from "@packaging/schema";
 import { db } from "@/server/db";
 import { LIMITS, takeToken } from "@/server/limits";
-import { requireUser } from "@/server/session";
+import { getActionUser } from "@/server/session";
+import { SESSION_ENDED_MESSAGE } from "@/lib/session-ended";
 
 export type SaveResult = { ok: true; savedAt: string } | { ok: false; message: string };
 
 /** Replace the artwork of a project the user owns. Fully re-validated on the server. */
 export async function saveArtwork(projectId: string, artwork: unknown): Promise<SaveResult> {
-  const user = await requireUser();
+  const user = await getActionUser();
+  if (!user) return { ok: false, message: SESSION_ENDED_MESSAGE };
   if (typeof projectId !== "string" || projectId.length > 40) return { ok: false, message: "Invalid project." };
   if (!(await takeToken(user.id, "saveArtwork", LIMITS.saveArtwork.max, LIMITS.saveArtwork.windowSec))) {
     return { ok: false, message: "Saving too fast. Your changes are kept; they will be saved in a moment." };
@@ -53,7 +55,8 @@ const threeDSchema = projectDocV1.shape.threeD;
 
 /** Save 3D preview settings (fold, board and inside colours) of a project the user owns. */
 export async function saveThreeD(projectId: string, settings: unknown): Promise<SaveResult> {
-  const user = await requireUser();
+  const user = await getActionUser();
+  if (!user) return { ok: false, message: SESSION_ENDED_MESSAGE };
   const parsed = threeDSchema.safeParse(settings);
   if (!parsed.success || typeof projectId !== "string" || projectId.length > 40) return { ok: false, message: "Invalid 3D settings." };
   if (!(await takeToken(user.id, "saveThreeD", LIMITS.saveThreeD.max, LIMITS.saveThreeD.windowSec))) return { ok: false, message: "Saving too fast. Please wait a moment." };

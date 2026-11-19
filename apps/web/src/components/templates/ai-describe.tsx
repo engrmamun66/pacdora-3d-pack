@@ -68,7 +68,7 @@ export function AiDescribe() {
               <>
                 <p className="font-medium">{res.presetName}</p>
                 <p className="text-muted-foreground">
-                  {String(result.params.width)} x {String(result.params.depth)} x {String(result.params.height)} mm ({result.params.sizeMode === "inner" ? "inside size" : "crease-to-crease"})
+                  {String(result.params.width)} x {String(result.params.depth)} x {String(result.params.height)} mm ({result.params.sizeMode === "inner" ? "inside size" : "fold-to-fold"})
                 </p>
                 <Link
                   className="w-fit rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted"

@@ -305,7 +305,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   const dimFrame = useRef(0);
   const dimBox = useRef<HTMLDivElement | null>(null);
   const dimGroup = useRef<THREE.Group | null>(null);
-  const dimPieces = useRef<{ box: THREE.Box3 }[]>([]);
+  const dimPieces = useRef<{ box: THREE.Box3; main: boolean }[]>([]);
   const dimTags = useRef<{ el: HTMLDivElement; at: THREE.Vector3 }[]>([]);
   const dimSide = useRef("");
   const dimTick = useRef<() => void>(() => {});
@@ -967,6 +967,11 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     const f = unit === "mm" ? 10 : 100;
     return `${Math.round(v * f) / f} ${unit}`;
   };
+  /**
+   * What each side of the main body is called, by how it stands: Height is the side that goes up, Length the longer of the two
+   * across (along the floor), Width the shorter. Returns the names of the x, y and z sides. A tie goes to x being the Length.
+   */
+  const sideNames = (size: THREE.Vector3): [string, string, string] => (size.x >= size.z ? ["Length", "Height", "Width"] : ["Width", "Height", "Length"]);
   /** Draw the arrows for the camera's side of every piece (the lines are made again when the camera crosses to another side). */
   const drawDims = () => {
     const t = three.current;
@@ -1006,9 +1011,10 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     const cam = t.camera.position;
     const board = thickness > 0 ? thickness : 0;
     let sig = "";
-    for (const { box } of dimPieces.current) {
+    for (const { box, main } of dimPieces.current) {
       const c = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
+      const names = main ? sideNames(size) : null; // only the main body is named: [x, y, z]
       const sx = cam.x >= c.x ? 1 : -1;
       const sz = cam.z >= c.z ? 1 : -1;
       sig += `${sx}${sz}`;
@@ -1038,20 +1044,21 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
         // height: up the corner nearest the camera
         { a: V(ox, box.min.y, oz), b: V(ox, box.max.y, oz), value: size.y, across: V(-sx, 0, 0), feet: [V(ex, box.min.y, ez), V(ox, box.min.y, oz), V(ex, box.max.y, ez), V(ox, box.max.y, oz)] },
       ];
-      const tagAt = (text: string, at: THREE.Vector3, tone: "out" | "in") => {
+      const tagAt = (text: string, at: THREE.Vector3, tone: "out" | "in", name: string | null) => {
         const tag = document.createElement("div");
         const color = tone === "out" ? "#1d4ed8" : "#0f766e";
         tag.style.cssText = `position:absolute;left:0;top:0;display:none;white-space:nowrap;padding:1px 7px;border-radius:6px;background:rgba(255,255,255,.95);color:${color};border:1px solid ${tone === "out" ? "rgba(29,78,216,.35)" : "rgba(15,118,110,.4)"};font:600 11px/15px system-ui,sans-serif;box-shadow:0 1px 3px rgba(0,0,0,.18);text-align:center`;
-        tag.textContent = tone === "out" ? text : `inside ${text}`;
+        tag.textContent = tone === "out" ? (name ? `${name} ${text}` : text) : name ? `Inside ${name.toLowerCase()} ${text}` : `inside ${text}`;
         dimBox.current!.appendChild(tag);
         dimTags.current.push({ el: tag, at });
       };
-      for (const it of items) {
+      const axisOf = [0, 2, 1]; // the arrows are in the order x, z, y; the names are in the order x, y, z
+      items.forEach((it, i) => {
         arrow(it.a, it.b, it.across);
         seg(it.feet[0], it.feet[1]); // the thin lines that reach from the box out to the arrow
         seg(it.feet[2], it.feet[3]);
-        tagAt(fmtDim(it.value, cfg.unit), it.a.clone().add(it.b).multiplyScalar(0.5), "out");
-      }
+        tagAt(fmtDim(it.value, cfg.unit), it.a.clone().add(it.b).multiplyScalar(0.5), "out", names ? names[axisOf[i]!]! : null);
+      });
       const geom = new THREE.BufferGeometry().setFromPoints(pts);
       const lines = new THREE.LineSegments(geom, new THREE.LineBasicMaterial({ color: 0x1d4ed8, depthTest: false, transparent: true }));
       lines.renderOrder = 999;
@@ -1067,16 +1074,16 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
         const fz = sz > 0 ? iMin.z : iMax.z;
         const inPts: THREE.Vector3[] = [];
         const inSeg = (a: THREE.Vector3, b: THREE.Vector3) => inPts.push(a, b);
-        const inArrow = (a: THREE.Vector3, b: THREE.Vector3, across: THREE.Vector3, value: number) => {
+        const inArrow = (a: THREE.Vector3, b: THREE.Vector3, across: THREE.Vector3, value: number, axis: number) => {
           inSeg(a, b);
           const dir = b.clone().sub(a).normalize();
           const h = Math.min(head, value * 0.2);
           for (const [tip, sign] of [[a, 1], [b, -1]] as const) for (const k of [1, -1]) inSeg(tip, tip.clone().addScaledVector(dir, sign * h).addScaledVector(across, k * h * 0.35));
-          tagAt(fmtDim(value, cfg.unit), a.clone().add(b).multiplyScalar(0.5), "in");
+          tagAt(fmtDim(value, cfg.unit), a.clone().add(b).multiplyScalar(0.5), "in", names ? names[axis]! : null);
         };
-        inArrow(V(iMin.x, iMin.y, fz), V(iMax.x, iMin.y, fz), V(0, 1, 0), inner.x);
-        inArrow(V(fx, iMin.y, iMin.z), V(fx, iMin.y, iMax.z), V(0, 1, 0), inner.z);
-        inArrow(V(fx, iMin.y, fz), V(fx, iMax.y, fz), V(-sx, 0, 0), inner.y);
+        inArrow(V(iMin.x, iMin.y, fz), V(iMax.x, iMin.y, fz), V(0, 1, 0), inner.x, 0);
+        inArrow(V(fx, iMin.y, iMin.z), V(fx, iMin.y, iMax.z), V(0, 1, 0), inner.z, 2);
+        inArrow(V(fx, iMin.y, fz), V(fx, iMax.y, fz), V(-sx, 0, 0), inner.y, 1);
         const inLines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(inPts), new THREE.LineBasicMaterial({ color: 0x0f766e, depthTest: false, transparent: true }));
         inLines.renderOrder = 999;
         group.add(inLines);
@@ -1102,7 +1109,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
           const o = t.model!.object.getObjectByName(id);
           if (o) box.expandByObject(o);
         }
-        return { box };
+        return { box, main: ids.includes(geo.foldTree.rootId) };
       })
       .filter((p) => !p.box.isEmpty());
     drawDims();

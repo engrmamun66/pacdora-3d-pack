@@ -20,6 +20,7 @@ export function MiniSheet({
   onOpen,
   onHoverMm,
   highlight = null,
+  highlights = [],
 }: {
   box: { minX: number; minY: number; width: number; height: number };
   src: string;
@@ -32,6 +33,8 @@ export function MiniSheet({
   onHoverMm?: (p: { x: number; y: number } | null) => void;
   /** A panel outline (sheet mm) drawn softly over the picture (the panel that blinks on the 3D box). */
   highlight?: readonly { x: number; y: number }[] | null;
+  /** More panels to light up in the same way. */
+  highlights?: readonly (readonly { x: number; y: number }[])[];
 }) {
   const picture = (
     <svg
@@ -52,7 +55,7 @@ export function MiniSheet({
         : {})}
     >
       <image href={src} x={box.minX} y={box.minY} width={box.width} height={box.height} preserveAspectRatio="none" />
-      {highlight && highlight.length >= 3 ? <polygon points={highlight.map((q) => `${q.x},${q.y}`).join(" ")} fill="#2f6bff" fillOpacity={0.22} stroke="#2f6bff" strokeWidth={1.6} vectorEffect="non-scaling-stroke" strokeLinejoin="round" pointerEvents="none" className="hover-pulse" /> : null}
+      {[...(highlight && highlight.length >= 3 ? [highlight] : []), ...highlights].map((poly, i) => <polygon key={`hl-${i}`} points={poly.map((q) => `${q.x},${q.y}`).join(" ")} fill="#2f6bff" fillOpacity={0.22} stroke="#2f6bff" strokeWidth={1.6} vectorEffect="non-scaling-stroke" strokeLinejoin="round" pointerEvents="none" className="hover-pulse" />)}
       {windows.map((w) => {
         const bad = problemOf?.has(w.id) ?? false;
         return (

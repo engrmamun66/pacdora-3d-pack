@@ -24,3 +24,12 @@ export async function requireUser() {
   if (!session) redirect("/login");
   return session.user;
 }
+
+/**
+ * Signed-in user, or null (no redirect). For server actions of pages with their own sign-in box (Dieline, Online design):
+ * the action answers SESSION_ENDED_MESSAGE and the page asks the person to log in again, right where they are.
+ */
+export async function getActionUser() {
+  const session = await getSession();
+  return session?.user ?? null;
+}

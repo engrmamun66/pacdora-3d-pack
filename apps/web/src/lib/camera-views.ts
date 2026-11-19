@@ -4,6 +4,8 @@ export interface CameraViewPreset {
   label: string;
   azimuthDeg: number;
   elevationDeg: number;
+  /** Straight-on views (one side of the box) show this letter as their icon instead of a little box. */
+  letter?: string;
 }
 
 export const CAMERA_VIEWS: readonly CameraViewPreset[] = [
@@ -11,12 +13,12 @@ export const CAMERA_VIEWS: readonly CameraViewPreset[] = [
   { id: "front-left", label: "Front Left", azimuthDeg: -40, elevationDeg: 12 },
   { id: "top-left", label: "Top Left", azimuthDeg: -40, elevationDeg: 38 },
   { id: "top-right", label: "Top Right", azimuthDeg: 40, elevationDeg: 38 },
-  { id: "front", label: "Front", azimuthDeg: 0, elevationDeg: 0 },
-  { id: "top", label: "Top", azimuthDeg: 0, elevationDeg: 89 },
-  { id: "left", label: "Left", azimuthDeg: -90, elevationDeg: 0 },
-  { id: "right", label: "Right", azimuthDeg: 90, elevationDeg: 0 },
-  { id: "back", label: "Back", azimuthDeg: 180, elevationDeg: 0 },
-  { id: "bottom", label: "Bottom", azimuthDeg: 0, elevationDeg: -89 },
+  { id: "front", letter: "F", label: "Front", azimuthDeg: 0, elevationDeg: 0 },
+  { id: "top", letter: "T", label: "Top", azimuthDeg: 0, elevationDeg: 89 },
+  { id: "left", letter: "L", label: "Left", azimuthDeg: -90, elevationDeg: 0 },
+  { id: "right", letter: "R", label: "Right", azimuthDeg: 90, elevationDeg: 0 },
+  { id: "back", letter: "B", label: "Back", azimuthDeg: 180, elevationDeg: 0 },
+  { id: "bottom", letter: "Bo", label: "Bottom", azimuthDeg: 0, elevationDeg: -89 },
 ];
 
 type V3 = [number, number, number];

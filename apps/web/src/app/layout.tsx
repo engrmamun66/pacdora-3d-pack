@@ -4,6 +4,7 @@ import "./globals.css";
 import { site } from "@/config/site";
 import { Toaster } from "@/components/ui/sonner";
 import { ConfirmHost } from "@/components/ui/confirm-host";
+import { InstantTip } from "@/components/ui/instant-tip";
 import { getSiteIdentity } from "@/server/site-identity";
 import { getSeoSettings } from "@/server/seo-settings";
 import { env } from "@/server/env";
@@ -59,6 +60,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         {/* All pop-up messages (success, error, info, warning) appear here. See lib/notify.ts. */}
         <Toaster position="bottom-center" richColors closeButton />
         <ConfirmHost />
+        <InstantTip />
       </body>
     </html>
   );

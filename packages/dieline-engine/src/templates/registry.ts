@@ -90,7 +90,7 @@ const cartonBaseParams = (structure: readonly ParamDescriptor[]): ParamDescripto
     label: "Size mode",
     group: "Structure",
     options: [
-      { value: "manufacture", label: "Manufacture (crease-to-crease)" },
+      { value: "manufacture", label: "Manufacture (fold-to-fold)" },
       { value: "inner", label: "Inner (inside of the box)" },
     ],
   },
@@ -170,7 +170,7 @@ export const slottedBoxDefinition: GeneratorDefinition = {
       label: "Size mode",
       group: "Structure",
       options: [
-        { value: "manufacture", label: "Manufacture (crease-to-crease)" },
+        { value: "manufacture", label: "Manufacture (fold-to-fold)" },
         { value: "inner", label: "Inner (inside of the box)" },
       ],
     },

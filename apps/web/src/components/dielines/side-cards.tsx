@@ -86,9 +86,12 @@ export function FoldPreview({
   materialId,
   unit,
   onReady,
+  onPanelHover,
 }: {
   /** Called once when the box has been built and drawn. */
   onReady?: () => void;
+  /** Told which panel the mouse is over on the 3D box (null when none). */
+  onPanelHover?: (id: string | null) => void;
   /** The unit the sizes tool (bottom right) shows; its own mm | in switch when absent. */
   unit?: "mm" | "in";
   /** Board family (units.ts id): decides the look of the inside, the cut edge and the surface grain. */
@@ -122,7 +125,7 @@ export function FoldPreview({
   };
   return (
     <section aria-label="3D preview" className={`relative overflow-hidden rounded-2xl border bg-muted/40 ${large ? "flex min-h-0 flex-1 flex-col" : "shrink-0"}`}>
-      <CartonView ref={viewRef} className={large ? "min-h-0 w-full flex-1" : "h-56 w-full"} geo={geo} texture={null} textureRect={null} progress={progress} outsideColor={color} insideColor={look.inside} thickness={thickness} watermark={watermark} boardGrain={look.grain} boardEdge={{ color: look.edge, flute: look.flute }} initialView={initialView} {...(onReady ? { onReady } : {})} />
+      <CartonView ref={viewRef} {...(onPanelHover ? { onPanelHover } : {})} className={large ? "min-h-0 w-full flex-1" : "h-56 w-full"} geo={geo} texture={null} textureRect={null} progress={progress} outsideColor={color} insideColor={look.inside} thickness={thickness} watermark={watermark} boardGrain={look.grain} boardEdge={{ color: look.edge, flute: look.flute }} initialView={initialView} {...(onReady ? { onReady } : {})} />
       <div className="flex items-center gap-2 border-t bg-background px-3 py-2 text-xs">
         <label className="flex flex-1 items-center gap-2">
           Open

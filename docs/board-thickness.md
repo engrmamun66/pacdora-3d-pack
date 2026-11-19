@@ -13,7 +13,7 @@ Related: `docs/thickness.md` (the list of materials and their thicknesses), `doc
 2. **Box sizes follow the thickness, in both size modes.** A size the customer left empty (auto) is
    `drawn size + allowanceFactor x (thickness - t0)` for each of width, depth and height (and for a lid that follows
    the body, through the body). The inside of the box stays the same. A size the customer TYPED is taken literally
-   (crease-to-crease in Manufacture mode, the inside in Inner mode).
+   (fold-to-fold in Manufacture mode, the inside in Inner mode).
 3. **Cut slots follow the thickness.** At each cut corner of a dust flap the slot is
    `cutGapFactor x (thickness - t0)` wider than drawn (a drawn slot can narrow to nothing; a corner with no drawn
    slot gets none at `t0`). Only the flap's corner moves. No box size changes. `cutGapFactor` default 1; 0 switches it off.

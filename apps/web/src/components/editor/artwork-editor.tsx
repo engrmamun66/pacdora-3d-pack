@@ -535,6 +535,8 @@ export function ArtworkEditor({
       onBackgroundEdit: setBgEditing,
       onBackgroundSelect: setBgSelected,
       onFacePick: setFacePick,
+      // The pointer over a panel of the dieline blinks that panel in the 3D view.
+      onPanelHover: (id) => view3d.current?.focusPanel(id),
     });
     ctl.current = c;
     if (process.env.NODE_ENV !== "production") Object.assign(window, { __editor: c });
@@ -1087,7 +1089,7 @@ export function ArtworkEditor({
             {/* Clipped drawer: the preview keeps its full width while the column grows, so it slides in instead of being squeezed (no re-layout of the 3D canvas per frame). */}
             <div className={`absolute inset-0 overflow-hidden border-l transition-opacity motion-reduce:transition-none ${animating ? "duration-300" : "duration-0"} ${show3d && expanded ? "opacity-100" : "opacity-0"}`}>
               <div className="absolute inset-y-0 right-0" style={{ width: openW }}>
-                <Preview3D initialView={initialView} geo={geo} artwork={artworkForPreview} settings={threeD} onSettings={updateThreeD} viewRef={view3d} watermark={watermark} projectId={projectId} layouts={layouts} />
+                <Preview3D initialView={initialView} geo={geo} artwork={artworkForPreview} settings={threeD} onSettings={updateThreeD} viewRef={view3d} watermark={watermark} projectId={projectId} layouts={layouts} onPanelHover={(id) => ctl.current?.setHighlight(id)} />
               </div>
             </div>
           </section>

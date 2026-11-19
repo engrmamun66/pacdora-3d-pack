@@ -58,6 +58,7 @@ export function SheetCanvas<T extends Record<string, boolean>>({
   windowCount = 0,
   onHoverMm,
   highlight = null,
+  highlights = [],
   onReady,
 }: {
   /** Size (mm) of the picture `src` shows, margins included. */
@@ -81,6 +82,8 @@ export function SheetCanvas<T extends Record<string, boolean>>({
   onHoverMm?: (p: { x: number; y: number } | null) => void;
   /** A panel outline (sheet mm) drawn softly over the sheet, e.g. the panel that blinks on the 3D box. */
   highlight?: readonly { x: number; y: number }[] | null;
+  /** More panels to light up in the same way (a setting that reaches several panels). */
+  highlights?: readonly (readonly { x: number; y: number }[])[];
   /** Called once, when the sheet picture is loaded and placed (so a loading placeholder can go away). */
   onReady?: () => void;
 }) {
@@ -234,9 +237,11 @@ export function SheetCanvas<T extends Record<string, boolean>>({
             <SheetWatermark bounds={vb} text={watermark} {...(watermarkStyle ? { style: watermarkStyle } : {})} {...(watermarkClip ? { clip: watermarkClip } : {})} />
             {/* eslint-disable-next-line @next/next/no-img-element -- generated SVG data URL */}
             <img ref={(el) => { if (el?.complete) settle(el); }} onLoad={(e) => settle(e.currentTarget)} src={src} alt="Flat dieline" draggable={false} className="absolute inset-0 size-full max-w-none" />
-            {highlight && highlight.length >= 3 ? (
+            {(highlight && highlight.length >= 3) || highlights.length > 0 ? (
               <svg aria-hidden className="absolute inset-0 size-full" viewBox={`${vb.minX ?? 0} ${vb.minY ?? 0} ${vb.width} ${vb.height}`}>
-                <polygon points={highlight.map((q) => `${q.x},${q.y}`).join(" ")} fill="#2f6bff" fillOpacity={0.2} stroke="#2f6bff" strokeWidth={2 / (view?.k || 1)} strokeLinejoin="round" className="hover-pulse" />
+                {[...(highlight && highlight.length >= 3 ? [highlight] : []), ...highlights].map((poly, i) => (
+                  <polygon key={i} points={poly.map((q) => `${q.x},${q.y}`).join(" ")} fill="#2f6bff" fillOpacity={0.2} stroke="#2f6bff" strokeWidth={2 / (view?.k || 1)} strokeLinejoin="round" className="hover-pulse" />
+                ))}
               </svg>
             ) : null}
           </div>

@@ -35,7 +35,7 @@ export const cartonBaseShape = {
   /** Board thickness, mm. */
   thickness: mm(0.05, 5).default(0.5),
   /**
-   * "manufacture": width/depth/height are crease-to-crease panel sizes (used as given).
+   * "manufacture": width/depth/height are fold-to-fold panel sizes (used as given).
    * "inner": they are the inside dimensions of the box; each gets an allowance of
    * allowanceFactor x thickness added to obtain the panel size.
    */

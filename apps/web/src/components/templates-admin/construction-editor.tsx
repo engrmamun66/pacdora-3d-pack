@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   CONSTRUCTION_DEFAULTS,
   DIM_KEYS,
+  DIM_LABELS,
   DIM_NAMES,
   FACTOR_RANGE,
   FLAP_SIZE_KEYS,
@@ -27,7 +28,6 @@ import { InfoTip } from "./help-tip";
 
 const field = "h-9 rounded-lg border border-input bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive";
 const round1 = (v: number) => Math.round(v * 10) / 10;
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const FLAP_LABELS: Record<FlapKey, string> = { tuckDepth: "Tuck flap depth", glueFlapWidth: "Glue flap width", dustFlapDepth: "Dust flap depth" };
 const FLAP_ROLE: Record<FlapKey, string> = { tuckDepth: "Tuck flap", glueFlapWidth: "Glue flap", dustFlapDepth: "Dust flap" };
@@ -156,7 +156,7 @@ export function ConstructionEditor({ fold, onChange, onMaterial }: { fold: FoldS
           <thead className="border-b bg-muted/40">
             <tr>
               <th className={th} scope="col">Size</th>
-              <th className={th} scope="col">As drawn (crease to crease)</th>
+              <th className={th} scope="col">As drawn (fold to fold)</th>
               <th className={th} scope="col">Called</th>
               <th className={th} scope="col">Starts at (mm)</th>
             </tr>
@@ -168,11 +168,11 @@ export function ConstructionEditor({ fold, onChange, onMaterial }: { fold: FoldS
                 <td className="px-2 py-1.5 tabular-nums">{round1(plan.natural[key])} mm</td>
                 <td className="px-2 py-1.5">
                   <select className={field} aria-label={`What the ${key} size is called`} value={res.names[key]} onChange={(e) => rename(key, e.target.value as DimName)}>
-                    {DIM_NAMES.map((n) => <option key={n} value={n}>{cap(n)}</option>)}
+                    {DIM_NAMES.map((n) => <option key={n} value={n}>{DIM_LABELS[n]}</option>)}
                   </select>
                 </td>
                 <td className="px-2 py-1.5">
-                  <NumberBox label={`Starting ${res.names[key]}`} value={c?.start?.[key]} placeholder={String(round1(plan.natural[key] - off))} min={0.1} max={10000} step={0.5} onChange={(v) => setStart(key, v)} />
+                  <NumberBox label={`Starting ${DIM_LABELS[res.names[key]].toLowerCase()}`} value={c?.start?.[key]} placeholder={String(round1(plan.natural[key] - off))} min={0.1} max={10000} step={0.5} onChange={(v) => setStart(key, v)} />
                 </td>
               </tr>
             ))}
@@ -204,14 +204,14 @@ export function ConstructionEditor({ fold, onChange, onMaterial }: { fold: FoldS
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm font-medium">
-          <span className="flex items-center gap-1">Size mode <InfoTip label="Size mode">What Width, Depth and Height mean on the page to start with. The drawing is crease-to-crease.</InfoTip></span>
+          <span className="flex items-center gap-1">Size mode <InfoTip label="Size mode">What Width, Depth and Height mean on the page to start with. The drawing is fold-to-fold.</InfoTip></span>
           <select className={`${field} h-10`} value={res.sizeMode} onChange={(e) => set({ sizeMode: e.target.value as Construction["sizeMode"] })}>
-            <option value="manufacture">Manufacture (crease-to-crease)</option>
+            <option value="manufacture">Manufacture (fold-to-fold)</option>
             <option value="inner">Inner (inside of the box)</option>
           </select>
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
-          <span className="flex items-center gap-1">Allowance (x thickness) <InfoTip label="Allowance">Inner mode: crease-to-crease = inner + allowance x thickness.</InfoTip></span>
+          <span className="flex items-center gap-1">Allowance (x thickness) <InfoTip label="Allowance">Inner mode: fold-to-fold = inner + allowance x thickness.</InfoTip></span>
           <NumberBox label="Allowance" value={c?.allowanceFactor} placeholder={String(CONSTRUCTION_DEFAULTS.allowanceFactor)} min={FACTOR_RANGE.min} max={FACTOR_RANGE.max} step={0.1} onChange={(v) => set({ allowanceFactor: v })} />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">

@@ -5,7 +5,7 @@ import type { Outline } from "../primitives/arc";
 import { area, bounds, offsetPolygon } from "../primitives/polygon";
 import { type Vec2, vec } from "../primitives/vec2";
 import { ENGINE_VERSION, ParamValidationError } from "./carton-common";
-import { CONSTRUCTION_DEFAULTS, DIM_KEYS, partKey, DIM_NAMES, FACTOR_RANGE, FLAP_SIZE_KEYS, THICKNESS_RANGE, type DimKey, type SizeMode, importedPlan, predictNames, resolveConstruction, sizeTargets } from "./imported-construction";
+import { CONSTRUCTION_DEFAULTS, DIM_KEYS, DIM_LABELS, partKey, DIM_NAMES, FACTOR_RANGE, FLAP_SIZE_KEYS, THICKNESS_RANGE, type DimKey, type SizeMode, importedPlan, predictNames, resolveConstruction, sizeTargets } from "./imported-construction";
 import { type FoldSetup, validateFoldSetup } from "./imported-fold";
 import { type PartSizes, type ResizePlan, sheetMap, slotEdits, stretchPlanOf } from "./imported-resize";
 import type { GeneratorDefinition, ParamDescriptor } from "./registry";
@@ -410,7 +410,7 @@ function partParams(plan: ResizePlan, fold?: FoldSetup | null): ParamDescriptor[
       // Its own sizes, named like a main body's (the largest of the other two is the width...).
       const names = predictNames(stretch);
       const dims = [...DIM_KEYS].sort((a, b) => DIM_NAMES.indexOf(names[a]) - DIM_NAMES.indexOf(names[b]));
-      for (const key of dims) out.push(sizeParam(pre(key), `${q.name} ${names[key]}`, `${cap(names[key])} of ${q.name}, on its own. Measured as Size mode says.`));
+      for (const key of dims) out.push(sizeParam(pre(key), `${q.name} ${DIM_LABELS[names[key]].toLowerCase()}`, `${DIM_LABELS[names[key]]} of ${q.name}, on its own. Measured as Size mode says.`));
     } else {
       out.push(
         sizeParam(pre("boxHeight"), `${q.name} height`, `How tall ${q.name} stands. Its width and depth follow ${main}. Measured as Size mode says.`),
@@ -431,10 +431,10 @@ function boxParams(plan: ResizePlan, cons: NonNullable<ReturnType<typeof resolve
   const dims = [...DIM_KEYS].sort((a, b) => DIM_NAMES.indexOf(cons.names[a]) - DIM_NAMES.indexOf(cons.names[b]));
   const dimHelp: Record<string, string> = {
     width: "Front/back panel width.",
-    depth: "Side panel width.",
-    height: "How tall the box stands.",
+    depth: "Side panel width (shown as Height).",
+    height: "The longest side of the box (shown as Length).",
   };
-  const out: ParamDescriptor[] = dims.map((key: DimKey) => sizeParam(key, cap(cons.names[key]), `${dimHelp[cons.names[key]]} Measured as Size mode says.`));
+  const out: ParamDescriptor[] = dims.map((key: DimKey) => sizeParam(key, DIM_LABELS[cons.names[key]], `${dimHelp[cons.names[key]]} Measured as Size mode says.`));
   const flapLabels = { tuckDepth: "Tuck flap depth", glueFlapWidth: "Glue flap width", dustFlapDepth: "Dust flap depth" } as const;
   for (const key of FLAP_SIZE_KEYS) {
     if (plan.natural[key] === undefined) continue;
@@ -448,7 +448,7 @@ function boxParams(plan: ResizePlan, cons: NonNullable<ReturnType<typeof resolve
       label: "Size mode",
       group: "Structure",
       options: [
-        { value: "manufacture", label: "Manufacture (crease-to-crease)" },
+        { value: "manufacture", label: "Manufacture (fold-to-fold)" },
         { value: "inner", label: "Inner (inside of the box)" },
       ],
     },

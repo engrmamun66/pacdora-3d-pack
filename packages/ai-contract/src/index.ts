@@ -62,7 +62,7 @@ export function systemPrompt(catalog: readonly TemplatePreset[] = templateCatalo
     "- depth_mm: the side panel (for shipping boxes and crash-lock bottoms it must not exceed width_mm; put the longer horizontal side in width_mm).",
     "- height_mm: the vertical height of the box.",
     "Convert other units (cm, inch, \") to millimetres and record each conversion in notes.",
-    'size_mode: "inner" when the customer gives the inside size or the size of the product to fit; "manufacture" when they give crease-to-crease or outside panel sizes, or do not say (then note the assumption).',
+    'size_mode: "inner" when the customer gives the inside size or the size of the product to fit; "manufacture" when they give fold-to-fold or outside panel sizes, or do not say (then note the assumption).',
     "board_thickness_mm: only if the customer states the material thickness, otherwise null.",
     'status: "ok" when all three dimensions are given or clearly implied; "needs_info" when a dimension is missing (still pick the best preset, put 0 for missing numbers, and ask for them in message); "unsupported" when no preset fits (say why in message).',
     "Never invent dimensions the customer did not give. Keep notes short and factual.",

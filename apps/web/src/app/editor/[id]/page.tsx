@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { db } from "@/server/db";
 import { getProject } from "@/server/projects";
 import { requireUser } from "@/server/session";
+import { SessionGuardHost } from "@/components/auth/session-guard-host";
 import { EditorLoader } from "@/components/editor/editor-loader";
 import { EditorSkeleton } from "@/components/editor/editor-skeleton";
 import { IMPORTED_GENERATOR_ID, type WindowSpec } from "@packaging/dieline-engine";
@@ -48,6 +49,8 @@ async function EditorView({ params }: { params: PageProps<"/editor/[id]">["param
     db.shareLink.findFirst({ where: { userId: user.id, scope: "template", projectId: project.id, active: false }, select: { id: true } }),
   ]);
   return (
+    <>
+    <SessionGuardHost email={user.email} />
     <EditorLoader
       projectId={project.id}
       viewer={{ name: user.name, email: user.email, image: user.image ?? null }}
@@ -66,6 +69,7 @@ async function EditorView({ params }: { params: PageProps<"/editor/[id]">["param
       layouts={await listLayouts(true)}
       previewLink={allLink ? { path: portalTemplate(allLink.hash, null, templateHash(project.id)), active: allLink.active && !offLink } : null}
     />
+    </>
   );
 }
 

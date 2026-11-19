@@ -11,7 +11,15 @@ import { GoogleButton, OrDivider } from "./google-button";
 import { Turnstile } from "./turnstile";
 import { TURNSTILE_SITE_KEY, useCaptcha } from "./use-captcha";
 
-export function LoginForm({ next, googleEnabled, initialError }: { next: string; googleEnabled: boolean; initialError?: string | null }) {
+export function LoginForm({ next, googleEnabled, initialError, onDone, newTabLinks = false }: {
+  next: string;
+  googleEnabled: boolean;
+  initialError?: string | null;
+  /** In a sign-in box over a page: called after a good sign-in instead of going to `next`. Return a message to refuse the sign-in (it is shown as the error). */
+  onDone?: () => Promise<string | null> | string | null;
+  /** Open "Forgot password" in a new tab, so the page behind the box keeps its work. */
+  newTabLinks?: boolean;
+}) {
   const router = useRouter();
   const captcha = useCaptcha();
   const [error, setError] = useState<string | null>(initialError ?? null);
@@ -36,6 +44,11 @@ export function LoginForm({ next, googleEnabled, initialError }: { next: string;
     captcha.reset();
     setBusy(false);
     if (!err) {
+      if (onDone) {
+        const refused = await onDone();
+        if (refused) setError(refused);
+        return;
+      }
       router.push(next);
       router.refresh();
       return;
@@ -79,7 +92,7 @@ export function LoginForm({ next, googleEnabled, initialError }: { next: string;
         <Field label="Email" id="email" type="email" autoComplete="email" required />
         <Field label="Password" id="password" type="password" autoComplete="current-password" required />
         <div className="-mt-2 text-right text-sm">
-          <Link href="/forgot-password" className="text-muted-foreground underline-offset-4 hover:underline">Forgot password?</Link>
+          <Link href="/forgot-password" {...(newTabLinks ? { target: "_blank", rel: "noopener" } : {})} className="text-muted-foreground underline-offset-4 hover:underline">Forgot password?</Link>
         </div>
         <Turnstile resetKey={captcha.resetKey} siteKey={TURNSTILE_SITE_KEY} onToken={captcha.onToken} onError={captcha.onError} />
         <FormError message={error ?? captcha.error} />

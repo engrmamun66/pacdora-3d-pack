@@ -79,7 +79,7 @@ export function RotationControls({ viewRef, className = "" }: { viewRef: RefObje
   };
 
   const slider = (axis: "x" | "y" | "z", hint: string, min: number, max: number) => (
-    <div className="flex items-center gap-1.5" title={hint}>
+    <div className="flex items-center gap-1.5" data-tip={hint}>
       <span aria-hidden className="w-3 shrink-0 font-medium">{axis.toUpperCase()}</span>
       <RangeSlider
         min={min}
@@ -100,7 +100,7 @@ export function RotationControls({ viewRef, className = "" }: { viewRef: RefObje
         type="button"
         aria-label="Show rotation controls"
         aria-expanded={false}
-        title="Rotate X / Y"
+        data-tip="Rotate X / Y"
         onClick={() => setOpen(true)}
         className={`absolute top-2 right-2 z-10 grid size-8 place-items-center rounded-lg border bg-background/80 text-muted-foreground shadow-xs backdrop-blur transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${className}`}
       >
@@ -120,7 +120,7 @@ export function RotationControls({ viewRef, className = "" }: { viewRef: RefObje
         type="button"
         aria-label="Hide rotation controls"
         aria-expanded
-        title="Hide"
+        data-tip="Hide"
         onClick={() => setOpen(false)}
         className="grid size-5 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { requireUser } from "@/server/session";
 import { getProject, getSaveAsOptions } from "@/server/projects";
+import { SessionGuardHost } from "@/components/auth/session-guard-host";
 import { DielineWorkspace } from "@/components/dielines/workspace";
 import { getWatermark } from "@/server/site-settings";
 import { IMPORTED_GENERATOR_ID, type WindowSpec } from "@packaging/dieline-engine";
@@ -24,6 +25,8 @@ async function ProjectView({ params, searchParams }: { params: PageProps<"/proje
     return <p className="p-6 text-destructive">The template this project was made from is no longer available.</p>;
   }
   return (
+    <>
+    <SessionGuardHost email={user.email} />
     <DielineWorkspace
       mode={{ kind: "edit", projectId: project.id }}
       generatorId={project.doc.template.generatorId}
@@ -40,6 +43,7 @@ async function ProjectView({ params, searchParams }: { params: PageProps<"/proje
       viewer={{ name: user.name, email: user.email, image: user.image ?? null }}
       saveOptions={await getSaveAsOptions(user.id, project.id)}
     />
+    </>
   );
 }
 

@@ -92,7 +92,9 @@ describe("box settings of an imported dieline", () => {
     const dup = resolveConstruction({ names: { baseWidth: "depth", baseHeight: "depth" } }, plan).names;
     expect(dup).toEqual(predictNames(plan));
     const gen = createImportedGenerator("t", flat, { ...setup, construction: { names: { baseWidth: "depth", baseHeight: "width", boxHeight: "height" } } });
-    expect(gen.params.find((p) => p.key === "baseWidth")?.label).toBe("Depth");
+    // The stored name "depth" is shown as "Height" (and "height" as "Length"), see DIM_LABELS.
+    expect(gen.params.find((p) => p.key === "baseWidth")?.label).toBe("Height");
+    expect(gen.params.find((p) => p.key === "boxHeight")?.label).toBe("Length");
     expect(gen.params.find((p) => p.key === "baseHeight")?.label).toBe("Width");
   });
 

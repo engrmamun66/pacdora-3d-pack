@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { z } from "zod";
 import { IMPORTED_GENERATOR_ID, getGenerator, getPreset } from "@packaging/dieline-engine";
+import { SessionGuardHost } from "@/components/auth/session-guard-host";
 import { DielineWorkspace } from "@/components/dielines/workspace";
 import { getWatermark } from "@/server/site-settings";
 import { getSession } from "@/server/session";
@@ -51,6 +52,8 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
     if (!imported) notFound();
     const startParams = importedStartParams(imported.flat, imported.fold);
     return (
+      <>
+      {user ? <SessionGuardHost email={user.email} /> : null}
       <DielineWorkspace
         mode={{ kind: "create", presetId: row.id }}
         generatorId={IMPORTED_GENERATOR_ID}
@@ -68,6 +71,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
         viewer={viewer}
         saveOptions={saveOptions}
       />
+      </>
     );
   }
 
@@ -76,6 +80,8 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
   if (row.source !== "builtin" || !preset) notFound();
   const prefill = readPrefill((await searchParams).p, getGenerator(preset.generatorId).schemaKeys);
   return (
+    <>
+    {user ? <SessionGuardHost email={user.email} /> : null}
     <DielineWorkspace
       mode={{ kind: "create", presetId: preset.id }}
       generatorId={preset.generatorId}
@@ -92,6 +98,7 @@ async function TemplateView({ params, searchParams }: { params: PageProps<"/temp
       viewer={viewer}
       saveOptions={saveOptions}
     />
+    </>
   );
 }
 

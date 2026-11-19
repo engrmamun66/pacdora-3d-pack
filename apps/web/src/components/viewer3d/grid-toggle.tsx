@@ -32,7 +32,7 @@ export function GridToggle({ viewRef, defaultOn = true, keepViewByDefault = fals
       type="button"
       aria-label={on ? "Hide the grid" : "Show the grid"}
       aria-pressed={on}
-      title={on ? "Hide grid" : "Show grid"}
+      data-tip={on ? "Hide grid" : "Show grid"}
       onClick={() => {
         const next = !on;
         setOn(next);
@@ -81,7 +81,7 @@ function KeepViewToggle({ viewRef, defaultOn }: { viewRef: RefObject<CartonViewH
       type="button"
       aria-label={on ? "Stop keeping the view" : "Keep the view when the model changes"}
       aria-pressed={on}
-      title={on ? `Keeping this view (${numbers}). Click to let it reset.` : `Keep this view (${numbers}) when the model changes: only the 3D object updates`}
+      data-tip={on ? `Keeping this view (${numbers}). Click to let it reset.` : `Keep this view (${numbers}) when the model changes: only the 3D object updates`}
       onClick={() => {
         const next = !on;
         setOn(next);

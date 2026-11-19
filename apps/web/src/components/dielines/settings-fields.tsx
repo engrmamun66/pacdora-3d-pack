@@ -79,6 +79,8 @@ export function ParamField({
   disabled,
   onUsePlaceholder,
   onChange,
+  lit = false,
+  onActive,
 }: {
   p: ParamDescriptor;
   /** mm text (or the enum value). */
@@ -90,15 +92,21 @@ export function ParamField({
   /** Copies the calculated default into an empty field when it is double-clicked. */
   onUsePlaceholder?: (mm: number) => void;
   onChange: (v: string) => void;
+  /** Lit up softly: the panel the mouse is over on the dieline (or the 3D box) is changed by this setting. */
+  lit?: boolean;
+  /** Called with true when the mouse or the keyboard is on this field and false when it leaves: the dieline blinks the panels it changes. */
+  onActive?: (on: boolean) => void;
 }) {
   const id = `param-${p.key}`;
+  const wrap = `flex flex-col gap-1 rounded-md transition-colors duration-150 ${lit ? "bg-primary/10 ring-2 ring-primary/40 ring-offset-2 ring-offset-background" : ""}`;
+  const active = onActive ? { onMouseEnter: () => onActive(true), onMouseLeave: () => onActive(false), onFocus: () => onActive(true), onBlur: () => onActive(false) } : {};
   const [draft, setDraft] = useState<string | null>(null);
   const hintId = `${id}-hint`;
   const hint = error; // the help text itself lives behind the help icon; only a problem stays visible
 
   if (p.kind === "enum") {
     return (
-      <div className="flex flex-col gap-1">
+      <div className={wrap} {...active}>
         <div className="flex items-center">
           <label htmlFor={id} className="text-xs font-medium">{p.label}</label>
           {p.help ? <FieldHelp label={p.label}>{p.help}</FieldHelp> : null}
@@ -119,7 +127,7 @@ export function ParamField({
   const div = u === "in" ? MM_PER_INCH : 1;
   const ph = placeholderMm === undefined ? (p.optional ? "auto" : undefined) : `${p.optional ? "auto" : "default"} (${toDisplay(String(placeholderMm.toFixed(2)), u)})`;
   return (
-    <div className="flex flex-col gap-1">
+    <div className={wrap} {...active}>
       <div className="flex items-center">
         <label htmlFor={id} className="text-xs font-medium">
           {p.label}
@@ -373,7 +381,7 @@ export function ThicknessField({
             "A thicker board moves the fold lines outward, so the flat sheet and the 3D box both change and the inside of the box stays the same. " +
             (sizeMode === "inner"
               ? "Sizes you type are the inside of the box."
-              : "A size you type is taken as the crease-to-crease size, so it does not move. Clear it to follow the thickness.")}
+              : "A size you type is taken as the fold-to-fold size, so it does not move. Clear it to follow the thickness.")}
         </FieldHelp>
       </div>
       <div className="flex items-center gap-2">

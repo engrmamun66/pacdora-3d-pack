@@ -127,6 +127,10 @@ export function FoldSetupEditor({
   const [warnings, setWarnings] = useState<readonly string[]>([]);
   const [progress, setProgress] = useState(startView?.progress ?? 1);
   const view = useRef<CartonViewHandle>(null);
+  // Sheet | 3D side by side (xl and up): share (%) of the width the sheet takes, set by dragging the divider between them.
+  const splitBox = useRef<HTMLDivElement>(null);
+  const splitDrag = useRef<number | null>(null);
+  const [splitPct, setSplitPct] = useState(40);
   const anim = useRef<number | null>(null);
   // The board picked on the "Material & Paper" tab (null = not picked: the family is guessed from the thickness). The 3D preview shows its colour, grain, cut edge and thickness.
   const [pickedMaterial, setPickedMaterial] = useState<string | null>(null);
@@ -327,9 +331,9 @@ export function FoldSetupEditor({
         </details>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div ref={splitBox} style={{ "--split": `${splitPct}%` } as React.CSSProperties} className="flex flex-col gap-4 xl:flex-row xl:gap-0">
         {/* flat sheet with panels and fold lines */}
-        <div className="flex min-w-0 flex-col gap-2">
+        <div className="flex min-w-0 flex-col gap-2 xl:flex-none xl:basis-(--split) xl:pr-2">
           <div className="relative rounded-xl border bg-white p-2">
             <HelpTip label="About the colours and numbers">
               Colours show how deep a panel is from the base. Numbers on the fold lines are the fold steps. <span className="text-teal-700 dark:text-teal-300">Green</span> folds inward, <span className="text-orange-600">orange</span> outward.
@@ -410,8 +414,51 @@ export function FoldSetupEditor({
           </div>
         </div>
 
+        {/* Divider: drag it left or right to give the sheet or the 3D view more room (double click: 50 / 50). Side by side from xl up. */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Drag to resize the sheet and the 3D view (double click to reset)"
+          aria-valuemin={25}
+          aria-valuemax={75}
+          aria-valuenow={Math.round(splitPct)}
+          tabIndex={0}
+          title="Drag to resize (double click: 40/60)"
+          className="group relative z-10 hidden w-0 shrink-0 cursor-col-resize touch-none outline-none xl:block"
+          onPointerDown={(e) => {
+            if (e.button !== 0) return;
+            e.currentTarget.setPointerCapture(e.pointerId);
+            splitDrag.current = e.pointerId;
+            e.preventDefault();
+          }}
+          onPointerMove={(e) => {
+            if (splitDrag.current !== e.pointerId) return;
+            const r = splitBox.current?.getBoundingClientRect();
+            if (r && r.width > 0) setSplitPct(Math.min(75, Math.max(25, ((e.clientX - r.left) / r.width) * 100)));
+          }}
+          onPointerUp={() => (splitDrag.current = null)}
+          onPointerCancel={() => (splitDrag.current = null)}
+          onDoubleClick={() => setSplitPct(40)}
+          onKeyDown={(e) => {
+            const step = e.shiftKey ? 10 : 2;
+            if (e.key === "ArrowLeft") setSplitPct((v) => Math.max(25, v - step));
+            else if (e.key === "ArrowRight") setSplitPct((v) => Math.min(75, v + step));
+            else if (e.key === "Home") setSplitPct(40);
+            else return;
+            e.preventDefault();
+          }}
+        >
+          <span aria-hidden className="absolute inset-y-0 -left-2 w-4" />
+          <span aria-hidden className="absolute inset-y-0 left-0 w-px -translate-x-1/2 bg-border transition-shadow duration-150 group-hover:shadow-[0_0_3px_rgba(59,130,246,0.35)] group-focus-visible:shadow-[0_0_3px_rgba(59,130,246,0.35)] group-active:shadow-[0_0_4px_1px_rgba(59,130,246,0.5)]" />
+          <span aria-hidden className="absolute top-1/2 left-0 flex h-12 w-3 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-full border bg-background shadow-sm transition-shadow duration-150 group-hover:shadow-[0_0_4px_rgba(59,130,246,0.35)] group-focus-visible:shadow-[0_0_4px_rgba(59,130,246,0.35)] group-active:shadow-[0_0_5px_1px_rgba(59,130,246,0.5)]">
+            <span className="size-[3px] rounded-full bg-muted-foreground/70" />
+            <span className="size-[3px] rounded-full bg-muted-foreground/70" />
+            <span className="size-[3px] rounded-full bg-muted-foreground/70" />
+          </span>
+        </div>
+
         {/* 3D preview */}
-        <div className="flex min-w-0 flex-col gap-2">
+        <div className="flex min-w-0 flex-col gap-2 xl:min-w-0 xl:flex-1 xl:basis-0 xl:pl-2">
           <div className="relative overflow-hidden rounded-xl border bg-muted/40">
             {geo.geo ? (
               <CartonView ref={view} className="h-[min(420px,50vh)] w-full" geo={shownGeo ?? geo.geo} texture={null} textureRect={null} progress={progress} outsideColor={boardColor} insideColor={boardLook.inside} thickness={boardThickness} boardGrain={boardLook.grain} boardEdge={{ color: boardLook.edge, flute: boardLook.flute }} initialView={startView} onPanelHover={setHover3d} />

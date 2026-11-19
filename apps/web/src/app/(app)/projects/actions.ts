@@ -7,7 +7,8 @@ import { ENGINE_VERSION, IMPORTED_GENERATOR_ID, MAX_WINDOWS, ParamValidationErro
 import { newProjectDoc, parseProjectDoc, windowSchema, type WindowDoc } from "@packaging/schema";
 import { db } from "@/server/db";
 import { claimNameAndSlug, isSlugClash, nameTaken } from "@/server/project-names";
-import { requireUser } from "@/server/session";
+import { getActionUser, requireUser } from "@/server/session";
+import { SESSION_ENDED_MESSAGE } from "@/lib/session-ended";
 import { resolveGenerator } from "@/server/imported-templates";
 import { copyTemplateBackground } from "@/server/template-background";
 import { storage } from "@/server/storage";
@@ -71,7 +72,8 @@ function validateWithEngine(gen: GeneratorDefinition, params: Record<string, unk
 
 /** Shared by both create actions: validate everything, insert, return the new id (or a form state). */
 async function insertProject(formData: FormData): Promise<{ id: string } | DesignState> {
-  const user = await requireUser();
+  const user = await getActionUser();
+  if (!user) return { ok: false, message: SESSION_ENDED_MESSAGE, issues: [] };
   const presetId = String(formData.get("presetId") ?? "");
   const builtin = getPreset(presetId);
   // An imported (SVG) template must exist and be published to start a new project from it.
@@ -159,7 +161,8 @@ export async function createProjectDraft(formData: FormData): Promise<DesignStat
 
 /** Save new parameters (and name) for an existing project the user owns. */
 export async function updateProject(_prev: DesignState, formData: FormData): Promise<DesignState> {
-  const user = await requireUser();
+  const user = await getActionUser();
+  if (!user) return { ok: false, message: SESSION_ENDED_MESSAGE, issues: [] };
   const id = String(formData.get("projectId") ?? "");
   const row = await db.project.findFirst({ where: { id, userId: user.id } });
   if (!row) return { ok: false, message: "Project not found.", issues: [] };
@@ -229,7 +232,8 @@ export async function saveProjectAs(formData: FormData): Promise<DesignState & {
     await applyOrganize(r.id, formData);
     return { ok: true, message: "Saved.", issues: [], id: r.id };
   }
-  const user = await requireUser();
+  const user = await getActionUser();
+  if (!user) return fail({ ok: false, message: SESSION_ENDED_MESSAGE, issues: [] });
   const row = await db.project.findFirst({ where: { id: projectId, userId: user.id } });
   if (!row) return fail({ ok: false, message: "Project not found.", issues: [] });
   const name = nameSchema.safeParse(formData.get("name"));
@@ -293,7 +297,8 @@ export async function saveProjectAs(formData: FormData): Promise<DesignState & {
 
 /** Delete a project the user owns. */
 export async function deleteProject(formData: FormData): Promise<void> {
-  const user = await requireUser();
+  const user = await getActionUser();
+  if (!user) return; // signed out: the page's sign-in box opens; nothing is deleted
   const id = String(formData.get("projectId") ?? "");
   await db.project.deleteMany({ where: { id, userId: user.id } });
   revalidatePath("/projects");

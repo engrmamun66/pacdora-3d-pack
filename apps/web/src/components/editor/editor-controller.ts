@@ -25,6 +25,8 @@ export interface EditorCallbacks {
   onError(message: string): void;
   /** Face color mode: a click on a panel (null = a click on no panel). Where to show the colour box (px from the canvas top-left) and which panel. */
   onFacePick?(pick: { panelId: string; x: number; y: number } | null): void;
+  /** The pointer is over a panel of the dieline (null = over none). Not called in face colour mode, nor while the pointer drags something. */
+  onPanelHover?(id: string | null): void;
   /** A right click (no drag) on artwork: where to show its menu (px from the canvas top-left); the artwork is selected. */
   onContextMenu?(at: { x: number; y: number }): void;
   /** A right click (no drag) on a background picture, with no artwork under it: where to show its menu, and which picture (it is chosen). */
@@ -103,6 +105,10 @@ export class EditorController {
   private faceMode = false;
   private faceHover: string | null = null;
   private faceChosen: string | null = null;
+  /** A panel shown blinking (from the 3D view, or under the pointer), and the frame loop that animates it. */
+  private lit: string | null = null;
+  private litFrame = 0;
+  private overPanel: string | null = null;
   private textTimer: ReturnType<typeof setTimeout> | null = null;
   private panning: { x: number; y: number } | null = null;
   spaceDown = false;
@@ -176,7 +182,7 @@ export class EditorController {
     this.canvas.on("mouse:move", ({ e }) => {
       if (this.faceMode && !this.panning) return this.faceMove(e as MouseEvent);
       if (this.bgEdit && !this.panning) return this.bgMove(e as MouseEvent);
-      if (!this.panning) return;
+      if (!this.panning) return this.hoverMove(e as MouseEvent);
       const me = e as MouseEvent;
       this.pan(me.clientX - this.panning.x, me.clientY - this.panning.y);
       this.panning = { x: me.clientX, y: me.clientY };
@@ -184,6 +190,11 @@ export class EditorController {
     // A double-click on a background picture, while it is being moved and resized, finishes the editing (same as Done).
     this.canvas.on("mouse:dblclick", ({ e }) => {
       if (this.bgEdit && this.bgHit(this.pointerScene(e as MouseEvent)) === "move") this.setBackgroundEdit(false);
+    });
+    this.canvas.on("mouse:out", () => {
+      if (this.overPanel === null) return;
+      this.overPanel = null;
+      this.cb.onPanelHover?.(null);
     });
     this.canvas.on("mouse:up", () => {
       this.panning = null;
@@ -348,6 +359,21 @@ export class EditorController {
     this.applyVpt(ctx);
     ctx.lineWidth = 1 / z;
     // Face color mode: the panel under the pointer (and the one whose colour box is open) is outlined.
+    if (this.lit && !this.faceMode) {
+      const panel = this.geo.foldTree.panels.find((p) => p.id === this.lit);
+      if (panel) {
+        const path = panelFillPath(panel);
+        const beat = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(performance.now() / 175)); // the same blink as the dieline page (about 1.1 s)
+        ctx.globalAlpha = beat;
+        ctx.fillStyle = "rgba(47,107,255,0.22)";
+        ctx.fill(path, "evenodd");
+        ctx.strokeStyle = "#2f6bff";
+        ctx.lineWidth = 2 / z;
+        ctx.stroke(path);
+        ctx.globalAlpha = 1;
+        ctx.lineWidth = 1 / z;
+      }
+    }
     for (const id of new Set([this.faceHover, this.faceChosen])) {
       const panel = id ? this.geo.foldTree.panels.find((p) => p.id === id) : undefined;
       if (!panel) continue;
@@ -486,6 +512,30 @@ export class EditorController {
   chooseFace(panelId: string | null) {
     this.faceChosen = panelId;
     this.canvas.requestRenderAll();
+  }
+
+  /** Blink a panel on the dieline (null = stop). Used when the pointer is over that panel in the 3D view. */
+  setHighlight(panelId: string | null) {
+    if (panelId === this.lit) return;
+    this.lit = panelId;
+    cancelAnimationFrame(this.litFrame);
+    if (!panelId) {
+      this.canvas.requestRenderAll();
+      return;
+    }
+    const tick = () => {
+      this.canvas.requestRenderAll();
+      this.litFrame = requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  /** Tell the page which panel the pointer is over (plain editing mode, no button held). */
+  private hoverMove(e: MouseEvent) {
+    const id = e.buttons ? null : this.panelAtPointer(e);
+    if (id === this.overPanel) return;
+    this.overPanel = id;
+    this.cb.onPanelHover?.(id);
   }
 
   private panelAtPointer(e: MouseEvent): string | null {
@@ -1422,6 +1472,7 @@ export class EditorController {
   dispose() {
     if (this.textTimer) clearTimeout(this.textTimer);
     this.offRightPan();
+    cancelAnimationFrame(this.litFrame);
     void this.canvas.dispose();
   }
 }

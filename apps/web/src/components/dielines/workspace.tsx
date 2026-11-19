@@ -14,6 +14,7 @@ import { createProject, createProjectDraft, listProjectsOfTemplate, saveProjectA
 import { SaveChoiceDialog } from "./save-choice-dialog";
 import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { panelAt, panelShapes } from "@/lib/panel-hit";
+import { computeParamPanels, type ParamPanels } from "@/lib/param-panels";
 import { withViewTab, type ViewTab } from "@/lib/view-tab";
 import { DielineInfo } from "./dieline-info";
 import { boxSizes, dielineStats } from "./info-math";
@@ -219,9 +220,34 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
     if (r && r.width > 0) setSplitPct(Math.min(80, Math.max(20, ((clientX - r.left) / r.width) * 100)));
   };
   const shapes = useMemo(() => (shown ? panelShapes(shown) : []), [shown]);
+  // Settings <-> panels. Which panels a setting changes is found by trying it (lib/param-panels.ts), once, a moment after the dieline is first drawn.
+  // Pointing at a panel (on the sheet or on the 3D box) lights the settings that change it; being on a setting (mouse or keyboard) makes the panels it changes blink on the sheet.
+  const relRef = useRef<{ gen: typeof gen; rel: ParamPanels } | null>(null);
+  const relations = (): ParamPanels | null => {
+    if (!result.geo) return null;
+    if (relRef.current?.gen !== gen) relRef.current = { gen, rel: computeParamPanels((p) => gen.generate(p), input, gen.params, result.geo.params as Record<string, unknown>) };
+    return relRef.current.rel;
+  };
+  const hasGeo = Boolean(result.geo);
+  useEffect(() => {
+    if (!hasGeo) return;
+    const t = window.setTimeout(() => relations(), 500);
+    return () => window.clearTimeout(t);
+    // The relations only depend on the template; they are worked out again if it changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gen, hasGeo]);
+  const [lit, setLit] = useState<{ panels: string[]; fields: string[] }>({ panels: [], fields: [] });
+  const setLight = (panels: string[], fields: string[]) =>
+    setLit((cur) => (cur.panels.join() === panels.join() && cur.fields.join() === fields.join() ? cur : { panels, fields }));
+  /** A panel is pointed at (null = none): it is lit on the sheet, and so are the settings that change it. */
+  const lightPanel = (id: string | null) => setLight(id ? [id] : [], id ? [...(relations()?.byPanel.get(id) ?? [])] : []);
+  /** The mouse or the keyboard is on a setting: the panels it changes are lit on the sheet. */
+  const lightField = (key: string, on: boolean) => setLight(on ? [...(relations()?.byParam.get(key) ?? [])] : [], on ? [key] : []);
+  const litPolys = shapes.filter((q) => lit.panels.includes(q.id)).map((q) => q.poly);
   const hoverAt = (pt: { x: number; y: number } | null) => {
     const id = pt ? (panelAt(shapes, pt)?.id ?? null) : null;
     setHoverPanel((cur) => (cur === id ? cur : id));
+    lightPanel(id);
   };
   const blinkId = hoverPanel;
   useEffect(() => {
@@ -426,6 +452,8 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
           value={values[p.key] ?? ""}
           unit={unit}
           {...(p.kind === "number" && typeof resolved[p.key] === "number" ? { placeholderMm: resolved[p.key] as number } : {})}
+          lit={lit.fields.includes(p.key)}
+          onActive={(on) => lightField(p.key, on)}
           {...(issueFor(p.key) ? { error: issueFor(p.key)! } : {})}
           {...(p.group === "Dimensions" && p.kind === "number" ? { onUsePlaceholder: (mm: number) => setValues((s) => ({ ...s, [p.key]: String(mm) })) } : {})}
           onChange={(v) => setValues((s) => ({ ...s, [p.key]: v }))}
@@ -619,7 +647,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
       <div ref={stageHost} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       {stageOn && shown ? (
         <div ref={stage} style={{ position: "absolute", visibility: "hidden", left: 0, top: 0, width: 0, height: 0 }} className="z-20 flex flex-col" inert={windowsView === "open"}>
-          <FoldPreview large unit={unit} onReady={sw.markReady} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
+          <FoldPreview large unit={unit} onPanelHover={lightPanel} onReady={sw.markReady} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
         </div>
       ) : null}
       <div
@@ -741,7 +769,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
             <div ref={splitBox} style={{ "--split": `${splitPct}%` } as React.CSSProperties} className="flex min-h-0 flex-1 flex-col max-lg:pt-14 lg:flex-row">
               <div className="relative flex min-h-[40vh] min-w-0 flex-1 basis-0 flex-col lg:min-h-0 lg:flex-none lg:basis-(--split)">
                 {src ? (
-                  <SheetCanvas onReady={() => splitDone("sheet")} onWindows={openWindows} windowCount={windows.length} {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} onHoverMm={hoverAt} highlight={shapes.find((q) => q.id === blinkId)?.poly ?? null} />
+                  <SheetCanvas onReady={() => splitDone("sheet")} onWindows={openWindows} windowCount={windows.length} {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} onHoverMm={hoverAt} highlights={litPolys} />
                 ) : null}
               </div>
               <div
@@ -785,7 +813,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
                 </span>
               </div>
               <div className="flex min-h-[40vh] min-w-0 flex-1 basis-0 flex-col gap-2 p-4 lg:min-h-0">
-                <FoldPreview large unit={unit} onReady={() => splitDone("box")} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
+                <FoldPreview large unit={unit} onPanelHover={lightPanel} onReady={() => splitDone("box")} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
               </div>
             </div>
           ) : shown && foldable && centre === "3d" ? (
@@ -794,7 +822,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
             </div>
           ) : shown && src ? (
             <SwapIn className="flex min-h-0 flex-1 flex-col" getFrom={() => swapFrom.current?.aside}>
-              <SheetCanvas onWindows={openWindows} windowCount={windows.length} {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} onHoverMm={hoverAt} highlight={shapes.find((q) => q.id === blinkId)?.poly ?? null} />
+              <SheetCanvas onWindows={openWindows} windowCount={windows.length} {...(watermark === undefined ? {} : { watermark: watermark?.text ?? "" })} {...(watermark ? { watermarkStyle: watermark } : {})} bounds={dielineViewBox(shown, 22)} watermarkClip={shown.cutLoops.map(outlinePathD).join(" ")} src={src} toggles={toggles} toggleDefs={toggleDefs} onToggles={setToggles} legend={legend} onHoverMm={hoverAt} highlights={litPolys} />
             </SwapIn>
           ) : (
             <p className="p-6 text-sm text-muted-foreground">Enter valid dimensions to see the dieline.</p>
@@ -812,7 +840,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
             <div ref={asideSlot} className="relative shrink-0 rounded-2xl">
               {centre === "dieline" ? <div ref={asideTarget} className="h-[17rem]" /> : src ? (
                 <SwapIn getFrom={() => swapFrom.current?.centre}>
-                  <MiniSheet box={dielineViewBox(shown, 22)} src={src} onHoverMm={hoverAt} highlight={shapes.find((q) => q.id === blinkId)?.poly ?? null} />
+                  <MiniSheet box={dielineViewBox(shown, 22)} src={src} onHoverMm={hoverAt} highlights={litPolys} />
                 </SwapIn>
               ) : <div className="h-80" aria-hidden />}
               {sw.switching && !quickPair && sw.tab === "dieline" ? <ViewSkeleton kind="box" label="Loading the 3D preview" /> : null}

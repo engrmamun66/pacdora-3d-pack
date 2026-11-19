@@ -140,11 +140,11 @@ export function CaptureBar({ projectId, viewRef, layouts, layoutId, onLayout, pr
           </label>
         ) : null}
         {selected ? (
-          <button type="button" disabled={busy} onClick={() => void updateSelected()} className="ml-auto flex h-7 items-center gap-1.5 rounded-md border bg-background px-2.5 font-medium transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-60" title="Replace the picked picture with the 3D view as it is now (fold amount, layout and camera)">
+          <button type="button" disabled={busy} onClick={() => void updateSelected()} className="ml-auto flex h-7 items-center gap-1.5 rounded-md border bg-background px-2.5 font-medium transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-60" data-tip="Replace the picked picture with the 3D view as it is now (fold amount, layout and camera)">
             <RefreshCw className="size-3.5" aria-hidden /> Update view
           </button>
         ) : null}
-        <button type="button" disabled={busy} onClick={() => void take()} className={`${selected ? "" : "ml-auto "}flex h-7 items-center gap-1.5 rounded-md border bg-background px-2.5 font-medium transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-60`} title="Save a picture of the 3D view as it is now (fold amount, layout and camera)">
+        <button type="button" disabled={busy} onClick={() => void take()} className={`${selected ? "" : "ml-auto "}flex h-7 items-center gap-1.5 rounded-md border bg-background px-2.5 font-medium transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-60`} data-tip="Save a picture of the 3D view as it is now (fold amount, layout and camera)">
           <Camera className="size-3.5" aria-hidden /> {busy ? "Saving…" : "Capture 3D picture"}
         </button>
       </div>
@@ -154,14 +154,14 @@ export function CaptureBar({ projectId, viewRef, layouts, layoutId, onLayout, pr
         <ul className="flex gap-2 overflow-x-auto px-1.5 pt-3 pb-1.5" aria-label="3D pictures of this project">
           {shots.map((s) => (
             <li key={s.id} className={`group relative h-16 w-20 shrink-0 rounded-md border bg-muted ${s.id === selectedId ? "ring-2 ring-foreground ring-offset-1 ring-offset-background" : ""}`}>
-              <button type="button" onClick={() => restore(s)} title={`Use this view again${s.view ? ` (zoom ${Math.round(s.view.zoom * 100)}%)` : ""}`} aria-label={`Use this view again${s.layoutName ? `: ${s.layoutName}` : ""}, ${Math.round(s.progress * 100)}% folded`} className="block size-full overflow-hidden rounded-[5px]">
+              <button type="button" onClick={() => restore(s)} data-tip={`Use this view again${s.view ? ` (zoom ${Math.round(s.view.zoom * 100)}%)` : ""}`} aria-label={`Use this view again${s.layoutName ? `: ${s.layoutName}` : ""}, ${Math.round(s.progress * 100)}% folded`} className="block size-full overflow-hidden rounded-[5px]">
                 {/* eslint-disable-next-line @next/next/no-img-element -- the project's own PNG */}
                 <img src={s.url} alt="" className="size-full object-cover" />
               </button>
               {s.cover ? <span className="pointer-events-none absolute -top-2 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/65 py-0.5 pr-2 pl-1.5 text-[9px] font-medium text-white shadow-sm ring-1 ring-white/25 backdrop-blur-sm"><Star className="size-2.5 fill-amber-300 text-amber-300" aria-hidden /> Cover</span> : null}
               <span className="absolute inset-x-0 bottom-0 flex justify-end gap-0.5 rounded-b-[5px] bg-black/55 p-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
-                {s.cover ? null : <button type="button" aria-label="Use as cover picture" title="Use as cover picture" onClick={() => void makeCover(s.id)} className="grid size-5 place-items-center rounded text-white hover:bg-white/25"><Star className="size-3" aria-hidden /></button>}
-                <button type="button" aria-label="Delete picture" title="Delete picture" onClick={() => void remove(s.id)} className="grid size-5 place-items-center rounded text-white hover:bg-white/25"><Trash2 className="size-3" aria-hidden /></button>
+                {s.cover ? null : <button type="button" aria-label="Use as cover picture" data-tip="Use as cover picture" onClick={() => void makeCover(s.id)} className="grid size-5 place-items-center rounded text-white hover:bg-white/25"><Star className="size-3" aria-hidden /></button>}
+                <button type="button" aria-label="Delete picture" data-tip="Delete picture" onClick={() => void remove(s.id)} className="grid size-5 place-items-center rounded text-white hover:bg-white/25"><Trash2 className="size-3" aria-hidden /></button>
               </span>
             </li>
           ))}

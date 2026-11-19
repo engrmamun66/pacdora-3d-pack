@@ -29,7 +29,10 @@ export function Preview3D({
   watermark = null,
   projectId,
   layouts = [],
+  onPanelHover,
 }: {
+  /** The pointer is over a panel of the box in the 3D view (null = over none). */
+  onPanelHover?: (id: string | null) => void;
   /** With a saved project: layouts to show the box in, and the button that keeps 3D pictures of it. */
   projectId?: string;
   layouts?: LayoutItem[];
@@ -92,6 +95,7 @@ export function Preview3D({
         insideColor={settings.insideColor}
         watermark={watermark}
         layout={layout}
+        {...(onPanelHover ? { onPanelHover } : {})}
       />
       <GridToggle viewRef={inner} />
       <RotationControls viewRef={inner} />
@@ -113,10 +117,10 @@ export function Preview3D({
           <span className="w-9 rounded-md bg-muted px-1.5 py-0.5 text-center font-medium tabular-nums">{Math.round(progress * 100)}%</span>
         </label>
         <div className="flex items-center gap-1">
-          <button type="button" title="Play the folding animation" className="flex h-7 items-center gap-1.5 rounded-md bg-primary px-2.5 font-medium text-primary-foreground transition-opacity hover:opacity-85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" onClick={animate}>
+          <button type="button" data-tip="Play the folding animation" className="flex h-7 items-center gap-1.5 rounded-md bg-primary px-2.5 font-medium text-primary-foreground transition-opacity hover:opacity-85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" onClick={animate}>
             <Play className="size-3 fill-current" /> Fold
           </button>
-          <button type="button" title="Reset the camera" className="flex h-7 items-center gap-1.5 rounded-md px-2 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" onClick={() => inner.current?.resetView()}>
+          <button type="button" data-tip="Reset the camera" className="flex h-7 items-center gap-1.5 rounded-md px-2 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" onClick={() => inner.current?.resetView()}>
             <RotateCcw className="size-3" /> View
           </button>
         </div>

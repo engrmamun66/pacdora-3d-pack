@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
+import { usesSignInBox } from "@/lib/session-ended";
 
 /**
  * Optimistic redirect only: checks that a session COOKIE exists. Real
@@ -14,6 +15,8 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/doraadmin/login", request.url));
   }
   if (!getSessionCookie(request)) {
+    // A server action from a page with its own sign-in box (Dieline, Online design): the action itself answers "session ended".
+    if (request.headers.has("next-action") && usesSignInBox(path)) return NextResponse.next();
     const url = new URL("/login", request.url);
     url.searchParams.set("next", request.nextUrl.pathname);
     return NextResponse.redirect(url);

@@ -11,7 +11,7 @@ Units: millimetres. Sheet coordinates: x right, y DOWN (SVG convention). Origin 
 | `depth` | side panel width | 10 to 1000 | required |
 | `height` | body height | 10 to 1000 | required |
 | `thickness` | board thickness | 0.05 to 5 | 0.5 |
-| `sizeMode` | `manufacture` (crease-to-crease, used as given) or `inner` (inside size) | enum | `manufacture` |
+| `sizeMode` | `manufacture` (fold-to-fold, used as given) or `inner` (inside size) | enum | `manufacture` |
 | `allowanceFactor` | inner mode only: allowance = factor x thickness added to width, depth, height | 0 to 5 | **UNVERIFIED** `1` (inner mode) |
 | `bleed` | bleed distance | 0 or 0.01 to 20 | 3 |
 | `safeMargin` | inset of printable safe area | 0 or 0.01 to 20 | 3 |

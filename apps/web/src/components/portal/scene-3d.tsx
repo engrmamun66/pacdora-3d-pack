@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Play, RotateCcw } from "lucide-react";
 import { applyWindows, createImportedGenerator, generateDieline } from "@packaging/dieline-engine";
+import { ShadowTool } from "@/components/viewer3d/shadow-menu";
+import { CameraViewTool } from "@/components/viewer3d/camera-view-menu";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { renderArtwork, type RasterRect } from "@/components/editor/artwork-raster";
 import { setAssetUrlBase } from "@/components/editor/fabric-map";
@@ -66,8 +68,10 @@ export function Scene3D({ userHash, scene, foldable, onFoldable, layout = null, 
   return (
     <div className="flex h-full flex-col">
       {/* The canvas is see-through, so the background picture (or the studio colour) behind it shows, with the box's shadow on it. */}
-      <div className="min-h-0 flex-1 bg-cover bg-center" style={{ backgroundColor: "#f4f4f2", ...(backgroundUrl ? { backgroundImage: `url("${backgroundUrl}")` } : {}) }}>
+      <div className="relative min-h-0 flex-1 bg-cover bg-center" style={{ backgroundColor: "#f4f4f2", ...(backgroundUrl ? { backgroundImage: `url("${backgroundUrl}")` } : {}) }}>
         <CartonView ref={view} className="size-full" transparent geo={geo} layout={layout} texture={raster?.canvas ?? null} textureRect={raster?.rect ?? null} progress={progress} outsideColor={scene.threeD.outsideColor} insideColor={scene.threeD.insideColor} initialView={scene.initialView} watermark={scene.watermark} />
+        <ShadowTool viewRef={view} />
+        <CameraViewTool viewRef={view} />
       </div>
       <div className="flex flex-wrap items-center gap-3 border-t bg-background/80 px-3 py-2 text-xs">
         {foldable ? (

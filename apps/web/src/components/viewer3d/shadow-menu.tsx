@@ -76,7 +76,7 @@ export function ShadowTool({ viewRef }: { viewRef: RefObject<CartonViewHandle | 
         type="button"
         aria-label="Shadow controls"
         aria-expanded={open}
-        title="Shadow controls"
+        data-tip="Shadow controls"
         onClick={() => toggle(!open)}
         style={{ bottom }}
         className={`absolute left-2 z-10 grid size-8 place-items-center rounded-lg border shadow-xs backdrop-blur transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${open ? "bg-black text-white" : "bg-background/80 text-muted-foreground hover:text-foreground"}`}
@@ -89,7 +89,7 @@ export function ShadowTool({ viewRef }: { viewRef: RefObject<CartonViewHandle | 
             type="button"
             aria-label={shadow.on ? "Hide shadow" : "Show shadow"}
             aria-pressed={shadow.on}
-            title={shadow.on ? "Hide shadow" : "Show shadow"}
+            data-tip={shadow.on ? "Hide shadow" : "Show shadow"}
             style={stripItem(open, 0, shadowPresets.length + 2).style}
             onClick={() => update({ on: !shadow.on })}
             className={`${stripItem(open, 0, shadowPresets.length + 2).className} grid size-7 shrink-0 place-items-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${shadow.on ? "bg-black text-white" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
@@ -105,7 +105,7 @@ export function ShadowTool({ viewRef }: { viewRef: RefObject<CartonViewHandle | 
                 type="button"
                 aria-label={preset.label}
                 aria-pressed={active}
-                title={preset.label}
+                data-tip={preset.label}
                 style={motion.style}
                 onClick={() => update({ on: true, azimuthDeg: preset.azimuthDeg, elevationDeg: preset.elevationDeg })}
                 className={`${motion.className} grid size-7 shrink-0 place-items-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${active ? "bg-black text-white" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
@@ -119,7 +119,7 @@ export function ShadowTool({ viewRef }: { viewRef: RefObject<CartonViewHandle | 
             aria-label="Set the light by hand"
             aria-pressed={custom}
             aria-expanded={custom}
-            title="Set the light by hand (angle, height, darkness, softness)"
+            data-tip="Set the light by hand (angle, height, darkness, softness)"
             style={stripItem(open, shadowPresets.length + 1, shadowPresets.length + 2).style}
             onClick={() => setCustom((v) => !v)}
             className={`${stripItem(open, shadowPresets.length + 1, shadowPresets.length + 2).className} grid size-7 shrink-0 place-items-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${custom ? "bg-black text-white" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
@@ -170,7 +170,7 @@ function GlobalLightPanel({ shadow, bottom, onChange }: { shadow: ShadowSettings
           aria-valuemax={180}
           aria-valuenow={round(shadow.azimuthDeg)}
           tabIndex={0}
-          title="Drag to turn the light around the box"
+          data-tip="Drag to turn the light around the box"
           className="relative size-12 shrink-0 cursor-pointer touch-none rounded-full border bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onPointerDown={(e) => {
             e.currentTarget.setPointerCapture(e.pointerId);

@@ -4,10 +4,10 @@ import { type FlapClass, type PartSizes, type ResizePlan, planResize, stretchPla
 /**
  * Box settings of an imported dieline, set by the admin (and first guessed from the file).
  * They give the dieline page the same kinds of options a built-in carton has: real box
- * Width / Depth / Height, board thickness, size mode (inner or crease-to-crease), flap sizes.
+ * Width / Depth / Height, board thickness, size mode (inner or fold-to-fold), flap sizes.
  *
- * The drawing itself is always crease-to-crease (that is what the lines are). "Inner" mode
- * shows the size of the inside of the box instead: crease-to-crease minus allowance x thickness.
+ * The drawing itself is always fold-to-fold (that is what the lines are). "Inner" mode
+ * shows the size of the inside of the box instead: fold-to-fold minus allowance x thickness.
  */
 
 const MAX_PARTS = 8;
@@ -16,6 +16,11 @@ export type DimName = "width" | "depth" | "height";
 export type SizeMode = "manufacture" | "inner";
 
 export const DIM_NAMES: readonly DimName[] = ["width", "depth", "height"];
+/**
+ * What each stored size name is CALLED on screen: the stored `depth` is shown as "Height" and the stored `height` as "Length"
+ * (the names the admin sees in "Called" and the Dimensions fields). Stored names are unchanged, so saved templates keep working.
+ */
+export const DIM_LABELS: Readonly<Record<DimName, string>> = { width: "Width", depth: "Height", height: "Length" };
 /** The three box sizes the sheet can follow: the base panel's x, its y, and how tall the walls stand. */
 export const DIM_KEYS = ["baseWidth", "baseHeight", "boxHeight"] as const;
 export type DimKey = (typeof DIM_KEYS)[number];
@@ -28,7 +33,7 @@ export interface Construction {
   readonly sizeMode?: SizeMode;
   /** Board thickness (mm) the page starts with, and the one the drawing was made for. Default 0.5. */
   readonly thickness?: number;
-  /** Inner mode: crease-to-crease = inner + allowanceFactor x thickness. Default 1. */
+  /** Inner mode: fold-to-fold = inner + allowanceFactor x thickness. Default 1. */
   readonly allowanceFactor?: number;
   /** The cut slot between a dust flap and the closure beside it follows the board: it is cutGapFactor x (thickness - the drawn thickness) wider than drawn. Default 1. */
   readonly cutGapFactor?: number;
@@ -132,7 +137,7 @@ export interface SizeInput {
 }
 
 export interface SizeTargets {
-  /** Crease-to-crease sizes the sheet must have (only those that differ from the plain scale). */
+  /** Fold-to-fold sizes the sheet must have (only those that differ from the plain scale). */
   readonly sizes: PartSizes;
   /** The value of every offered size as the customer sees it (dimensions in `mode`). */
   readonly shown: Record<string, number>;
@@ -159,7 +164,7 @@ export function sizeTargets(plan: ResizePlan, c: ResolvedConstruction, k: number
   /** One size: what the sheet gets, what the customer sees, and the allowed range. */
   const solve = (natural: number, isDim: boolean, typed: number | undefined, start: number | undefined) => {
     const plain = natural * k;
-    // Crease-to-crease size with nothing typed: the starting size, or as drawn. A thicker board moves the folds
+    // Fold-to-fold size with nothing typed: the starting size, or as drawn. A thicker board moves the folds
     // outward (the inside stays the same), in either size mode; a size the customer typed is taken as it is.
     const base = start !== undefined ? start + (isDim ? adminOff : 0) : plain;
     const byDefault = isDim ? base + input.allowance * (input.thickness - c.thickness) : base;
@@ -228,7 +233,7 @@ export function sizeTargets(plan: ResizePlan, c: ResolvedConstruction, k: number
 }
 
 /**
- * Crease-to-crease sizes of a generated imported dieline, read back from its resolved `params`
+ * Fold-to-fold sizes of a generated imported dieline, read back from its resolved `params`
  * (what `scaleImportedPaths` needs to put other lines of the file on the stretched sheet).
  */
 export function creaseSizesOf(params: unknown): PartSizes {

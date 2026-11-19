@@ -399,7 +399,7 @@ export function DielineTopBar({
             </button>
           )}
           {mode === "edit" && projectId ? (
-            <Link href={`/editor/${projectId}`} target="_blank" rel="noopener" aria-label="Open the artwork editor in a new tab" title="Open the artwork editor in a new tab" className={`${ghost} -ml-px w-8 justify-center rounded-l-none border-l-[#444444] px-0`}>
+            <Link href={`/editor/${projectId}`} target="_blank" rel="noopener" aria-label="Open the artwork editor in a new tab" title="Open the artwork editor in a new tab" className={`${ghost} -ml-px w-8 justify-center rounded-l-none px-0`}>
               <ExternalLink className="size-3.5" aria-hidden />
             </Link>
           ) : (
@@ -408,7 +408,7 @@ export function DielineTopBar({
               aria-label="Create a project and open the artwork editor in a new tab"
               title="Create a project and open the artwork editor in a new tab"
               disabled={saving || !canSave || opening || !onDesignNewTab}
-              className={`${ghost} -ml-px w-8 justify-center rounded-l-none border-l-[#444444] px-0`}
+              className={`${ghost} -ml-px w-8 justify-center rounded-l-none px-0`}
               onClick={async () => {
                 if (!onDesignNewTab) return;
                 setOpening(true);

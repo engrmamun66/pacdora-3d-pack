@@ -9,6 +9,14 @@ import { stripFrame, stripItem, useCanvasBottom, useStrip } from "./strip";
 
 /** A tiny box drawn as seen from a view (the faces are computed from the same angles the camera gets). */
 export function CameraViewIcon({ view, className = "size-6" }: { view: CameraViewPreset; className?: string }) {
+  if (view.letter) {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden className={className} fill="none" stroke="currentColor" strokeWidth={1.1}>
+        <rect x="4" y="4" width="16" height="16" rx="2.5" fill="currentColor" fillOpacity={0.14} />
+        <text x="12" y="16.2" textAnchor="middle" fontSize={view.letter.length > 1 ? 9 : 11.5} fontWeight="700" fill="currentColor" stroke="none" fontFamily="system-ui, sans-serif">{view.letter}</text>
+      </svg>
+    );
+  }
   const shade = { front: 0.38, top: 0.14, side: 0.24 } as const;
   return (
     <svg viewBox="0 0 24 24" aria-hidden className={className} fill="none" stroke="currentColor" strokeWidth={1.1} strokeLinejoin="round">
@@ -43,7 +51,7 @@ export function CameraViewTool({ viewRef }: { viewRef: RefObject<CartonViewHandl
         type="button"
         aria-label="Camera view"
         aria-expanded={open}
-        title="Camera view: quick angles"
+        data-tip="Camera view: quick angles"
         onClick={() => toggle(!open)}
         style={{ bottom }}
         className={`absolute left-2 z-10 grid size-8 place-items-center rounded-lg border shadow-xs backdrop-blur transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${open ? "bg-black text-white" : "bg-background/80 text-muted-foreground hover:text-foreground"}`}
@@ -60,7 +68,7 @@ export function CameraViewTool({ viewRef }: { viewRef: RefObject<CartonViewHandl
                 type="button"
                 aria-label={v.label}
                 aria-pressed={current === v.id}
-                title={v.label}
+                data-tip={v.label}
                 style={m.style}
                 onClick={() => go(v)}
                 className={`${m.className} grid size-7 shrink-0 place-items-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${current === v.id ? "bg-black text-white" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}

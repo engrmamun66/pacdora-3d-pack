@@ -15,8 +15,8 @@ type Unit = "mm" | "in";
 export function DimensionTool({ viewRef, unit }: { viewRef: RefObject<CartonViewHandle | null>; unit?: Unit | undefined }) {
   const [on, setOn] = useState(false);
   const [own, setOwn] = useState<Unit>("mm");
-  const [showBox, setShowBox] = useState(false);
-  const [panels, setPanels] = useState(true);
+  const [showBox, setShowBox] = useState(true);
+  const [panels, setPanels] = useState(false);
   const shownUnit = unit ?? own;
   // Sits at the bottom of the 3D picture itself, above the view's own control bar (Fold slider and so on) when it has one.
   const box = useRef<HTMLDivElement>(null);
@@ -42,10 +42,10 @@ export function DimensionTool({ viewRef, unit }: { viewRef: RefObject<CartonView
     <div ref={box} style={{ bottom }} className="absolute right-2 z-10 flex items-center gap-1.5">
       {on ? (
         <div role="group" aria-label="What sizes to show" className="flex items-center gap-2.5 rounded-lg border bg-background/90 px-2.5 py-1 shadow-xs backdrop-blur">
-          <label title="Sizes of each part of the box" className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium">
+          <label data-tip="Sizes of each part of the box" className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium">
             <input type="checkbox" className="size-3.5 cursor-pointer accent-foreground" checked={showBox} onChange={() => (panels || !showBox) && setShowBox((v) => !v)} /> Box
           </label>
-          <label title="Width and height of every panel" className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium">
+          <label data-tip="Width and height of every panel" className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium">
             <input type="checkbox" className="size-3.5 cursor-pointer accent-foreground" checked={panels} onChange={() => (showBox || !panels) && setPanels((v) => !v)} /> Panels
           </label>
         </div>
@@ -60,7 +60,7 @@ export function DimensionTool({ viewRef, unit }: { viewRef: RefObject<CartonView
         type="button"
         aria-label={on ? "Hide the sizes" : "Show the sizes"}
         aria-pressed={on}
-        title={on ? "Hide sizes" : `Show the size of each part (${shownUnit})`}
+        data-tip={on ? "Hide sizes" : `Show the size of each part (${shownUnit})`}
         onClick={() => setOn((v) => !v)}
         className={`grid size-8 place-items-center rounded-lg border shadow-xs backdrop-blur transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${on ? "bg-black text-white" : "bg-background/80 text-muted-foreground hover:text-foreground"}`}
       >

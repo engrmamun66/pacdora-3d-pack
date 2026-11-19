@@ -10,6 +10,10 @@ describe("camera views", () => {
       expect(viewSettingsSchema.safeParse({ v: 1, azimuthDeg: v.azimuthDeg, elevationDeg: v.elevationDeg, zoom: 1, panX: 0, panY: 0, progress: 1 }).success).toBe(true);
     }
   });
+  it("the straight-on views have the first letter of their side (Bo for the bottom, as B is the back)", () => {
+    const letters = Object.fromEntries(CAMERA_VIEWS.filter((v) => v.letter).map((v) => [v.id, v.letter]));
+    expect(letters).toEqual({ front: "F", top: "T", left: "L", right: "R", back: "B", bottom: "Bo" });
+  });
   it("the icon shows one face from the front, three from a corner, and the right sides", () => {
     expect(viewIconFaces(0, 0).map((f) => f.kind)).toEqual(["front"]);
     expect(viewIconFaces(40, 38)).toHaveLength(3);
