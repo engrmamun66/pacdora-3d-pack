@@ -178,7 +178,7 @@ export async function addSystemTemplate(templateId: string, categoryId: string |
 
 const displaySchema = z.object({ columns: z.number().int().min(MIN_COLUMNS).max(MAX_COLUMNS), image: z.enum(CARD_IMAGES as unknown as [string, ...string[]]) });
 
-/** Product Display Settings: cards per row, and which picture a card shows, on the Client's shared pages. */
+/** Products Settings: cards per row, and which picture a card shows, on the Client's shared pages. */
 export async function saveDisplaySettings(input: unknown): Promise<MyResult> {
   const user = await requireUser();
   const p = displaySchema.safeParse(input);

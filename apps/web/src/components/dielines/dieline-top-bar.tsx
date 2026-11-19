@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirmedSubmit } from "@/components/ui/confirm-host";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -36,6 +37,7 @@ function MainMenu({
   onSaveAs: () => void;
 }) {
   const router = useRouter();
+  const confirmed = useConfirmedSubmit();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const nameInput = useRef<HTMLInputElement>(null);
@@ -117,12 +119,7 @@ function MainMenu({
           {projectId ? (
             <>
               {rule}
-              <form
-                action={deleteProject}
-                onSubmit={(e) => {
-                  if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) e.preventDefault();
-                }}
-              >
+              <form action={deleteProject} onSubmit={confirmed({ title: `Delete "${name}"?`, description: "The project and its design are removed. This cannot be undone." })}>
                 <input type="hidden" name="projectId" value={projectId} />
                 <button type="submit" role="menuitem" className={`${rowLive} text-destructive`}>Delete project</button>
               </form>

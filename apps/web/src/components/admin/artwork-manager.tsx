@@ -318,8 +318,8 @@ export function ArtworkGrid({ rows, categories, filtered, view }: { rows: Artwor
     setDraft({ name: r.name, tags: r.tags.join(", "), category: r.category });
   };
   const save = (r: ArtworkRow) => run(() => updateArtwork({ id: r.id, ...draft }), () => setEditing(null));
-  const del = (r: ArtworkRow) => {
-    if (window.confirm(`Delete "${r.name}"? The picture file is removed too.`)) run(() => deleteArtwork(r.id));
+  const del = async (r: ArtworkRow) => {
+    if (await confirmAction({ title: `Delete "${r.name}"?`, description: "The picture file is removed too." })) run(() => deleteArtwork(r.id));
   };
   const fields = (
     <>

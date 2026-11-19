@@ -12,7 +12,7 @@ import { useCart } from "./cart";
 /** Cards per row on wide screens, as whole class names (Tailwind reads them from the source). */
 const COLUMNS: Record<number, string> = { 2: "lg:grid-cols-2", 3: "lg:grid-cols-3", 4: "lg:grid-cols-4", 5: "lg:grid-cols-5", 6: "lg:grid-cols-6" };
 
-export function TemplateGrid({ userHash, scopeHash, templates, columns = 4, image = "dieline" }: { userHash: string; scopeHash: string | null; templates: PortalTemplate[]; /** Cards per row (from the Client's Product Display Settings). */ columns?: number; /** Which picture is on a card. */ image?: CardImage }) {
+export function TemplateGrid({ userHash, scopeHash, templates, columns = 4, image = "dieline" }: { userHash: string; scopeHash: string | null; templates: PortalTemplate[]; /** Cards per row (from the Client's Products Settings). */ columns?: number; /** Which picture is on a card. */ image?: CardImage }) {
   const { lines, add } = useCart(userHash);
   const [q, setQ] = useState("");
   const shown = useMemo(() => {

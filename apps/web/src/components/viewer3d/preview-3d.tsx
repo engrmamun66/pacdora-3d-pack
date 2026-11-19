@@ -95,7 +95,7 @@ export function Preview3D({
       />
       <GridToggle viewRef={inner} />
       <RotationControls viewRef={inner} />
-      {projectId ? <CaptureBar projectId={projectId} viewRef={inner} layouts={layouts} layoutId={layoutId} onLayout={setLayoutId} progress={progress} /> : null}
+      {projectId ? <CaptureBar projectId={projectId} viewRef={inner} layouts={layouts} layoutId={layoutId} onLayout={setLayoutId} progress={progress} onProgress={setProgress} /> : null}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t bg-background px-3 py-2 text-xs">
         <label className="flex min-w-[150px] flex-1 items-center gap-2.5">
           <span className="font-medium text-muted-foreground">Fold</span>

@@ -61,7 +61,7 @@ export async function loadMyDashboard(userId: string): Promise<MyDashboard> {
         categoryId: true,
         template: { select: { name: true, source: true, thumbnail: true } },
         tags: { select: { tagId: true } },
-        captures: { where: { cover: true }, select: { id: true }, take: 1 },
+        captures: { where: { cover: true }, select: { id: true, storageKey: true }, take: 1 },
       },
     }),
     db.project.count({ where: { userId } }),
@@ -71,7 +71,7 @@ export async function loadMyDashboard(userId: string): Promise<MyDashboard> {
     db.shareLink.findMany({ where: { userId, scope: "template", active: false }, select: { projectId: true } }),
     db.user.findUnique({ where: { id: userId }, select: { cardImage: true } }),
   ]);
-  // Product Display Settings: with "3D Output" a card shows the cover 3D picture (when the template has one).
+  // Products Settings: with "3D Output" a card shows the cover 3D picture (when the template has one).
   const show3d = me?.cardImage === "3d";
   const all = links.find((l) => l.scope === "all");
   const userHash = all?.hash ?? "";
@@ -86,7 +86,7 @@ export async function loadMyDashboard(userId: string): Promise<MyDashboard> {
       } catch {
         // a project file from a newer version: no preview
       }
-      const cover = show3d && r.captures[0] ? captureUrl(r.captures[0].id) : null;
+      const cover = show3d && r.captures[0] ? captureUrl(r.captures[0].id, r.captures[0].storageKey) : null;
       return { id: r.id, name: r.name, templateName: r.template.name, updatedAt: r.updatedAt.toISOString().slice(0, 10), updatedMs: r.updatedAt.getTime(), thumbnail: cover ?? thumbnail, categoryId: r.categoryId, tagIds: r.tags.map((t) => t.tagId), share: { path: portalTemplate(userHash, null, templateHash(r.id)), active: !off.has(r.id) } };
     }),
     total,

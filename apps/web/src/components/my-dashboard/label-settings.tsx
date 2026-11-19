@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Folder, Pencil, Tag, Trash2, X } from "lucide-react";
 import { createCategory, createTag, deleteCategory, deleteTag, renameCategory, renameTag, type MyResult } from "@/app/(dash)/my-dashboard/actions";
 import { notify } from "@/lib/notify";
+import { confirmAction } from "@/lib/confirm";
 import type { MyLabel } from "@/server/my-templates";
 
 type Label = MyLabel & { count: number };
@@ -92,7 +93,6 @@ export function LabelSettings({ kind, labels }: { kind: Kind; labels: Label[] })
   const [busy, start] = useTransition();
   const [pending, setPending] = useState(false);
   const [renaming, setRenaming] = useState<Label | null>(null);
-  const [deleting, setDeleting] = useState<Label | null>(null);
   const working = busy || pending;
 
   /** Run an action; show its message; reload the list when it worked. */
@@ -109,13 +109,17 @@ export function LabelSettings({ kind, labels }: { kind: Kind; labels: Label[] })
 
   const add = (k: Kind, name: string) => run(() => (k === "category" ? createCategory(name) : createTag(name)));
   const word = kind === "category" ? "category" : "tag";
+  const askDelete = async (l: Label) => {
+    const yes = await confirmAction({ title: `Delete ${word} "${l.name}"?`, description: `Your templates are kept${l.count ? ` (${l.count} will lose it)` : ""}.` });
+    if (yes) await run(() => (kind === "category" ? deleteCategory(l.id) : deleteTag(l.id)));
+  };
 
   return (
     <>
       {kind === "category" ? (
-        <Group kind="category" title="Categories" icon={Folder} hint="Folders for sorting your templates. A template is in one category at most." labels={labels} busy={working} onAdd={add} onRename={(_, l) => setRenaming(l)} onDelete={(_, l) => setDeleting(l)} />
+        <Group kind="category" title="Categories" icon={Folder} hint="Folders for sorting your templates. A template is in one category at most." labels={labels} busy={working} onAdd={add} onRename={(_, l) => setRenaming(l)} onDelete={(_, l) => void askDelete(l)} />
       ) : (
-        <Group kind="tag" title="Tags" icon={Tag} hint="Labels you can put on any template, several at once." labels={labels} busy={working} onAdd={add} onRename={(_, l) => setRenaming(l)} onDelete={(_, l) => setDeleting(l)} />
+        <Group kind="tag" title="Tags" icon={Tag} hint="Labels you can put on any template, several at once." labels={labels} busy={working} onAdd={add} onRename={(_, l) => setRenaming(l)} onDelete={(_, l) => void askDelete(l)} />
       )}
 
       {renaming ? (
@@ -141,26 +145,6 @@ export function LabelSettings({ kind, labels }: { kind: Kind; labels: Label[] })
               <button type="submit" disabled={working} className="h-9 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/85 disabled:opacity-60">Save</button>
             </div>
           </form>
-        </Modal>
-      ) : null}
-
-      {deleting ? (
-        <Modal title={`Delete ${word}`} description={`Delete the ${word} "${deleting.name}"? Your templates are kept${deleting.count ? ` (${deleting.count} will lose it)` : ""}.`} onClose={() => setDeleting(null)}>
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={(e) => e.currentTarget.closest("dialog")?.close()} className="h-9 rounded-lg border bg-background px-3 text-sm font-medium hover:bg-muted">Cancel</button>
-            <button
-              type="button"
-              disabled={working}
-              onClick={async (e) => {
-                const dialog = e.currentTarget.closest("dialog");
-                const ok = await run(() => (kind === "category" ? deleteCategory(deleting.id) : deleteTag(deleting.id)));
-                if (ok) dialog?.close();
-              }}
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 text-sm font-medium text-destructive hover:bg-destructive/20 disabled:opacity-60"
-            >
-              <Trash2 className="size-4" aria-hidden /> Delete
-            </button>
-          </div>
         </Modal>
       ) : null}
     </>

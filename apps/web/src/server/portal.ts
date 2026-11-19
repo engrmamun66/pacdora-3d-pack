@@ -113,7 +113,7 @@ const projectSelect = {
   template: { select: { name: true, source: true, thumbnail: true } },
   category: { select: { name: true } },
   tags: { select: { tag: { select: { name: true } } } },
-  captures: { where: { cover: true }, select: { id: true }, take: 1 },
+  captures: { where: { cover: true }, select: { id: true, storageKey: true }, take: 1 },
 } as const;
 
 type Row = {
@@ -123,7 +123,7 @@ type Row = {
   template: { name: string; source: string; thumbnail: string | null };
   category: { name: string } | null;
   tags: { tag: { name: string } }[];
-  captures: { id: string }[];
+  captures: { id: string; storageKey: string }[];
 };
 
 function toTemplate(r: Row): PortalTemplate {
@@ -134,7 +134,7 @@ function toTemplate(r: Row): PortalTemplate {
   } catch {
     // a project file from a newer version: no preview
   }
-  return { id: r.id, hash: templateHash(r.id), name: r.name, templateName: r.template.name, thumbnail, cover: r.captures[0] ? captureUrl(r.captures[0].id) : null, category: r.category?.name ?? null, tags: r.tags.map((t) => t.tag.name) };
+  return { id: r.id, hash: templateHash(r.id), name: r.name, templateName: r.template.name, thumbnail, cover: r.captures[0] ? captureUrl(r.captures[0].id, r.captures[0].storageKey) : null, category: r.category?.name ?? null, tags: r.tags.map((t) => t.tag.name) };
 }
 
 /** Ids of this Client's templates that were switched off one by one (a template link that is off hides it everywhere). */

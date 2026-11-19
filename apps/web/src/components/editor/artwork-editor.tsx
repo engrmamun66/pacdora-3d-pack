@@ -39,6 +39,8 @@ import type { ViewSettings } from "@/lib/view-settings";
 import { type Artwork, type ArtworkObject, type BoxBackground, MAX_BACKGROUNDS, backgroundsOf, facesOf } from "@packaging/schema";
 import { saveArtwork, saveThreeD } from "@/app/editor/[id]/actions";
 import type { LayoutItem } from "@/lib/scene-layout";
+import { PreviewLinkButton, PreviewOpenButton } from "./preview-link-button";
+import { confirmAction } from "@/lib/confirm";
 import { Preview3D, type ThreeDSettings } from "@/components/viewer3d/preview-3d";
 import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { EditorController, type OverlayOptions, type Viewport } from "./editor-controller";
@@ -268,6 +270,7 @@ export function ArtworkEditor({
   threeD: initialThreeD,
   watermark = null,
   layouts = [],
+  previewLink = null,
   viewer = null,
 }: {
   projectId: string;
@@ -293,6 +296,8 @@ export function ArtworkEditor({
   watermark?: WatermarkSpec | null;
   /** The layouts customers' boxes can be shown in (Sample 1, Sample 2 ...), for the 3D pictures. */
   layouts?: LayoutItem[];
+  /** This template on the Client's shared pages (path, and whether the link is on), for the Link button; null = no button. */
+  previewLink?: { path: string; active: boolean } | null;
 }) {
   // Keyed by value: a props refresh with equal params must not rebuild the editor (and lose undo history).
   const paramsKey = JSON.stringify(params);
@@ -671,7 +676,7 @@ export function ArtworkEditor({
       notify.error(`"${name}" is used on this box. Remove it from the box first.`);
       return;
     }
-    if (!window.confirm(`Delete "${name}"? The picture is removed from your uploads and cannot be brought back.`)) return;
+    if (!(await confirmAction({ title: `Delete "${name}"?`, description: "The picture is removed from your uploads and cannot be brought back." }))) return;
     try {
       const res = await fetch(`/api/assets/${encodeURIComponent(id)}`, { method: "DELETE" });
       const json = (await res.json().catch(() => ({}))) as { error?: string };
@@ -836,6 +841,12 @@ export function ArtworkEditor({
           </ToolButton>
         ) : null}
         <div className="ml-auto flex items-center gap-2">
+          {previewLink ? (
+            <>
+              <PreviewLinkButton path={previewLink.path} active={previewLink.active} />
+              <PreviewOpenButton path={previewLink.path} active={previewLink.active} />
+            </>
+          ) : null}
           <button type="button" onClick={() => setShowExport(true)} className="flex h-8 items-center gap-1 rounded-md border px-3 text-xs font-medium hover:bg-muted">
             <Download className="size-3.5" /> Export
           </button>

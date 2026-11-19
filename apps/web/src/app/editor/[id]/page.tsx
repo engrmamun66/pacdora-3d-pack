@@ -11,6 +11,9 @@ import { loadImportedSource } from "@/server/imported-templates";
 import { readViewSettings } from "@/lib/view-settings";
 import { getWatermark } from "@/server/site-settings";
 import { listLayouts } from "@/server/layouts";
+import { ensureLinks } from "@/server/portal";
+import { templateHash } from "@/server/share-hash";
+import { portalTemplate } from "@/lib/portal-paths";
 
 /** Tab title "<site name> | Online design": the site name is added by the root layout template. */
 export const metadata: Metadata = { title: "Online design" };
@@ -38,6 +41,12 @@ async function EditorView({ params }: { params: PageProps<"/editor/[id]">["param
   if (project.doc.template.generatorId === IMPORTED_GENERATOR_ID && !imported) {
     return <p className="p-8 text-destructive">The template this project was made from is no longer available.</p>;
   }
+  // The address of this template on the Client's shared pages, for the Link button.
+  await ensureLinks(user.id);
+  const [allLink, offLink] = await Promise.all([
+    db.shareLink.findFirst({ where: { userId: user.id, scope: "all" }, select: { hash: true, active: true } }),
+    db.shareLink.findFirst({ where: { userId: user.id, scope: "template", projectId: project.id, active: false }, select: { id: true } }),
+  ]);
   return (
     <EditorLoader
       projectId={project.id}
@@ -55,6 +64,7 @@ async function EditorView({ params }: { params: PageProps<"/editor/[id]">["param
       threeD={project.doc.threeD}
       watermark={await getWatermark(user)}
       layouts={await listLayouts(true)}
+      previewLink={allLink ? { path: portalTemplate(allLink.hash, null, templateHash(project.id)), active: allLink.active && !offLink } : null}
     />
   );
 }

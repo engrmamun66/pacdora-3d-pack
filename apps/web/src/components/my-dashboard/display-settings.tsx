@@ -14,7 +14,7 @@ const IMAGES: { id: Image | "product"; label: string; hint: string; soon?: boole
   { id: "dieline", label: "Dieline", hint: "The flat drawing of the box." },
 ];
 
-/** Settings > Product Display Settings: how the templates look as cards on the Client's shared pages. */
+/** Settings > Products Settings: how the templates look as cards on the Client's shared pages. */
 export function DisplaySettings({ columns, image }: { columns: number; image: Image }) {
   const router = useRouter();
   const [pending, start] = useTransition();

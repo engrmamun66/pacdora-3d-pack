@@ -3,15 +3,16 @@
 import { useTransition } from "react";
 import { setBanned } from "@/app/doraadmin/actions";
 import { notify } from "@/lib/notify";
+import { confirmAction } from "@/lib/confirm";
 
 /** Suspend / restore with an explicit confirmation. Suspending asks for an optional reason (kept for the team). */
 export function BanButton({ userId, email, banned }: { userId: string; email: string; banned: boolean }) {
   const [pending, start] = useTransition();
 
-  function run() {
+  async function run() {
     let reason = "";
     if (banned) {
-      if (!window.confirm(`Restore ${email}? They will be able to sign in again.`)) return;
+      if (!(await confirmAction({ title: `Restore ${email}?`, description: "They will be able to sign in again.", confirmLabel: "Restore", tone: "default" }))) return;
     } else {
       const r = window.prompt(`Suspend ${email}? They are signed out everywhere and cannot sign in.\n\nReason (optional, max 200 characters):`);
       if (r === null) return;

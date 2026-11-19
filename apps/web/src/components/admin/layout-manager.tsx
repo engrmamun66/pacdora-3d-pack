@@ -3,13 +3,15 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, Camera, Copy, Plus, Sparkles, Trash2 } from "lucide-react";
-import { generateDieline, getPreset } from "@packaging/dieline-engine";
+import { generateDieline } from "@packaging/dieline-engine";
 import { Button } from "@/components/ui/button";
 import { RangeSlider } from "@/components/ui/range-slider";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { addStarterLayouts, createLayout, deleteLayout, moveLayout, updateLayout } from "@/app/doraadmin/template-layout-actions";
 import { MAX_BOXES, MAX_ITEMS, MAX_REPEAT, PRESETS, layoutInstances, newBoxItem, presetSpec, type BoxItem, type LayoutItem, type LayoutSpec, type Repeat } from "@/lib/scene-layout";
 import { notify } from "@/lib/notify";
+import { SAMPLE_BOXES } from "@/lib/sample-boxes";
+import { confirmAction } from "@/lib/confirm";
 
 const input = "h-9 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 
@@ -64,11 +66,16 @@ export function LayoutManager({ layouts }: { layouts: LayoutItem[] }) {
   /** The box being edited (an index into the layout's boxes). */
   const [sel, setSel] = useState(0);
 
-  // A plain sample box for the preview (the layouts work on any box).
+  // The box the preview shows (the layouts work on any box, so the admin can try them on different shapes).
+  const [boxId, setBoxId] = useState(SAMPLE_BOXES[0]!.id);
   const sample = useMemo(() => {
-    const p = getPreset("straight-tuck-end-box");
-    return p ? generateDieline(p.generatorId, p.defaults) : null;
-  }, []);
+    const b = SAMPLE_BOXES.find((x) => x.id === boxId) ?? SAMPLE_BOXES[0]!;
+    try {
+      return generateDieline(b.generatorId, b.params);
+    } catch {
+      return null;
+    }
+  }, [boxId]);
 
   const run = (fn: () => Promise<{ ok: boolean; message: string }>, after?: () => void) =>
     start(async () => {
@@ -167,7 +174,13 @@ export function LayoutManager({ layouts }: { layouts: LayoutItem[] }) {
       </aside>
 
       <section aria-label="Layout settings" className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start">
-        <div className="overflow-hidden rounded-xl border bg-muted/40 xl:order-2 xl:sticky xl:top-24">
+        <div className="relative overflow-hidden rounded-xl border bg-muted/40 xl:order-2 xl:sticky xl:top-24">
+          <label className="absolute top-2 right-2 z-10 flex items-center gap-1.5 rounded-lg bg-background/90 px-2 py-1 text-xs font-medium shadow-sm ring-1 ring-black/5 backdrop-blur-sm">
+            <span className="text-muted-foreground">Box</span>
+            <select value={boxId} onChange={(e) => setBoxId(e.target.value)} aria-label="Box shape of the preview" className="h-7 rounded-md border border-input bg-background px-1.5 text-xs font-normal">
+              {SAMPLE_BOXES.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+            </select>
+          </label>
           {sample ? <CartonView ref={view} className="h-[22rem] w-full" geo={sample} texture={null} textureRect={null} progress={1} outsideColor="#c9a574" insideColor="#bd9763" layout={spec} boardGrain={1} /> : null}
           <div className="flex items-center justify-between gap-2 border-t bg-background px-3 py-2">
             <p className="text-xs text-muted-foreground">Drag to look around, then take the camera.</p>
@@ -292,7 +305,7 @@ export function LayoutManager({ layouts }: { layouts: LayoutItem[] }) {
             <Setting label="Zoom" value={spec.zoom} min={0.2} max={4} step={0.05} unit="×" onChange={(v) => set({ zoom: Math.round(v * 100) / 100 })} />
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+          <div className="sticky bottom-0 z-10 -mx-4 -mb-4 flex flex-wrap items-center justify-between gap-3 rounded-b-xl border-t bg-card px-4 py-3 shadow-[0_-8px_12px_-10px_rgba(0,0,0,0.18)]">
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={draft.active} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} />
               Show to customers
@@ -304,8 +317,8 @@ export function LayoutManager({ layouts }: { layouts: LayoutItem[] }) {
                   variant="destructive"
                   className="h-9 border-destructive/30"
                   disabled={pending}
-                  onClick={() => {
-                    if (window.confirm(`Delete "${draft.name}"?`)) run(() => deleteLayout(draft.id), () => { setDraft(newDraft(layouts.length)); setSel(0); });
+                  onClick={async () => {
+                    if (await confirmAction({ title: `Delete "${draft.name}"?`, description: "Customers will no longer see this layout." })) run(() => deleteLayout(draft.id), () => { setDraft(newDraft(layouts.length)); setSel(0); });
                   }}
                 >
                   <Trash2 className="size-4" /> Delete

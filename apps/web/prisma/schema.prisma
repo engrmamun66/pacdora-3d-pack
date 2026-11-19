@@ -241,6 +241,8 @@ model ProjectCapture {
   /// Name of the layout it was taken with ("Sample 2"), if any, and how far folded (0 flat to 1 closed).
   layoutName String?
   progress   Float    @default(1)
+  /// The camera when it was taken (turn, tilt, zoom, pan: a ViewSettings), so the same view can be put back.
+  view       Json?    @db.JsonB
   cover      Boolean  @default(false)
   createdAt  DateTime @default(now())
 

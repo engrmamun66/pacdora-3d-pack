@@ -114,8 +114,8 @@ export function CategoryManager({ kind, rows }: { kind: "use" | "model"; rows: C
                         aria-label={`Delete ${r.name}`}
                         disabled={pending}
                         className="grid size-8 place-items-center rounded-md border border-destructive/40 text-destructive hover:bg-destructive/10"
-                        onClick={() => {
-                          if (window.confirm(`Delete "${r.name}"?${r.templateCount ? ` ${r.templateCount} template(s) will be kept but removed from this category.` : ""}`)) run(() => deleteCategory(r.id));
+                        onClick={async () => {
+                          if (await confirmAction({ title: `Delete "${r.name}"?`, description: r.templateCount ? `${r.templateCount} template(s) will be kept but removed from this category.` : undefined })) run(() => deleteCategory(r.id));
                         }}
                       >
                         <Trash2 className="size-4" />

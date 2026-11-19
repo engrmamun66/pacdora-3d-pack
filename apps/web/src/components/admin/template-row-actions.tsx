@@ -69,8 +69,8 @@ export function TemplateRowActions({ slug, name, source, status, has3d }: { slug
           disabled={pending}
           aria-label={`Delete ${name}`}
           className="grid size-8 place-items-center rounded-md border border-destructive/40 text-destructive hover:bg-destructive/10 disabled:opacity-50"
-          onClick={() => {
-            if (window.confirm(`Delete "${name}"? This cannot be undone.`)) run(() => deleteTemplate(slug));
+          onClick={async () => {
+            if (await confirmAction({ title: `Delete "${name}"?`, description: "The template is removed. This cannot be undone." })) run(() => deleteTemplate(slug));
           }}
         >
           <Trash2 className="size-4" />

@@ -10,6 +10,7 @@ import {
   type MyResult,
 } from "@/app/(dash)/my-dashboard/actions";
 import { notify } from "@/lib/notify";
+import { confirmAction } from "@/lib/confirm";
 import type { MyDashboard, MyLabel, MyTemplateRow } from "@/server/my-templates";
 import { AddSystemDialog } from "./add-system-dialog";
 import { ManagePanel } from "./manage-panel";
@@ -111,8 +112,8 @@ export function DashboardClient({ templates, categories, tags, total, share, ini
     const before = t.tagIds;
     return change(t.id, () => patch(t.id, { tagIds }), () => patch(t.id, { tagIds: before }), () => setTemplateTags(t.id, tagIds), true);
   };
-  const onDelete = (t: MyTemplateRow) => {
-    if (!window.confirm(`Delete "${t.name}"? This cannot be undone.`)) return;
+  const onDelete = async (t: MyTemplateRow) => {
+    if (!(await confirmAction({ title: `Delete "${t.name}"?`, description: "This cannot be undone." }))) return;
     return change(t.id, () => setItems((l) => l.filter((x) => x.id !== t.id)), () => setItems((l) => (l.some((x) => x.id === t.id) ? l : [...l, t])), () => deleteMyTemplate(t.id));
   };
 

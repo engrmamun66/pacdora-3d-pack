@@ -56,7 +56,7 @@ const SECTIONS = [
   { id: "profile", label: "Profile settings", icon: UserRound },
   { id: "categories", label: "Manage Categories", icon: Folder },
   { id: "tags", label: "Manage Tags", icon: Tag },
-  { id: "display", label: "Product Display Settings", icon: LayoutGrid },
+  { id: "display", label: "Products Settings", icon: LayoutGrid },
 ] as const;
 type Section = (typeof SECTIONS)[number]["id"];
 
@@ -85,7 +85,7 @@ async function SettingsTab({ section }: { section: Section }) {
         {display ? (
           <div className="sheet flex flex-col gap-5 p-6">
             <div>
-              <h2 className="font-display text-xl font-semibold">Product Display Settings</h2>
+              <h2 className="font-display text-xl font-semibold">Products Settings</h2>
               <p className="text-sm text-muted-foreground">How your templates look as cards on your shared pages.</p>
             </div>
             <DisplaySettings columns={display.cardColumns} image={display.cardImage === "3d" ? "3d" : "dieline"} />
