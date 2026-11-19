@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, Copy, GripVertical, ImageIcon, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, GripVertical, ImageIcon, Plus, Sparkles, Trash2 } from "lucide-react";
 import { generateDieline } from "@packaging/dieline-engine";
 import { Button } from "@/components/ui/button";
 import { RangeSlider } from "@/components/ui/range-slider";
 import { SortableList } from "@/components/ui/sortable-list";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
-import { addStarterLayouts, clearLayoutIcon, createLayout, deleteLayout, getLayoutDesignLook, reorderLayouts, setIconBox, setIconStyle, setLayoutIcon, updateLayout } from "@/app/doraadmin/template-layout-actions";
+import { CameraViewGrid } from "@/components/viewer3d/camera-view-grid";
+import { addStarterLayouts, createLayout, deleteLayout, getLayoutDesignLook, reorderLayouts, setIconBox, setIconStyle, setLayoutIcon, updateLayout } from "@/app/doraadmin/template-layout-actions";
 import { MAX_BOXES, MAX_ITEMS, MAX_REPEAT, PRESETS, defaultLayoutSpec, layoutInstances, newBoxItem, presetSpec, type BoxItem, type LayoutItem, type LayoutSpec, type Repeat } from "@/lib/scene-layout";
 import { notify } from "@/lib/notify";
 import { SAMPLE_BOXES, SAMPLE_STYLES, designIdOf, designStyle, isDesignStyle, styleCss, type SampleStyle } from "@/lib/sample-boxes";
@@ -193,10 +194,34 @@ export function LayoutManager({ layouts, designs, iconBox, iconStyle }: { layout
     setSel(0);
   };
 
+  /**
+   * Save the layout (name, on/off switch, settings) and, in the same go, keep a small picture of the preview as it is now as its icon.
+   * A layout that is not saved yet is added first. When the 3D view is not ready for a picture the layout is saved without a new icon.
+   */
   const save = () => {
     const body = { name: draft.name, active: draft.active, spec };
-    if (draft.id) run(() => updateLayout({ id: draft.id, ...body }));
-    else run(() => createLayout(body), () => { setDraft(newDraft(layouts.length + 2)); setSel(0); });
+    const png = view.current?.snapshot({ width: ICON_PX, height: ICON_PX }) ?? null;
+    if (draft.id) {
+      run(async () => {
+        const saved = await updateLayout({ id: draft.id, ...body });
+        if (!saved.ok || !png) return saved;
+        const icon = await setLayoutIcon(draft.id, png);
+        return icon.ok ? saved : icon;
+      });
+      return;
+    }
+    run(
+      async () => {
+        const made = await createLayout(body);
+        if (!made.ok || !made.id || !png) return made;
+        const icon = await setLayoutIcon(made.id, png);
+        return icon.ok ? made : icon;
+      },
+      () => {
+        setDraft(newDraft(layouts.length + 2));
+        setSel(0);
+      },
+    );
   };
 
   // Changing the box redraws every saved icon with it: one hidden 3D view is shown for each layout in turn, and its picture is saved.
@@ -253,35 +278,6 @@ export function LayoutManager({ layouts, designs, iconBox, iconStyle }: { layout
     set({ azimuthDeg: turn, elevationDeg: Math.max(-89, Math.min(89, Math.round(v.elevationDeg))), zoom: Math.max(0.2, Math.min(10, Math.round(v.zoom * 100) / 100)) });
   };
 
-  /**
-   * Keep a small picture of the preview, as it is now, as the icon of this layout, and save the layout itself in the same go (its name,
-   * on/off switch and settings as they are on screen). A layout that is not saved yet is added first.
-   */
-  const setIcon = () => {
-    const png = view.current?.snapshot({ width: ICON_PX, height: ICON_PX });
-    if (!png) return notify.error("The 3D view is not ready yet.");
-    const body = { name: draft.name, active: draft.active, spec };
-    if (draft.id) {
-      run(async () => {
-        const saved = await updateLayout({ id: draft.id, ...body });
-        if (!saved.ok) return saved;
-        return setLayoutIcon(draft.id, png);
-      });
-      return;
-    }
-    run(
-      async () => {
-        const made = await createLayout(body);
-        if (!made.ok || !made.id) return made;
-        return setLayoutIcon(made.id, png);
-      },
-      () => {
-        setDraft(newDraft(layouts.length + 2));
-        setSel(0);
-      },
-    );
-  };
-  const iconUrl = layouts.find((l) => l.id === draft.id)?.iconUrl ?? null;
 
 
   return (
@@ -358,19 +354,8 @@ export function LayoutManager({ layouts, designs, iconBox, iconStyle }: { layout
       <section aria-label="Layout settings" className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start">
         <div className="overflow-hidden rounded-xl border bg-muted/40 xl:order-2 xl:sticky xl:top-[9.75rem]">
           {sample ? <CartonView ref={view} className="h-[22rem] w-full" geo={sample} texture={look?.canvas ?? null} textureRect={look?.rect ?? null} progress={1} outsideColor={style.outside} insideColor={style.inside} layout={spec} boardGrain={1} onUserView={takeView} /> : null}
-          <div className="flex items-center justify-between gap-2 border-t bg-background px-3 py-2">
-            {iconUrl ? (
-              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                {/* eslint-disable-next-line @next/next/no-img-element -- the layout's own small PNG */}
-                <img src={iconUrl} alt="" className="size-10 rounded border object-cover" />
-                Icon
-                <button type="button" aria-label="Remove the icon" title="Remove the icon" disabled={pending} onClick={() => draft.id && run(() => clearLayoutIcon(draft.id))} className="grid size-6 place-items-center rounded-md hover:bg-muted"><X className="size-3.5" aria-hidden /></button>
-              </span>
-            ) : <span />}
-            <div className="flex flex-wrap justify-end gap-1.5">
-              <Button type="button" variant="outline" size="sm" disabled={pending} onClick={setIcon} title="Use the 3D view as it is now as the icon of this layout, and save the layout"><ImageIcon className="size-3.5" /> Set this view as icon</Button>
-            </div>
-          </div>
+          {/* The quick camera views, always shown under the 3D view: a pick sets the camera of the layout (Turn around and Look from); the zoom stays. */}
+          <CameraViewGrid azimuthDeg={spec.azimuthDeg} elevationDeg={spec.elevationDeg} onPick={(v) => set({ azimuthDeg: v.azimuthDeg, elevationDeg: v.elevationDeg })} />
         </div>
 
         <div className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-xs xl:order-1">
@@ -436,8 +421,8 @@ export function LayoutManager({ layouts, designs, iconBox, iconStyle }: { layout
                 <>
               <p className="text-xs text-muted-foreground">Where this box stands. 1 = one box size.</p>
               <Setting label="Left / right" value={item.x} min={-12} max={12} step={0.05} onChange={(v) => setItem({ x: v })} />
-              <Setting label="Up (on the floor = 0)" value={item.y} min={-5} max={12} step={0.05} onChange={(v) => setItem({ y: v })} />
               <Setting label="Front / back" value={item.z} min={-12} max={12} step={0.05} onChange={(v) => setItem({ z: v })} />
+              <Setting label="Up / down" value={item.y} min={-5} max={12} step={0.05} onChange={(v) => setItem({ y: v })} />
                 </>
               ) : null}
               {boxTab === "turn" ? (
@@ -536,7 +521,7 @@ export function LayoutManager({ layouts, designs, iconBox, iconStyle }: { layout
                   <Trash2 className="size-4" /> Delete
                 </Button>
               ) : null}
-              <Button type="button" className="h-9" disabled={pending} onClick={save}>{draft.id ? "Save layout" : "Add layout"}</Button>
+              <Button type="button" className="h-9" disabled={pending} onClick={save} title="Saves the layout, and the preview as its icon">{draft.id ? "Save layout" : "Add layout"}</Button>
             </div>
           </div>
         </div>

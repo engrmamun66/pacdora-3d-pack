@@ -13,7 +13,9 @@ import type { LayoutSpec } from "@/lib/scene-layout";
 import { RangeSlider } from "@/components/ui/range-slider";
 
 /** The box of a shared template in 3D: drag to turn, scroll to zoom, a slider (and a button) to fold it. */
-export function Scene3D({ userHash, scene, foldable, onFoldable, layout = null, backgroundUrl = null }: { userHash: string; scene: PortalScene; foldable: boolean; onFoldable: (v: boolean) => void; /** Copies of the box in an arrangement (a template layout); null = the one box. */ layout?: LayoutSpec | null; /** A picture behind the box (a featured background); null = the plain studio colour. */ backgroundUrl?: string | null }) {
+export function Scene3D({ userHash, scene, foldable, onFoldable, layout = null, backgroundUrl = null, onReady }: {
+  /** Called once the box is drawn with its artwork (or cannot be shown), so the page can fade the view in. */
+  onReady?: () => void; userHash: string; scene: PortalScene; foldable: boolean; onFoldable: (v: boolean) => void; /** Copies of the box in an arrangement (a template layout); null = the one box. */ layout?: LayoutSpec | null; /** A picture behind the box (a featured background); null = the plain studio colour. */ backgroundUrl?: string | null }) {
   const [raster, setRaster] = useState<{ canvas: HTMLCanvasElement; rect: RasterRect } | null>(null);
   const [failed, setFailed] = useState(false);
   const [progress, setProgress] = useState(scene.initialView?.progress ?? scene.threeD.foldProgress);
@@ -23,8 +25,8 @@ export function Scene3D({ userHash, scene, foldable, onFoldable, layout = null, 
   // Effects run in order, so this is set before the texture below asks for the pictures.
   // Pictures come from the public route of this page, not the owner's private one. Put it back when the view goes away.
   useEffect(() => {
+    // Not put back on unmount: while a new view fades in over the old one both exist, and this page never uses the owner's private route.
     setAssetUrlBase(`/api/portal/assets/${encodeURIComponent(userHash)}`);
-    return () => setAssetUrlBase("/api/assets");
   }, [userHash]);
 
   const geo = useMemo(() => {
@@ -52,6 +54,24 @@ export function Scene3D({ userHash, scene, foldable, onFoldable, layout = null, 
   useEffect(() => () => {
     if (anim.current) cancelAnimationFrame(anim.current);
   }, []);
+
+  // Ready: the box has its artwork (two frames later, so it has been drawn), or there is nothing to wait for.
+  const readyRef = useRef(onReady);
+  useEffect(() => {
+    readyRef.current = onReady;
+  }, [onReady]);
+  const noBox = !geo || failed;
+  useEffect(() => {
+    if (!raster && !noBox) return;
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => readyRef.current?.());
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, [raster, noBox]);
 
   const fold = () => {
     if (anim.current) cancelAnimationFrame(anim.current);

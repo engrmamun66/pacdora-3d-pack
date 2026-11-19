@@ -6,8 +6,9 @@ import type { PortalCapture } from "@/server/portal";
 /** Which design sample of a shared template is open (null = the template as it is now). The grid under the name picks it; the 3D view follows. */
 const Ctx = createContext<{ selected: string | null; select: (id: string | null) => void }>({ selected: null, select: () => undefined });
 
-export function SampleDesignProvider({ children }: { children: ReactNode }) {
-  const [selected, select] = useState<string | null>(null);
+/** `initial`: the sample open when the page loads (the first of the grid), or null for the template as it is. */
+export function SampleDesignProvider({ children, initial = null }: { children: ReactNode; initial?: string | null }) {
+  const [selected, select] = useState<string | null>(initial);
   return <Ctx.Provider value={{ selected, select }}>{children}</Ctx.Provider>;
 }
 

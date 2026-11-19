@@ -33,15 +33,16 @@ export function CameraViewIcon({ view, className = "size-6" }: { view: CameraVie
  * Picking one glides the camera there (about 0.6 s), back at the standard zoom and position; the fold stays as it is.
  * The parent must be `relative` and hold the 3D canvas.
  */
-export function CameraViewTool({ viewRef }: { viewRef: RefObject<CartonViewHandle | null> }) {
+export function CameraViewTool({ viewRef, onPick, glide = true }: { viewRef: RefObject<CartonViewHandle | null>; /** Called with the view picked (for a page that keeps the camera in its own settings). */ onPick?: (v: CameraViewPreset) => void; /** false: the page moves the camera itself (from `onPick`); the tool only reports the pick. */ glide?: boolean }) {
   const { box, open, shown, toggle } = useStrip(CAMERA_VIEWS.length);
   const [current, setCurrent] = useState<string | null>(null);
   const bottom = useCanvasBottom(box);
 
   const go = (v: CameraViewPreset) => {
-    const h = viewRef.current;
-    if (!h) return;
     setCurrent(v.id);
+    onPick?.(v);
+    const h = viewRef.current;
+    if (!h || !glide) return;
     h.setViewSmooth({ ...STANDARD_VIEW, azimuthDeg: v.azimuthDeg, elevationDeg: v.elevationDeg, progress: h.getView()?.progress ?? 1 });
   };
 

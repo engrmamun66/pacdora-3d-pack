@@ -70,7 +70,8 @@ export async function DetailPage({ params }: { params: Promise<{ userHash: strin
           { label: t.name },
         ]}
       />
-      <SampleDesignProvider>
+      {/* The first design sample (when there are some) is open from the start. */}
+      <SampleDesignProvider initial={scene?.captures[0]?.id ?? null}>
       <div className="grid gap-6 md:grid-cols-[1fr_24rem]">
         <TemplatePreview userHash={userHash} name={t.name} thumbnail={t.thumbnail} scene={scene} layouts={layouts} backgrounds={backgrounds} />
         <div className="flex flex-col gap-4">

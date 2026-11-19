@@ -8,6 +8,8 @@ import { useSampleDesign } from "./sample-design";
 import type { FeaturedBackground } from "@/server/layouts";
 import type { LayoutItem } from "@/lib/scene-layout";
 
+type Layer = { key: string; scene: PortalScene } | { key: string; picture: string };
+
 const Scene3D = dynamic(() => import("./scene-3d").then((m) => m.Scene3D), {
   ssr: false,
   loading: () => <div className="grid h-full place-items-center text-sm text-muted-foreground">Loading 3D view…</div>,
@@ -56,30 +58,75 @@ export function TemplatePreview({
   }, [userHash, sample]);
   const ready = sample !== null && loaded?.id === sample.id;
   // One object while nothing changes: the 3D view rebuilds its box whenever it gets a new one.
-  const shown = useMemo<PortalScene | null>(
-    () => {
-      if (!scene || !sample || !ready) return scene;
-      // The sample's design (box size, artwork, backgrounds, colours), folded, with the template's own camera.
-      const design = loaded.design;
-      return { ...scene, ...(design ?? {}), threeD: { ...(design?.threeD ?? scene.threeD), foldProgress: 1 }, initialView: scene.initialView ? { ...scene.initialView, progress: 1 } : null };
-    },
-    [scene, sample, ready, loaded],
-  );
+  const target = useMemo<Layer | null>(() => {
+    if (!scene) return null;
+    if (!sample) return { key: "current", scene };
+    if (!ready) return null; // the design of the sample is on its way
+    // A sample taken before samples kept their design: only its picture is true to it, so that is what is shown.
+    if (!loaded.design) return { key: sample.id, picture: sample.url };
+    // The sample's design (box size, artwork, backgrounds, colours), folded, with the template's own camera.
+    const design = loaded.design;
+    return { key: sample.id, scene: { ...scene, ...design, threeD: { ...design.threeD, foldProgress: 1 }, initialView: scene.initialView ? { ...scene.initialView, progress: 1 } : null } };
+  }, [scene, sample, ready, loaded]);
+
+  // Changing the design never shows the wrong one: the view on screen (front) stays until the next one (incoming) is drawn with its artwork,
+  // fades in over it, and takes its place. A loader shows meanwhile.
+  const [front, setFront] = useState<Layer | null>(null);
+  const [incoming, setIncoming] = useState<Layer | null>(null);
+  const [incomingReady, setIncomingReady] = useState(false);
+  const want = target?.key ?? null;
+  if (target && want !== front?.key && want !== incoming?.key) {
+    setIncoming(target);
+    setIncomingReady(false);
+  } else if (want && want === front?.key && incoming) {
+    setIncoming(null);
+  }
+  // When the new view has faded in, it takes the place of the old one (which goes away).
+  useEffect(() => {
+    if (!incoming || !incomingReady) return;
+    const t = window.setTimeout(() => {
+      setFront(incoming);
+      setIncoming(null);
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [incoming, incomingReady]);
+  const waiting = sample !== null && !ready;
+  const busy = waiting || (incoming !== null && !incomingReady) || (front === null && incoming === null && scene !== null);
   // The layout is the visitor's pick in the tabs below: it stays whichever design sample is open.
   const layout = layouts.find((l) => l.id === layoutId) ?? null;
+
+  const layerView = (l: Layer, onReady?: () => void) =>
+    "scene" in l ? (
+      <Scene3D userHash={userHash} scene={l.scene} onFoldable={setFoldable} foldable={foldable} layout={layout?.spec ?? null} backgroundUrl={background ? `/api/portal/backgrounds/${background.id}` : null} {...(onReady ? { onReady } : {})} />
+    ) : (
+      <div className="flex h-full flex-col items-center justify-center gap-2 p-3">
+        {/* eslint-disable-next-line @next/next/no-img-element -- the saved picture, exactly as the Client took it */}
+        <img src={l.picture} alt="Design sample" onLoad={onReady} className="min-h-0 max-w-full flex-1 object-contain" />
+        <p className="text-xs text-muted-foreground">This sample is a picture only.</p>
+      </div>
+    );
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <div className="paper-grid sheet marks relative aspect-[4/3] overflow-hidden">
-        {sample && ready && !loaded.design ? (
-          // A sample taken before samples kept their design: only its picture is true to it, so that is what is shown.
-          <div className="flex h-full flex-col items-center justify-center gap-2 p-3">
-            {/* eslint-disable-next-line @next/next/no-img-element -- the saved picture, exactly as the Client took it */}
-            <img src={sample.url} alt="Design sample" className="min-h-0 max-w-full flex-1 object-contain" />
-            <p className="text-xs text-muted-foreground">This sample is a picture only.</p>
-          </div>
-        ) : shown ? (
-          <Scene3D key={sample && ready ? sample.id : "current"} userHash={userHash} scene={shown} onFoldable={setFoldable} foldable={foldable} layout={layout?.spec ?? null} backgroundUrl={background ? `/api/portal/backgrounds/${background.id}` : null} />
+        {scene ? (
+          <>
+            {/* Keyed by the design: when the new view takes the place of the old one it is the same element, so it is not built again (no blink). */}
+            {[front, incoming].flatMap((l) => (l ? [l] : [])).map((l) => {
+              const arriving = l.key === incoming?.key;
+              return (
+                <div key={l.key} className={`absolute inset-0 transition-opacity duration-300 ease-out motion-reduce:transition-none ${arriving && !incomingReady ? "pointer-events-none opacity-0" : "opacity-100"}`}>
+                  {layerView(l, arriving ? () => setIncomingReady(true) : undefined)}
+                </div>
+              );
+            })}
+            <div role="status" aria-hidden={!busy} className={`pointer-events-none absolute inset-0 z-10 grid place-items-center transition-opacity duration-300 motion-reduce:transition-none ${busy ? "opacity-100" : "opacity-0"} ${front ? "bg-background/40 backdrop-blur-[2px]" : "bg-transparent"}`}>
+              <span className="flex items-center gap-2 rounded-full border bg-background/90 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm">
+                <span aria-hidden className="size-3.5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground motion-reduce:animate-none" />
+                Loading 3D view…
+              </span>
+            </div>
+          </>
         ) : (
           <div className="flex h-full items-center justify-center p-6">
             {thumbnail ? (
