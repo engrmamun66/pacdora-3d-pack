@@ -50,12 +50,10 @@ async function Landing({ params }: { params: PageProps<"/dielines/[slug]">["para
   ];
   return (
     <div className="flex flex-col gap-10">
-      <JsonLd data={breadcrumbJsonLd(origin, [{ name: "Home", path: "/" }, { name: "Dielines", path: "/dielines" }, { name: t.name, path: `/dielines/${t.id}` }])} />
+      <JsonLd data={breadcrumbJsonLd(origin, [{ name: "Home", path: "/" }, { name: t.name, path: `/dielines/${t.id}` }])} />
       <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
         <ol className="flex flex-wrap items-center gap-1.5">
           <li><Link href="/" className="hover:text-foreground hover:underline">Home</Link></li>
-          <li aria-hidden>/</li>
-          <li><Link href="/dielines" className="hover:text-foreground hover:underline">Dielines</Link></li>
           <li aria-hidden>/</li>
           <li aria-current="page" className="text-foreground">{t.name}</li>
         </ol>
@@ -92,7 +90,7 @@ async function Landing({ params }: { params: PageProps<"/dielines/[slug]">["para
             <Link href={`/template/dieline/${t.id}`} className="cta group inline-flex h-12 items-center gap-2 rounded-xl px-6 text-base font-semibold">
               Open this dieline <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
             </Link>
-            <Link href="/dielines" className="inline-flex h-12 items-center rounded-xl border bg-card px-6 text-base font-medium transition-colors hover:border-[var(--crease,currentColor)]">All dielines</Link>
+            <Link href="/templates" className="inline-flex h-12 items-center rounded-xl border bg-card px-6 text-base font-medium transition-colors hover:border-[var(--crease,currentColor)]">All templates</Link>
           </div>
           <p className="text-sm text-muted-foreground">Free account, no card. You will be asked to sign in or create an account before the editor opens.</p>
         </div>

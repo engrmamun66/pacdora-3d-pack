@@ -25,6 +25,10 @@ const nextConfig: NextConfig = {
       // The dashboard and the settings page became one: /my-dashboard (settings = its Profile tab).
       { source: "/dashboard", destination: "/my-dashboard", permanent: false },
       { source: "/settings", destination: "/my-dashboard?tab=profile", permanent: false },
+      // The project list lives in the dashboard (Templates tab); /projects/:id (one project) is still its own page.
+      // The public list of dieline templates is gone; the templates page is its replacement.
+      { source: "/dielines", destination: "/templates", permanent: false },
+      { source: "/projects", destination: "/my-dashboard?tab=templates", permanent: false },
     ];
   },
   async headers() {

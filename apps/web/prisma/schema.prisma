@@ -171,6 +171,8 @@ model Project {
   userId       String
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   name         String
+  /// Short address-friendly name, unique among the Client's own projects (see lib/slug.ts).
+  slug         String
   templateId   String
   template     Template      @relation(fields: [templateId], references: [id], onDelete: Restrict)
   projectData  Json          @db.JsonB
@@ -186,8 +188,10 @@ model Project {
   updatedAt    DateTime      @updatedAt
   assets       Asset[]
 
+  @@unique([userId, slug])
   @@index([userId, updatedAt(sort: Desc)])
   @@index([categoryId])
+  @@index([userId, templateId])
   @@map("project")
 }
 

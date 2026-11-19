@@ -143,6 +143,8 @@ export async function buildScene(
   const bleedBox: Box = { minX: bb.min.x, minY: bb.min.y, width: bb.max.x - bb.min.x, height: bb.max.y - bb.min.y };
   const cb = geo.cutBounds;
   const trimBox: Box = { minX: cb.min.x, minY: cb.min.y, width: cb.max.x - cb.min.x, height: cb.max.y - cb.min.y };
+  // The watermark goes under the dimensions, so the sizes stay readable over it.
+  if (o.watermark?.text.trim()) layers.push(await watermarkLayer(geo, o.watermark, () => fontFor("Inter", "bold", "normal")));
   let mediaBox = bleedBox;
   if (o.dimensions) {
     const font = await fontFor("Inter", "normal", "normal");
@@ -167,8 +169,6 @@ export async function buildScene(
     layers.push({ id: "dimensions", name: "Dimensions", printable: false, items });
     mediaBox = { minX: bleedBox.minX - DIM_MARGIN, minY: bleedBox.minY - DIM_MARGIN, width: bleedBox.width + 2 * DIM_MARGIN, height: bleedBox.height + 2 * DIM_MARGIN };
   }
-
-  if (o.watermark?.text.trim()) layers.push(await watermarkLayer(geo, o.watermark, () => fontFor("Inter", "bold", "normal")));
 
   // Artwork outside the page is clipped by every backend; say so.
   const art = layers.find((l) => l.id === "artwork");

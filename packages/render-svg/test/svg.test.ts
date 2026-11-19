@@ -7,6 +7,13 @@ const geo = generateDieline("tuck-end-carton", { width: 100, depth: 50, height: 
 describe("renderDielineSvg", () => {
   const svg = renderDielineSvg(geo);
 
+  it("paints a white sheet, unless asked to be transparent (so a watermark can sit under the drawing)", () => {
+    expect(svg).toMatch(/<rect [^>]*fill="#ffffff"\/>/);
+    const clear = renderDielineSvg(geo, { transparent: true });
+    expect(clear).not.toMatch(/<rect [^>]*fill="#ffffff"\/>/);
+    expect(clear).toContain('id="annotations"');
+  });
+
   it("declares physical size in millimetres matching the viewBox", () => {
     const m = svg.match(/width="([\d.]+)mm" height="([\d.]+)mm" viewBox="(-?[\d.]+) (-?[\d.]+) ([\d.]+) ([\d.]+)"/);
     expect(m).not.toBeNull();

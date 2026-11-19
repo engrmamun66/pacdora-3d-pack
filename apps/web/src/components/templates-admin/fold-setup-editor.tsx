@@ -305,10 +305,6 @@ export function FoldSetupEditor({
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="dark" size="sm" aria-pressed={quick} onClick={() => (quick ? closeQuick() : (setQuick(true), setSel(null)))}><ListOrdered className="size-4" aria-hidden /> Quick sort</Button>
           <Button type="button" variant="dark" size="sm" onClick={() => void detectAgain()}><Wand2 className="size-4" aria-hidden /> Detect again</Button>
-          <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm select-none">
-            <input type="checkbox" className="size-4 accent-primary" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} />
-            Show labels on 3D view
-          </label>
           {onWindows ? (
             <Button type="button" variant="dark" size="sm" className="ml-auto" disabled={!geo.geo} title={geo.geo ? "Cut window holes that new projects start with" : "Set up the 3D fold first"} onClick={() => setWindowsOpen(true)}>
               <AppWindow className="size-4" aria-hidden /> Window holes{windows.length > 0 ? <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[10px] leading-4 font-semibold text-primary-foreground">{windows.length}</span> : null}
@@ -430,6 +426,10 @@ export function FoldSetupEditor({
               </label>
               <button type="button" aria-label="Play the fold step by step" className="grid size-7 place-items-center rounded-md border hover:bg-muted" onClick={play}><Play className="size-3.5" /></button>
               <button type="button" aria-label="Reset camera" className="grid size-7 place-items-center rounded-md border hover:bg-muted" onClick={() => view.current?.resetView()}><RotateCcw className="size-3.5" /></button>
+              <label className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap select-none">
+                <input type="checkbox" className="size-3.5 accent-primary" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} />
+                Show labels on 3D view
+              </label>
             </div>
             {geo.geo ? <><GridToggle viewRef={view} keepViewByDefault /><RotationControls viewRef={view} /></> : null}
           </div>

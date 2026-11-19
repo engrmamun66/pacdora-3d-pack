@@ -39,7 +39,6 @@ export type SeoPageKey = keyof SeoSettings["pages"];
 
 export const SEO_PAGES: { key: SeoPageKey; label: string; path: string; hint: string }[] = [
   { key: "home", label: "Home page", path: "/", hint: "The page most people find first. Put the main phrase people search for near the start of the title." },
-  { key: "dielines", label: "Dieline templates (list)", path: "/dielines", hint: "The public list of box templates." },
   { key: "register", label: "Create an account", path: "/register", hint: "Shown when someone searches for the sign-up page." },
   { key: "login", label: "Log in", path: "/login", hint: "Shown when someone searches for the log-in page." },
 ];

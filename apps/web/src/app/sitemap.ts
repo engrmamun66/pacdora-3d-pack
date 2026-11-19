@@ -12,7 +12,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const { templates } = await getPublicCatalogue();
   return [
     { url: `${base}/`, changeFrequency: "weekly", priority: 1 },
-    { url: `${base}/dielines`, changeFrequency: "weekly", priority: 0.9 },
     ...templates.map((t) => ({ url: `${base}/dielines/${t.id}`, changeFrequency: "monthly" as const, priority: 0.7 })),
     { url: `${base}/register`, changeFrequency: "yearly", priority: 0.5 },
     { url: `${base}/login`, changeFrequency: "yearly", priority: 0.3 },

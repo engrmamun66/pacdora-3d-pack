@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
-import { LayoutDashboard, Shapes, FolderOpen } from "lucide-react";
+import { LayoutDashboard, Shapes } from "lucide-react";
 import { SiteTitle } from "@/components/site-brand";
 import { UserMenu } from "@/components/app/user-menu";
 
 const nav = [
   { href: "/my-dashboard", label: "My dashboard", icon: LayoutDashboard },
   { href: "/templates", label: "Templates", icon: Shapes },
-  { href: "/projects", label: "Projects", icon: FolderOpen },
 ];
 
 /**

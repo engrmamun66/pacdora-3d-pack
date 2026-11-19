@@ -230,15 +230,15 @@ export function SheetCanvas<T extends Record<string, boolean>>({
             className="pointer-events-none absolute left-0 top-0 select-none overflow-hidden rounded-sm bg-white shadow-sm"
             style={{ width: vb.width * view.k, height: vb.height * view.k, transform: `translate(${view.x}px, ${view.y}px)` }}
           >
+            {/* Under the picture (its SVG has no white sheet when the watermark is on), so the dimensions and lines are drawn over it. */}
+            <SheetWatermark bounds={vb} text={watermark} {...(watermarkStyle ? { style: watermarkStyle } : {})} {...(watermarkClip ? { clip: watermarkClip } : {})} />
             {/* eslint-disable-next-line @next/next/no-img-element -- generated SVG data URL */}
             <img ref={(el) => { if (el?.complete) settle(el); }} onLoad={(e) => settle(e.currentTarget)} src={src} alt="Flat dieline" draggable={false} className="absolute inset-0 size-full max-w-none" />
-            {/* Above the picture: its SVG paints an opaque white sheet, which would hide a watermark under it. */}
             {highlight && highlight.length >= 3 ? (
               <svg aria-hidden className="absolute inset-0 size-full" viewBox={`${vb.minX ?? 0} ${vb.minY ?? 0} ${vb.width} ${vb.height}`}>
                 <polygon points={highlight.map((q) => `${q.x},${q.y}`).join(" ")} fill="#2f6bff" fillOpacity={0.2} stroke="#2f6bff" strokeWidth={2 / (view?.k || 1)} strokeLinejoin="round" className="hover-pulse" />
               </svg>
             ) : null}
-            <SheetWatermark bounds={vb} text={watermark} {...(watermarkStyle ? { style: watermarkStyle } : {})} {...(watermarkClip ? { clip: watermarkClip } : {})} />
           </div>
         ) : null}
       </div>

@@ -176,6 +176,15 @@ export interface ShadowSettings {
 /** What a view starts with: the light the viewer always had (from the front right, high), shadow on. */
 export const DEFAULT_SHADOW: Omit<ShadowSettings, "on"> = { azimuthDeg: 39, elevationDeg: 51, strength: 0.18, softness: 0 };
 
+/** What the sizes tool shows: the whole box (each part), the size of every panel, or both, in this unit. */
+export interface DimensionConfig {
+  unit: "mm" | "in";
+  /** Sizes of each part of the box. Default true. */
+  box?: boolean;
+  /** Width and height of every panel, on the panel. Default false. */
+  panels?: boolean;
+}
+
 export interface CartonViewHandle {
   /** The carton object currently shown (for GLB export). */
   getModelObject(): THREE.Object3D | null;
@@ -204,6 +213,12 @@ export interface CartonViewHandle {
    * panels while the box turns or folds, and stay when the box is rebuilt.
    */
   setPanelLabels(labels: Readonly<Record<string, string>> | null): void;
+  /**
+   * Show the size of every part of the box (width, depth, height) as arrows along its edges, the value at the middle of each
+   * arrow, outside and (with a board thickness) inside, in this unit. null hides them. They follow the box while it folds.
+   */
+  setDimensions(cfg: DimensionConfig | null): void;
+  getDimensions(): DimensionConfig | null;
   /**
    * Make a panel findable (null = stop). It blinks; if only its thickness side (or nothing) can be seen from the camera, then
    * with the view kept ("locked") an arrow points at where the panel is, otherwise the camera turns smoothly until its face is
@@ -282,6 +297,18 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   const labelBox = useRef<HTMLDivElement | null>(null);
   const labelEls = useRef(new Map<string, HTMLDivElement>());
   const labelFrame = useRef(0);
+  // Dimension arrows (see setDimensions).
+  const dimCfg = useRef<DimensionConfig | null>(null);
+  const dimPanelGroup = useRef<THREE.Group | null>(null);
+  const dimPanelTags = useRef<{ id: string; el: HTMLDivElement; at: THREE.Vector3 }[]>([]);
+  const dimPanelLines = useRef(new Map<string, THREE.LineSegments>());
+  const dimFrame = useRef(0);
+  const dimBox = useRef<HTMLDivElement | null>(null);
+  const dimGroup = useRef<THREE.Group | null>(null);
+  const dimPieces = useRef<{ box: THREE.Box3 }[]>([]);
+  const dimTags = useRef<{ el: HTMLDivElement; at: THREE.Vector3 }[]>([]);
+  const dimSide = useRef("");
+  const dimTick = useRef<() => void>(() => {});
   const shadowCfg = useRef<ShadowSettings>({ on: shadows, ...DEFAULT_SHADOW });
   const gridObj = useRef<THREE.GridHelper | null>(null);
   const gridOn = useRef(false);
@@ -484,6 +511,10 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
    * With the mirror on, a faded upside-down copy of everything is put under the floor. Copies share the box's geometry and materials.
    */
   const placeLayout = () => {
+    placeLayoutOnly();
+    refreshDims(); // the box has moved: measure and draw again
+  };
+  const placeLayoutOnly = () => {
     const t = three.current;
     if (!t?.model) return;
     clearLayout();
@@ -817,6 +848,313 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   };
   labelTick.current = followLabels;
 
+  /** Take the arrows and their numbers away. */
+  const clearDims = () => {
+    const g = dimGroup.current;
+    if (g) {
+      three.current?.scene.remove(g);
+      g.traverse((o) => {
+        if (o instanceof THREE.LineSegments) {
+          o.geometry.dispose();
+          (o.material as THREE.Material).dispose();
+        }
+      });
+    }
+    dimGroup.current = null;
+    for (const t of dimTags.current) t.el.remove();
+    dimTags.current = [];
+    dimSide.current = "";
+    clearPanelDims();
+  };
+  /** Take the arrows and numbers of the panels away. */
+  const clearPanelDims = () => {
+    const g = dimPanelGroup.current;
+    if (g) {
+      three.current?.scene.remove(g);
+      g.traverse((o) => {
+        if (o instanceof THREE.LineSegments) {
+          o.geometry.dispose();
+          (o.material as THREE.Material).dispose();
+        }
+      });
+    }
+    dimPanelGroup.current = null;
+    dimPanelLines.current.clear();
+    for (const t of dimPanelTags.current) t.el.remove();
+    dimPanelTags.current = [];
+  };
+  /** The layer the numbers are written on (made once, on top of the picture). */
+  const dimLayer = (): HTMLDivElement | null => {
+    const el = host.current;
+    if (!el) return null;
+    if (!dimBox.current) {
+      if (getComputedStyle(el).position === "static") el.style.position = "relative";
+      const box = document.createElement("div");
+      box.setAttribute("aria-hidden", "true");
+      box.style.cssText = "position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:15";
+      el.appendChild(box);
+      dimBox.current = box;
+    }
+    return dimBox.current;
+  };
+  /**
+   * The size of every panel: two arrows on it (its width and its height, at a little distance in from the edges) with the value
+   * in the middle of each, in a violet that tells them from the box sizes. Hidden for a panel the camera cannot see.
+   */
+  const drawPanelDims = () => {
+    clearPanelDims();
+    const t = three.current;
+    const cfg = dimCfg.current;
+    const layer = dimLayer();
+    if (!t?.model || !cfg?.panels || !layer) return;
+    const board = thickness > 0 ? thickness : 0;
+    const group = new THREE.Group();
+    group.name = "panel-dimensions";
+    for (const p of geo.foldTree.panels) {
+      const o = t.model.object.getObjectByName(p.id);
+      if (!o || p.polygon.length < 3) continue;
+      const xs = p.polygon.map((v) => v.x);
+      const ys = p.polygon.map((v) => v.y);
+      const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+      const w = x1 - x0;
+      const h = y1 - y0;
+      if (w < 0.5 || h < 0.5) continue;
+      const P = (x: number, y: number) => o.localToWorld(new THREE.Vector3(x, y, -board / 2));
+      const head = Math.min(w, h) * 0.07;
+      const pts: THREE.Vector3[] = [];
+      const arrow = (a: THREE.Vector3, b: THREE.Vector3, across: THREE.Vector3, value: number) => {
+        pts.push(a, b);
+        const dir = b.clone().sub(a).normalize();
+        for (const [tip, sign] of [[a, 1], [b, -1]] as const) for (const k of [1, -1]) pts.push(tip, tip.clone().addScaledVector(dir, sign * head).addScaledVector(across, k * head * 0.35));
+        const tag = document.createElement("div");
+        tag.style.cssText = "position:absolute;left:0;top:0;display:none;white-space:nowrap;padding:0 6px;border-radius:5px;background:rgba(255,255,255,.95);color:#6d28d9;border:1px solid rgba(109,40,217,.35);font:600 10px/14px system-ui,sans-serif;box-shadow:0 1px 2px rgba(0,0,0,.18)";
+        tag.textContent = fmtDim(value, cfg.unit);
+        layer.appendChild(tag);
+        dimPanelTags.current.push({ id: p.id, el: tag, at: a.clone().add(b).multiplyScalar(0.5) });
+      };
+      const yw = y0 + h * 0.2; // the width arrow runs along x, near the bottom edge
+      const xh = x0 + w * 0.2; // the height arrow runs along y, near the left edge
+      const along = P(x0, yw);
+      const acrossW = P(x0, yw + 1).sub(along).normalize();
+      arrow(P(x0, yw), P(x1, yw), acrossW, w);
+      const alongH = P(xh, y0);
+      const acrossH = P(xh + 1, y0).sub(alongH).normalize();
+      arrow(P(xh, y0), P(xh, y1), acrossH, h);
+      const lines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x6d28d9, depthTest: false, transparent: true }));
+      lines.renderOrder = 998;
+      group.add(lines);
+      dimPanelLines.current.set(p.id, lines);
+    }
+    dimPanelGroup.current = group;
+    t.scene.add(group);
+  };
+  /** Which panels belong together (a main body and each extra part are separate pieces, joined by fold lines inside). */
+  const piecesOfGeo = (): string[][] => {
+    const parent = new Map<string, string>(geo.foldTree.panels.map((p) => [p.id, p.id]));
+    const root = (id: string): string => {
+      let r = id;
+      while (parent.get(r) !== r) r = parent.get(r)!;
+      parent.set(id, r);
+      return r;
+    };
+    for (const h of geo.foldTree.hinges) if (parent.has(h.parentId) && parent.has(h.childId)) parent.set(root(h.parentId), root(h.childId));
+    const groups = new Map<string, string[]>();
+    for (const p of geo.foldTree.panels) groups.set(root(p.id), [...(groups.get(root(p.id)) ?? []), p.id]);
+    return [...groups.values()];
+  };
+  const fmtDim = (mm: number, unit: "mm" | "in") => {
+    const v = unit === "mm" ? mm : mm / 25.4;
+    const f = unit === "mm" ? 10 : 100;
+    return `${Math.round(v * f) / f} ${unit}`;
+  };
+  /** Draw the arrows for the camera's side of every piece (the lines are made again when the camera crosses to another side). */
+  const drawDims = () => {
+    const t = three.current;
+    const cfg = dimCfg.current;
+    if (!t || !cfg || !host.current) return;
+    if (cfg.box === false) {
+      // Only the panel sizes are wanted: no box arrows.
+      if (dimGroup.current) {
+        t.scene.remove(dimGroup.current);
+        dimGroup.current.traverse((o) => {
+          if (o instanceof THREE.LineSegments) {
+            o.geometry.dispose();
+            (o.material as THREE.Material).dispose();
+          }
+        });
+        dimGroup.current = null;
+      }
+      for (const tag of dimTags.current) tag.el.remove();
+      dimTags.current = [];
+      dimSide.current = "";
+      return;
+    }
+    if (dimGroup.current) {
+      t.scene.remove(dimGroup.current);
+      dimGroup.current.traverse((o) => {
+        if (o instanceof THREE.LineSegments) {
+          o.geometry.dispose();
+          (o.material as THREE.Material).dispose();
+        }
+      });
+    }
+    for (const tag of dimTags.current) tag.el.remove();
+    dimTags.current = [];
+    const group = new THREE.Group();
+    group.name = "dimensions";
+    dimLayer();
+    const cam = t.camera.position;
+    const board = thickness > 0 ? thickness : 0;
+    let sig = "";
+    for (const { box } of dimPieces.current) {
+      const c = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const sx = cam.x >= c.x ? 1 : -1;
+      const sz = cam.z >= c.z ? 1 : -1;
+      sig += `${sx}${sz}`;
+      const big = Math.max(size.x, size.y, size.z, 1);
+      const off = big * 0.1;
+      const head = big * 0.035;
+      const ex = sx > 0 ? box.max.x : box.min.x;
+      const ez = sz > 0 ? box.max.z : box.min.z;
+      const ox = ex + sx * off;
+      const oz = ez + sz * off;
+      const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+      const pts: THREE.Vector3[] = [];
+      const seg = (a: THREE.Vector3, b: THREE.Vector3) => pts.push(a, b);
+      // An arrow from a to b with a head at each end; `across` is the direction the heads open in.
+      const arrow = (a: THREE.Vector3, b: THREE.Vector3, across: THREE.Vector3) => {
+        seg(a, b);
+        const dir = b.clone().sub(a).normalize();
+        for (const [tip, sign] of [[a, 1], [b, -1]] as const) {
+          for (const k of [1, -1]) seg(tip, tip.clone().addScaledVector(dir, sign * head).addScaledVector(across, k * head * 0.35));
+        }
+      };
+      const items: { a: THREE.Vector3; b: THREE.Vector3; value: number; across: THREE.Vector3; feet: [THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.Vector3] }[] = [
+        // width: along x, in front of the box's bottom edge
+        { a: V(box.min.x, box.min.y, oz), b: V(box.max.x, box.min.y, oz), value: size.x, across: V(0, 1, 0), feet: [V(box.min.x, box.min.y, ez), V(box.min.x, box.min.y, oz), V(box.max.x, box.min.y, ez), V(box.max.x, box.min.y, oz)] },
+        // depth: along z, beside the bottom edge
+        { a: V(ox, box.min.y, box.min.z), b: V(ox, box.min.y, box.max.z), value: size.z, across: V(0, 1, 0), feet: [V(ex, box.min.y, box.min.z), V(ox, box.min.y, box.min.z), V(ex, box.min.y, box.max.z), V(ox, box.min.y, box.max.z)] },
+        // height: up the corner nearest the camera
+        { a: V(ox, box.min.y, oz), b: V(ox, box.max.y, oz), value: size.y, across: V(-sx, 0, 0), feet: [V(ex, box.min.y, ez), V(ox, box.min.y, oz), V(ex, box.max.y, ez), V(ox, box.max.y, oz)] },
+      ];
+      const tagAt = (text: string, at: THREE.Vector3, tone: "out" | "in") => {
+        const tag = document.createElement("div");
+        const color = tone === "out" ? "#1d4ed8" : "#0f766e";
+        tag.style.cssText = `position:absolute;left:0;top:0;display:none;white-space:nowrap;padding:1px 7px;border-radius:6px;background:rgba(255,255,255,.95);color:${color};border:1px solid ${tone === "out" ? "rgba(29,78,216,.35)" : "rgba(15,118,110,.4)"};font:600 11px/15px system-ui,sans-serif;box-shadow:0 1px 3px rgba(0,0,0,.18);text-align:center`;
+        tag.textContent = tone === "out" ? text : `inside ${text}`;
+        dimBox.current!.appendChild(tag);
+        dimTags.current.push({ el: tag, at });
+      };
+      for (const it of items) {
+        arrow(it.a, it.b, it.across);
+        seg(it.feet[0], it.feet[1]); // the thin lines that reach from the box out to the arrow
+        seg(it.feet[2], it.feet[3]);
+        tagAt(fmtDim(it.value, cfg.unit), it.a.clone().add(it.b).multiplyScalar(0.5), "out");
+      }
+      const geom = new THREE.BufferGeometry().setFromPoints(pts);
+      const lines = new THREE.LineSegments(geom, new THREE.LineBasicMaterial({ color: 0x1d4ed8, depthTest: false, transparent: true }));
+      lines.renderOrder = 999;
+      group.add(lines);
+
+      // The inside sizes (the board takes its thickness off every side) are drawn INSIDE the box, along the three inner edges
+      // that meet at the corner farthest from the camera, so they never sit on top of the outside arrows.
+      const inner = { x: size.x - 2 * board, y: size.y - 2 * board, z: size.z - 2 * board };
+      if (board > 0 && inner.x > 0.001 && inner.y > 0.001 && inner.z > 0.001) {
+        const iMin = V(box.min.x + board, box.min.y + board, box.min.z + board);
+        const iMax = V(box.max.x - board, box.max.y - board, box.max.z - board);
+        const fx = sx > 0 ? iMin.x : iMax.x; // the inner wall on the far side
+        const fz = sz > 0 ? iMin.z : iMax.z;
+        const inPts: THREE.Vector3[] = [];
+        const inSeg = (a: THREE.Vector3, b: THREE.Vector3) => inPts.push(a, b);
+        const inArrow = (a: THREE.Vector3, b: THREE.Vector3, across: THREE.Vector3, value: number) => {
+          inSeg(a, b);
+          const dir = b.clone().sub(a).normalize();
+          const h = Math.min(head, value * 0.2);
+          for (const [tip, sign] of [[a, 1], [b, -1]] as const) for (const k of [1, -1]) inSeg(tip, tip.clone().addScaledVector(dir, sign * h).addScaledVector(across, k * h * 0.35));
+          tagAt(fmtDim(value, cfg.unit), a.clone().add(b).multiplyScalar(0.5), "in");
+        };
+        inArrow(V(iMin.x, iMin.y, fz), V(iMax.x, iMin.y, fz), V(0, 1, 0), inner.x);
+        inArrow(V(fx, iMin.y, iMin.z), V(fx, iMin.y, iMax.z), V(0, 1, 0), inner.z);
+        inArrow(V(fx, iMin.y, fz), V(fx, iMax.y, fz), V(-sx, 0, 0), inner.y);
+        const inLines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(inPts), new THREE.LineBasicMaterial({ color: 0x0f766e, depthTest: false, transparent: true }));
+        inLines.renderOrder = 999;
+        group.add(inLines);
+      }
+    }
+    dimSide.current = sig;
+    dimGroup.current = group;
+    t.scene.add(group);
+  };
+  /** Measure every piece of the box as it stands now, and draw the arrows (called when the box is built or moved). */
+  const refreshDims = () => {
+    const t = three.current;
+    if (!dimCfg.current) {
+      clearDims();
+      return;
+    }
+    if (!t?.model) return;
+    t.model.object.updateMatrixWorld(true);
+    dimPieces.current = piecesOfGeo()
+      .map((ids) => {
+        const box = new THREE.Box3();
+        for (const id of ids) {
+          const o = t.model!.object.getObjectByName(id);
+          if (o) box.expandByObject(o);
+        }
+        return { box };
+      })
+      .filter((p) => !p.box.isEmpty());
+    drawDims();
+    drawPanelDims();
+  };
+  const followDims = () => {
+    const t = three.current;
+    if (!dimCfg.current || !t) return;
+    const w = t.renderer.domElement.clientWidth;
+    const h = t.renderer.domElement.clientHeight;
+    const place = (el: HTMLDivElement, at: THREE.Vector3) => {
+      const p = at.clone().project(t.camera);
+      if (p.z > 1) {
+        el.style.display = "none";
+        return;
+      }
+      el.style.display = "block";
+      el.style.transform = `translate(${Math.round((p.x * 0.5 + 0.5) * w)}px, ${Math.round((-p.y * 0.5 + 0.5) * h)}px) translate(-50%, -50%)`;
+    };
+    if (dimGroup.current) {
+      // The arrows sit on the side of the box facing the camera: made again when the camera moves to another side.
+      let sig = "";
+      for (const { box } of dimPieces.current) {
+        const c = box.getCenter(new THREE.Vector3());
+        sig += `${t.camera.position.x >= c.x ? 1 : -1}${t.camera.position.z >= c.z ? 1 : -1}`;
+      }
+      if (sig !== dimSide.current) drawDims();
+      for (const tag of dimTags.current) place(tag.el, tag.at);
+    }
+    if (dimPanelTags.current.length > 0) {
+      // Which panels the camera sees takes ray casts, so it is worked out on every other frame.
+      dimFrame.current = (dimFrame.current + 1) % 2;
+      if (dimFrame.current === 0) {
+        const seen = new Map<string, boolean>();
+        for (const tag of dimPanelTags.current) {
+          if (!seen.has(tag.id)) {
+            const info = panelInfo(tag.id);
+            seen.set(tag.id, Boolean(info && info.visible && info.front));
+          }
+        }
+        for (const [id, line] of dimPanelLines.current) line.visible = seen.get(id) === true;
+        for (const tag of dimPanelTags.current) {
+          if (seen.get(tag.id) === true) place(tag.el, tag.at);
+          else tag.el.style.display = "none";
+        }
+      } else {
+        for (const tag of dimPanelTags.current) if (tag.el.style.display !== "none") place(tag.el, tag.at);
+      }
+    }
+  };
+  dimTick.current = followDims;
+
   const focusPanel = (id: string | null) => {
     blinkId.current = id;
     applyBlink();
@@ -849,6 +1187,11 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       labelFrame.current = 1; // draw on the next frame
       syncLabels();
     },
+    setDimensions: (cfg) => {
+      dimCfg.current = cfg ? { unit: cfg.unit, box: cfg.box !== false, panels: cfg.panels === true } : null;
+      refreshDims();
+    },
+    getDimensions: () => (dimCfg.current ? { ...dimCfg.current } : null),
     highlightPanel: (id) => {
       blinkId.current = id;
       applyBlink();
@@ -1100,6 +1443,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       controls.update();
       arrowTick.current();
       labelTick.current();
+      dimTick.current();
       const mats = blinkMats.current;
       if (mats && blinkMeshes.current.length > 0) {
         // Soft blink: a slow breathing glow, not a flash.
@@ -1122,6 +1466,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       blinkMats.current = null;
       blinkMeshes.current = [];
       const t = three.current;
+      clearDims();
       if (gridObj.current) {
         gridObj.current.geometry.dispose();
         (gridObj.current.material as THREE.Material).dispose();

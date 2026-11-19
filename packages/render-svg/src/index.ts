@@ -12,6 +12,8 @@ export interface SvgOptions {
   readonly margin?: number;
   /** Multiplies all line widths (e.g. 4 for small thumbnails). Default 1. */
   readonly strokeScale?: number;
+  /** Leave out the white sheet behind the drawing, so something laid under the picture (the on-screen watermark) shows through it. */
+  readonly transparent?: boolean;
 }
 
 const DEFAULT_MARGIN = 22;
@@ -212,7 +214,7 @@ export function renderDielineSvg(geo: DielineGeometry, opts: SvgOptions = {}): s
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" ` +
     `width="${n(w)}mm" height="${n(h)}mm" viewBox="${n(minX)} ${n(minY)} ${n(w)} ${n(h)}">\n` +
     `<title>${esc(geo.templateId)} dieline (mm)</title>\n` +
-    `<rect x="${n(minX)}" y="${n(minY)}" width="${n(w)}" height="${n(h)}" fill="#ffffff"/>\n` +
+    (o.transparent ? "" : `<rect x="${n(minX)}" y="${n(minY)}" width="${n(w)}" height="${n(h)}" fill="#ffffff"/>\n`) +
     layers.join("\n") +
     `\n</svg>\n`
   );

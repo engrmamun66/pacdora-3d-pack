@@ -10,7 +10,8 @@ import { notify } from "@/lib/notify";
 import type { ViewSettings } from "@/lib/view-settings";
 import { svgDataUrl } from "@/lib/dieline-preview";
 import { pathData } from "@/lib/template-import";
-import { createProject, createProjectDraft, saveProjectAs, updateProject, type DesignState } from "@/app/(app)/projects/actions";
+import { createProject, createProjectDraft, listProjectsOfTemplate, saveProjectAs, updateProject, type DesignState, type SavedOfTemplate } from "@/app/(app)/projects/actions";
+import { SaveChoiceDialog } from "./save-choice-dialog";
 import type { CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { panelAt, panelShapes } from "@/lib/panel-hit";
 import { withViewTab, type ViewTab } from "@/lib/view-tab";
@@ -20,6 +21,7 @@ import { DielineTopBar } from "./dieline-top-bar";
 import { WindowEditor } from "./window-editor";
 import { SWAP_EASE, SWAP_MS, SkeletonOverlay, SwapIn, ViewSkeleton, useViewSwitch } from "./view-switch";
 import { MiniSheet } from "./mini-sheet";
+import { DEFAULT_WATERMARK } from "./sheet-watermark";
 import type { SaveAsOptions } from "@/server/projects";
 import { TemplatePicker } from "./template-picker";
 import { MaterialInfoButton } from "./material-info";
@@ -174,6 +176,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   const foldable = (shown?.foldTree.hinges.length ?? 0) > 0;
 
   const hasReference = Boolean(imported?.flat.reference?.length);
+  const watermarkShown = (watermark === undefined ? DEFAULT_WATERMARK : watermark?.text ?? "").trim() !== "";
   const src = useMemo(
     () => {
       if (!shown) return null;
@@ -184,6 +187,8 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
         showAnnotations: toggles.dimensions,
         showPanelLabels: toggles.labels,
         ...(toggles.partSizes ? { showPartSizes: unit } : {}),
+        // The watermark is laid UNDER the picture on screen, so the lines and the size labels are drawn over it.
+        ...(watermarkShown ? { transparent: true } : {}),
       });
       // Reference lines (ignored in the file, kept by the admin): faint, scaled with the sheet, drawn only on request.
       const ref = imported?.flat.reference;
@@ -195,7 +200,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
       }
       return svgDataUrl(svg);
     },
-    [shown, unit, toggles, imported],
+    [shown, unit, toggles, imported, watermarkShown],
   );
 
   // Dieline | 3D. The tab changes at once; the slow view is built behind a placeholder, and the tabs wait until it is drawn.
@@ -263,6 +268,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
   const saveAs = async (newName: string, organize?: { categoryId: string | null; tagIds: string[] }): Promise<{ ok: boolean; message: string | null }> => {
     const fd = formData(mode.kind === "edit" ? mode.projectId : undefined);
     fd.set("name", newName);
+    fd.set("strict", "1");
     if (organize) {
       fd.set("organized", "1");
       fd.set("categoryId", organize.categoryId ?? "");
@@ -275,6 +281,71 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
       return { ok: true, message: null };
     }
     return { ok: false, message: r.message ?? "Could not save." };
+  };
+
+  // Save on a template page: when the Client already saved projects from this template, ask first (overwrite one, or save new).
+  const projectForm = useRef<HTMLFormElement>(null);
+  const skipCheck = useRef(false);
+  const [saved, setSaved] = useState<SavedOfTemplate[] | null>(null);
+  const checkThenSave = async () => {
+    let list: SavedOfTemplate[] = [];
+    if (mode.kind === "create") {
+      try {
+        list = await listProjectsOfTemplate(mode.presetId);
+      } catch {
+        list = []; // cannot tell: save as before
+      }
+    }
+    if (list.length > 0) {
+      setSaved(list);
+      return;
+    }
+    skipCheck.current = true;
+    projectForm.current?.requestSubmit();
+    skipCheck.current = false;
+  };
+  /** Overwrite one of the saved projects with the values on screen (its own name and slug stay). */
+  const overwrite = async (p: SavedOfTemplate): Promise<{ ok: boolean; message: string | null }> => {
+    const fd = formData(p.id);
+    fd.set("name", p.name);
+    const r = await updateProject(IDLE, fd);
+    if (!r.ok) return { ok: false, message: r.message };
+    notify.success("Project overwritten", { description: p.name });
+    router.push(`/projects/${p.id}`);
+    return { ok: true, message: null };
+  };
+  const saveNew = async (newName: string, slug: string): Promise<{ ok: boolean; message: string | null }> => {
+    const fd = formData();
+    fd.set("name", newName);
+    fd.set("slug", slug);
+    fd.set("strict", "1");
+    const r = await createProjectDraft(fd);
+    if (!r.ok || !r.id) return { ok: false, message: r.message ?? "Could not save." };
+    notify.success("Saved as a new project", { description: newName });
+    router.push(`/projects/${r.id}`);
+    return { ok: true, message: null };
+  };
+
+  /**
+   * Template page, "Design Online" arrow: create the project and open its artwork editor in a new tab. The tab is opened at once
+   * (a browser only allows that straight after the click), then sent to the editor when the project exists. This page moves on
+   * to the new project, so a later Save does not make another copy.
+   */
+  const designInNewTab = async () => {
+    const tab = window.open("", "_blank");
+    const r = await createProjectDraft(formData()).catch(() => ({ ok: false, message: "Could not save. Please try again.", issues: [], id: null as string | null }));
+    if (!r.ok || !r.id) {
+      tab?.close();
+      notify.error(r.message ?? "Could not create the project.");
+      return;
+    }
+    if (tab) {
+      tab.opener = null;
+      tab.location.href = `/editor/${r.id}`;
+    } else {
+      notify.info("Your browser blocked the new tab.", { description: "Open it from My projects." });
+    }
+    router.replace(`/projects/${r.id}`);
   };
 
   const download = async () => {
@@ -502,12 +573,23 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
 
   return (
     <div className="flex min-h-dvh flex-col bg-background lg:h-dvh">
-      <form id="project-form" action={formAction}>
+      <form
+        ref={projectForm}
+        id="project-form"
+        action={formAction}
+        onSubmit={(e) => {
+          if (mode.kind !== "create" || skipCheck.current) return;
+          e.preventDefault();
+          void checkThenSave();
+        }}
+      >
         {mode.kind === "create" ? <input type="hidden" name="presetId" value={mode.presetId} /> : <input type="hidden" name="projectId" value={mode.projectId} />}
         <input type="hidden" name="name" value={name} />
         <input type="hidden" name="params" value={JSON.stringify(input)} />
         <input type="hidden" name="windows" value={windows.length > 0 ? JSON.stringify(windows) : ""} />
       </form>
+
+      <SaveChoiceDialog existing={saved} name={name} onClose={() => setSaved(null)} onOverwrite={overwrite} onSaveNew={saveNew} />
 
       <DielineTopBar
         title={title}
@@ -522,6 +604,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
         downloadLabel="Download the dieline"
         onDownload={() => void download()}
         onSaveAs={saveAs}
+        onDesignNewTab={designInNewTab}
         saveOptions={saveOptions}
         viewer={viewer}
         {...(shown && foldable && !editingWindows ? { centre: viewTabs } : {})}
@@ -536,7 +619,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
       <div ref={stageHost} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       {stageOn && shown ? (
         <div ref={stage} style={{ position: "absolute", visibility: "hidden", left: 0, top: 0, width: 0, height: 0 }} className="z-20 flex flex-col" inert={windowsView === "open"}>
-          <FoldPreview large onReady={sw.markReady} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
+          <FoldPreview large unit={unit} onReady={sw.markReady} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
         </div>
       ) : null}
       <div
@@ -702,7 +785,7 @@ export function DielineWorkspace({ mode, generatorId, imported, initialView = nu
                 </span>
               </div>
               <div className="flex min-h-[40vh] min-w-0 flex-1 basis-0 flex-col gap-2 p-4 lg:min-h-0">
-                <FoldPreview large onReady={() => splitDone("box")} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
+                <FoldPreview large unit={unit} onReady={() => splitDone("box")} materialId={materialType?.id} thickness={bt ?? 0} watermark={watermark ?? null} initialView={initialView} geo={shown} progress={progress} onProgress={setProgress} color={boardColor} viewRef={viewRef} />
               </div>
             </div>
           ) : shown && foldable && centre === "3d" ? (

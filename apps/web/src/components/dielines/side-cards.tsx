@@ -84,10 +84,13 @@ export function FoldPreview({
   thickness = 0,
   watermark = null,
   materialId,
+  unit,
   onReady,
 }: {
   /** Called once when the box has been built and drawn. */
   onReady?: () => void;
+  /** The unit the sizes tool (bottom right) shows; its own mm | in switch when absent. */
+  unit?: "mm" | "in";
   /** Board family (units.ts id): decides the look of the inside, the cut edge and the surface grain. */
   materialId?: string;
   /** Board thickness in mm, shown as the thickness of the panels in 3D. */
@@ -140,7 +143,7 @@ export function FoldPreview({
           <RotateCcw className="size-3.5" />
         </button>
       </div>
-      <GridToggle viewRef={viewRef} />
+      <GridToggle viewRef={viewRef} unit={unit} />
       <RotationControls viewRef={viewRef} />
     </section>
   );

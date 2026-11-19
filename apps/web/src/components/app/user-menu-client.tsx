@@ -37,7 +37,7 @@ export function UserMenuClient({ name, email, image }: { name: string; email: st
         <DropdownMenuSeparator />
         {/* Real links, so Ctrl/Cmd+click or the middle button opens them in a new tab. */}
         <DropdownMenuItem nativeButton={false} render={<Link href="/my-dashboard" />}>My dashboard</DropdownMenuItem>
-        <DropdownMenuItem nativeButton={false} render={<Link href="/projects" />}>My projects</DropdownMenuItem>
+        <DropdownMenuItem nativeButton={false} render={<Link href="/my-dashboard?tab=templates" />}>My projects</DropdownMenuItem>
         <DropdownMenuItem nativeButton={false} render={<Link href="/my-dashboard?tab=settings" />}>Settings</DropdownMenuItem>
         <DropdownMenuItem
           onClick={async () => {

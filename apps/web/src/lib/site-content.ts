@@ -105,7 +105,7 @@ export const DEFAULT_CONTENT: SiteContent = {
       title: "Online dieline generator that folds in 3D",
       subtitle: "Make a custom box dieline from your own size, add artwork, fold it in 3D and export print-ready PDF, AI, EPS, SVG and DXF files, all in your browser.",
       primary: { label: "Create a free account", href: "/register" },
-      secondary: { label: "Browse dielines", href: "/dielines" },
+      secondary: { label: "Browse templates", href: "/templates" },
       points: ["Free to start", "Cut and crease layers", "Live 3D fold", "DXF, PDF, AI, EPS, SVG"],
     },
     sections: HOME_SECTIONS.map((s) => ({ id: s.id, on: true })),
@@ -172,7 +172,7 @@ export const DEFAULT_CONTENT: SiteContent = {
     footer: {
       tagline: "Parametric packaging dielines, 2D artwork and 3D preview in your browser.",
       columns: [
-        { title: "Product", links: [{ label: "Dieline templates", href: "/dielines" }, { label: "Features", href: "/#features" }, { label: "How it works", href: "/#how" }, { label: "File formats", href: "/#formats" }] },
+        { title: "Product", links: [{ label: "Templates", href: "/templates" }, { label: "Features", href: "/#features" }, { label: "How it works", href: "/#how" }, { label: "File formats", href: "/#formats" }] },
         { title: "Account", links: [{ label: "Log in", href: "/login" }, { label: "Create an account", href: "/register" }, { label: "My dashboard", href: "/my-dashboard" }] },
       ],
       note: "",

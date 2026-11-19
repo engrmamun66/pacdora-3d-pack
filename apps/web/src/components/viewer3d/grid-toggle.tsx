@@ -5,13 +5,14 @@ import { Grid3x3, Lock, LockOpen } from "lucide-react";
 import type { CartonViewHandle } from "./carton-view";
 import { CameraViewTool } from "./camera-view-menu";
 import { ShadowTool } from "./shadow-menu";
+import { DimensionTool } from "./dimension-tool";
 
 /**
  * Icon button in the top left corner of a 3D view: shows or hides a floor grid behind the carton. Under it: keep the view. The camera views tool sits in the bottom left corner.
  * The parent must be `relative`. On from the start; pass `defaultOn={false}` to start with the grid hidden.
  * Pass `keepViewByDefault` to start with the view kept (the lock button selected).
  */
-export function GridToggle({ viewRef, defaultOn = true, keepViewByDefault = false }: { viewRef: RefObject<CartonViewHandle | null>; defaultOn?: boolean; keepViewByDefault?: boolean }) {
+export function GridToggle({ viewRef, defaultOn = true, keepViewByDefault = false, unit }: { viewRef: RefObject<CartonViewHandle | null>; defaultOn?: boolean; keepViewByDefault?: boolean; /** The page's unit for the sizes tool (bottom right); without it the tool has its own mm | in switch. */ unit?: "mm" | "in" }) {
   const [on, setOn] = useState(defaultOn);
 
   // A view that was created earlier may already have its grid on; with `defaultOn` a view without one gets it now.
@@ -44,6 +45,7 @@ export function GridToggle({ viewRef, defaultOn = true, keepViewByDefault = fals
     <KeepViewToggle viewRef={viewRef} defaultOn={keepViewByDefault} />
     <ShadowTool viewRef={viewRef} />
     <CameraViewTool viewRef={viewRef} />
+    <DimensionTool viewRef={viewRef} unit={unit} />
     </>
   );
 }

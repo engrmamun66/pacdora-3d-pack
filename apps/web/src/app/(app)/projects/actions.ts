@@ -6,6 +6,7 @@ import { z } from "zod";
 import { ENGINE_VERSION, IMPORTED_GENERATOR_ID, MAX_WINDOWS, ParamValidationError, applyWindows, getPreset, type GeneratorDefinition, type WindowSpec } from "@packaging/dieline-engine";
 import { newProjectDoc, parseProjectDoc, windowSchema, type WindowDoc } from "@packaging/schema";
 import { db } from "@/server/db";
+import { claimNameAndSlug, isSlugClash, nameTaken } from "@/server/project-names";
 import { requireUser } from "@/server/session";
 import { resolveGenerator } from "@/server/imported-templates";
 import { copyTemplateBackground } from "@/server/template-background";
@@ -90,8 +91,13 @@ async function insertProject(formData: FormData): Promise<{ id: string } | Desig
   const badWindows = checkWindows(generator, params, windows ?? []);
   if (badWindows) return badWindows;
 
+  // The name and slug the project is kept under (unique among this Client's projects). "strict" = the Client typed them in the save box.
+  const slugText = formData.has("slug") ? String(formData.get("slug") ?? "").trim() : null;
+  const claimed = await claimNameAndSlug(user.id, name.data, slugText, formData.get("strict") === "1");
+  if ("error" in claimed) return { ok: false, message: claimed.error, issues: [] };
+
   const baseDoc = newProjectDoc({
-    name: name.data,
+    name: claimed.name,
     presetId,
     generatorId: generator.id,
     generatorSchemaVersion: generator.schemaVersion,
@@ -118,10 +124,16 @@ async function insertProject(formData: FormData): Promise<{ id: string } | Desig
       update: {},
     });
   }
-  const project = await db.project.create({
-    data: { userId: user.id, name: name.data, templateId: presetId, projectData: doc },
-    select: { id: true },
-  });
+  let project: { id: string };
+  try {
+    project = await db.project.create({
+      data: { userId: user.id, name: claimed.name, slug: claimed.slug, templateId: presetId, projectData: doc },
+      select: { id: true },
+    });
+  } catch (e) {
+    if (isSlugClash(e)) return { ok: false, message: "Another save took that name a moment ago. Please try again.", issues: [] };
+    throw e;
+  }
   // A template's box background (set by an admin) becomes the project's starting background.
   const bg = await copyTemplateBackground(presetId, user.id, project.id);
   if (bg) {
@@ -153,6 +165,9 @@ export async function updateProject(_prev: DesignState, formData: FormData): Pro
   if (!row) return { ok: false, message: "Project not found.", issues: [] };
   const name = nameSchema.safeParse(formData.get("name"));
   if (!name.success) return { ok: false, message: name.error.issues[0]!.message, issues: [] };
+  if (name.data.toLowerCase() !== row.name.toLowerCase() && (await nameTaken(user.id, name.data, row.id))) {
+    return { ok: false, message: `You already have a project named "${name.data}". Choose another name.`, issues: [] };
+  }
   const params = readParams(formData.get("params"));
   if (!params) return { ok: false, message: "Invalid parameters.", issues: [] };
 
@@ -237,11 +252,20 @@ export async function saveProjectAs(formData: FormData): Promise<DesignState & {
   const badWindows = checkWindows(generator, params, windows);
   if (badWindows) return fail(badWindows);
 
-  const next = parseProjectDoc({ ...doc, meta: { ...doc.meta, name: name.data, engineVersion: ENGINE_VERSION }, template: { ...doc.template, params }, ...(sent !== undefined ? { windows } : {}) });
-  const copy = await db.project.create({
-    data: { userId: user.id, name: name.data, templateId: row.templateId, projectData: next, categoryId: row.categoryId },
-    select: { id: true },
-  });
+  // "Save as" is asked for a name of its own, so a taken name or slug is an error, not a number added behind its back.
+  const claimed = await claimNameAndSlug(user.id, name.data, formData.has("slug") ? String(formData.get("slug") ?? "").trim() : null, true);
+  if ("error" in claimed) return fail({ ok: false, message: claimed.error, issues: [] });
+  const next = parseProjectDoc({ ...doc, meta: { ...doc.meta, name: claimed.name, engineVersion: ENGINE_VERSION }, template: { ...doc.template, params }, ...(sent !== undefined ? { windows } : {}) });
+  let copy: { id: string };
+  try {
+    copy = await db.project.create({
+      data: { userId: user.id, name: claimed.name, slug: claimed.slug, templateId: row.templateId, projectData: next, categoryId: row.categoryId },
+      select: { id: true },
+    });
+  } catch (e) {
+    if (isSlugClash(e)) return fail({ ok: false, message: "Another save took that name a moment ago. Please try again.", issues: [] });
+    throw e;
+  }
   // The copy gets its own uploaded images (best effort: if one cannot be copied the copy keeps pointing at the original).
   let json = JSON.stringify(next);
   const assets = await db.asset.findMany({ where: { projectId: row.id, userId: user.id } });
@@ -273,5 +297,24 @@ export async function deleteProject(formData: FormData): Promise<void> {
   const id = String(formData.get("projectId") ?? "");
   await db.project.deleteMany({ where: { id, userId: user.id } });
   revalidatePath("/projects");
-  redirect("/projects");
+  redirect("/my-dashboard?tab=templates");
+}
+
+export interface SavedOfTemplate {
+  id: string;
+  name: string;
+  slug: string;
+  updatedAt: string;
+}
+
+/**
+ * The signed-in Client's projects made from this template (newest first), for the box that opens on Save when there are
+ * some already. A visitor who is not signed in gets none.
+ */
+export async function listProjectsOfTemplate(templateId: unknown): Promise<SavedOfTemplate[]> {
+  const { getSession } = await import("@/server/session");
+  const session = await getSession();
+  if (!session || typeof templateId !== "string" || templateId.length === 0 || templateId.length > 80) return [];
+  const rows = await db.project.findMany({ where: { userId: session.user.id, templateId }, orderBy: { updatedAt: "desc" }, take: 50, select: { id: true, name: true, slug: true, updatedAt: true } });
+  return rows.map((r) => ({ id: r.id, name: r.name, slug: r.slug, updatedAt: r.updatedAt.toISOString() }));
 }

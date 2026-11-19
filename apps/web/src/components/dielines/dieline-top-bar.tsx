@@ -113,7 +113,7 @@ function MainMenu({
           {rule}
           <button type="button" role="menuitem" className={rowLive} onClick={() => go("/templates")}>Create new project</button>
           {rule}
-          <button type="button" role="menuitem" className={rowLive} onClick={() => go("/projects")}>My projects</button>
+          <button type="button" role="menuitem" className={rowLive} onClick={() => go("/my-dashboard?tab=templates")}>My projects</button>
           <button type="button" role="menuitem" className={rowLive} onClick={() => go("/my-dashboard?tab=settings")}>Settings</button>
           <button type="button" role="menuitem" className={rowLive} onClick={() => go("/")}>Homepage</button>
           {projectId ? (
@@ -327,6 +327,7 @@ export function DielineTopBar({
   downloadLabel,
   onDownload,
   onSaveAs,
+  onDesignNewTab,
   saveOptions = null,
   viewer = null,
   centre,
@@ -344,6 +345,8 @@ export function DielineTopBar({
   onDownload: () => void;
   /** Keep the current values as a new project with this name (and the category / tags picked); resolves with how it went (the page opens the new project). */
   onSaveAs: SaveAs;
+  /** On a template page: create the project and open the artwork editor in a new tab (the page itself moves on to the new project). */
+  onDesignNewTab?: () => Promise<void>;
   /** The visitor's own categories and tags to choose from in "Save as". */
   saveOptions?: SaveAsOptions | null;
   /** Signed-in visitor: shown as a profile icon with an account menu. */
@@ -363,6 +366,7 @@ export function DielineTopBar({
   const primary = "inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-[13px] font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-70";
   const saveAsDialog = useRef<HTMLDialogElement>(null);
   const [saveAsOpen, setSaveAsOpen] = useState(false);
+  const [opening, setOpening] = useState(false);
   const openSaveAs = () => {
     setSaveAsOpen(true);
     saveAsDialog.current?.showModal();
@@ -383,15 +387,42 @@ export function DielineTopBar({
 
       <div className="ml-auto flex items-center gap-2">
         <SaveSplit saving={saving} disabled={!mayHere} why={whyNot} saveTitle={mode === "edit" ? "Save the changes to this project" : "Save this as a project in My projects"} onSaveAs={openSaveAs} />
-        {mode === "edit" && projectId ? (
-          <Link href={`/editor/${projectId}`} target="_blank" rel="noopener" className={ghost} title="Open the artwork editor in a new tab">
-            Design Online <ExternalLink className="size-3.5" aria-hidden />
-          </Link>
-        ) : (
-          <button type="submit" form="project-form" name="next" value="editor" disabled={saving || !canSave} className={ghost} title="Create a project and open the artwork editor">
-            {saving ? "Creating…" : "Design Online"} <ExternalLink className="size-3.5" aria-hidden />
-          </button>
-        )}
+        {/* "Design Online" opens the artwork editor in this tab; the small arrow beside it opens it in a new tab. */}
+        <div className="inline-flex">
+          {mode === "edit" && projectId ? (
+            <Link href={`/editor/${projectId}`} className={`${ghost} rounded-r-none`} title="Open the artwork editor">
+              Design Online
+            </Link>
+          ) : (
+            <button type="submit" form="project-form" name="next" value="editor" disabled={saving || !canSave || opening} className={`${ghost} rounded-r-none`} title="Create a project and open the artwork editor">
+              {saving ? "Creating…" : "Design Online"}
+            </button>
+          )}
+          {mode === "edit" && projectId ? (
+            <Link href={`/editor/${projectId}`} target="_blank" rel="noopener" aria-label="Open the artwork editor in a new tab" title="Open the artwork editor in a new tab" className={`${ghost} -ml-px w-8 justify-center rounded-l-none border-l-[#444444] px-0`}>
+              <ExternalLink className="size-3.5" aria-hidden />
+            </Link>
+          ) : (
+            <button
+              type="button"
+              aria-label="Create a project and open the artwork editor in a new tab"
+              title="Create a project and open the artwork editor in a new tab"
+              disabled={saving || !canSave || opening || !onDesignNewTab}
+              className={`${ghost} -ml-px w-8 justify-center rounded-l-none border-l-[#444444] px-0`}
+              onClick={async () => {
+                if (!onDesignNewTab) return;
+                setOpening(true);
+                try {
+                  await onDesignNewTab();
+                } finally {
+                  setOpening(false);
+                }
+              }}
+            >
+              <ExternalLink className="size-3.5" aria-hidden />
+            </button>
+          )}
+        </div>
         {mode === "create" ? (
           <button type="button" aria-label="Copy link" title="Copy link" onClick={() => void share()} className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
             <Share2 className="size-4" aria-hidden />
