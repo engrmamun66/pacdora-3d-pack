@@ -141,7 +141,7 @@ export function LabelSettings({ kind, labels }: { kind: Kind; labels: Label[] })
               <input name="name" defaultValue={renaming.name} maxLength={40} required autoFocus onFocus={(e) => e.currentTarget.select()} className={input} />
             </label>
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={(e) => e.currentTarget.closest("dialog")?.close()} className="h-9 rounded-lg border bg-background px-3 text-sm font-medium hover:bg-muted">Cancel</button>
+              <button type="button" onClick={(e) => e.currentTarget.closest("dialog")?.close()} className="h-9 rounded-lg border border-red-600 bg-red-600 text-white hover:bg-red-700 px-3 text-sm font-medium">Cancel</button>
               <button type="submit" disabled={working} className="h-9 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/85 disabled:opacity-60">Save</button>
             </div>
           </form>

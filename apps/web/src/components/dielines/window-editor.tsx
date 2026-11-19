@@ -1043,7 +1043,7 @@ export function WindowEditor({
         </div>
         <div className="ml-auto flex items-center gap-2">
           {bad ? <span role="status" className="hidden text-xs text-destructive sm:block">{result.problems.length} {result.problems.length === 1 ? "window does" : "windows do"} not fit</span> : null}
-          <button type="button" onClick={onCancel} className="inline-flex h-8 items-center rounded-lg border bg-background px-3 text-[13px] font-medium hover:bg-muted">Cancel</button>
+          <button type="button" onClick={onCancel} className="inline-flex h-8 items-center rounded-lg border border-red-600 bg-red-600 text-white hover:bg-red-700 px-3 text-[13px] font-medium">Cancel</button>
           <button
             type="button"
             disabled={bad}
@@ -1544,7 +1544,7 @@ function Fields({
       ) : null}
       <div className="flex items-center gap-2 border-t pt-3">
         <button type="button" onClick={onDuplicate} className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[13px] hover:bg-muted"><Copy className="size-3.5" aria-hidden /> Duplicate</button>
-        <button type="button" onClick={onRemove} className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[13px] text-destructive hover:bg-destructive/10"><Trash2 className="size-3.5" aria-hidden /> Delete</button>
+        <button type="button" onClick={onRemove} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-600 bg-red-600 text-white hover:bg-red-700 px-3 text-[13px]"><Trash2 className="size-3.5" aria-hidden /> Delete</button>
       </div>
     </div>
   );

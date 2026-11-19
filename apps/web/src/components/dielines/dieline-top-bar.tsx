@@ -303,7 +303,7 @@ function SaveAsForm({ name, options, onSaveAs, onDone }: { name: string; options
       ) : null}
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
       <div className="flex justify-end gap-2">
-        <button type="button" className={ghost} disabled={busy} onClick={onDone}>Cancel</button>
+        <button type="button" className={`${ghost} !border-red-600 !bg-red-600 !text-white hover:!bg-red-700`} disabled={busy} onClick={onDone}>Cancel</button>
         <button type="submit" className={primary} disabled={busy}>{busy ? "Saving…" : "Save as new project"}</button>
       </div>
     </form>

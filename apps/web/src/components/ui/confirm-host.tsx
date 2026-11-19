@@ -63,14 +63,14 @@ export function ConfirmHost() {
           </div>
         </div>
         <div className="flex justify-end gap-2">
-          <button type="button" autoFocus onClick={(e) => e.currentTarget.closest("dialog")?.close()} className="h-9 rounded-lg border bg-background px-3 text-sm font-medium hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">Cancel</button>
+          <button type="button" autoFocus onClick={(e) => e.currentTarget.closest("dialog")?.close()} className="h-9 rounded-lg border border-red-600 bg-red-600 text-white hover:bg-red-700 px-3 text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">Cancel</button>
           <button
             type="button"
             onClick={(e) => {
               answer.current = true;
               e.currentTarget.closest("dialog")?.close();
             }}
-            className={`h-9 rounded-lg px-4 text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${danger ? "border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20" : "bg-primary text-primary-foreground hover:bg-primary/85"}`}
+            className={`h-9 rounded-lg px-4 text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${danger ? "border border-red-600 bg-red-600 text-white hover:bg-red-700" : "bg-primary text-primary-foreground hover:bg-primary/85"}`}
           >
             {opts.confirmLabel ?? (danger ? "Delete" : "Confirm")}
           </button>

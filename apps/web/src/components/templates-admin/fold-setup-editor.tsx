@@ -12,7 +12,8 @@ import { HelpTip, InfoTip } from "./help-tip";
 import { PiecesEditor } from "./pieces-editor";
 import { HingeList } from "./hinge-list";
 import { PanelKindHelp } from "./panel-kind-help";
-import { QuickSortBar } from "./quick-sort-bar";
+import { confirmAction } from "@/lib/confirm";
+import { QUICK_SLIDE_MS, QuickSortBar } from "./quick-sort-bar";
 import type { ViewSettings } from "@/lib/view-settings";
 import { GridToggle } from "@/components/viewer3d/grid-toggle";
 import { RotationControls } from "@/components/viewer3d/rotation-controls";
@@ -68,7 +69,7 @@ export function FoldSetupEditor({
   fold,
   onChange,
   stale,
-  barBottom = "0.75rem",
+  onQuickChange,
   startView = null,
   memoryKey,
   windows = [],
@@ -83,8 +84,8 @@ export function FoldSetupEditor({
   onChange: (f: FoldSetup | null) => void;
   /** True when the lines changed after the fold was set up: it must be detected again or removed. */
   stale: boolean;
-  /** Distance of the quick sort bar from the window bottom, so it clears a sticky save bar. */
-  barBottom?: string;
+  /** Told when Quick sort opens or closes, so the page can clear the bottom of the window for it. */
+  onQuickChange?: (open: boolean) => void;
   /** The template's saved starting 3D view: the preview opens with it, returns to it on reset, and moves to it when it changes. */
   startView?: ViewSettings | null;
   /** Edit page: saving rebuilds this editor from the saved data. With a key, the open tab is remembered across that. */
@@ -114,6 +115,11 @@ export function FoldSetupEditor({
   // Quick sort: while on, a click on a fold line (or the panel it swings) adds it to `queue` with the step now chosen
   // (1 at first; "Add step" moves on to the next one, and the lines clicked from then on take that step).
   const [quick, setQuick] = useState(false);
+  const [quickClosing, setQuickClosing] = useState(false);
+  useEffect(() => {
+    onQuickChange?.(quick);
+    return () => onQuickChange?.(false);
+  }, [quick, onQuickChange]);
   const [queue, setQueue] = useState<{ id: string; step: number }[]>([]);
   const [quickStep, setQuickStep] = useState(1);
   // "Preview 3D folding" in the Quick sort bar: while on, the 3D box folds in the order being sorted (steps of the clicked lines first).
@@ -147,6 +153,16 @@ export function FoldSetupEditor({
     setQueue([]);
     setQuickStep(1);
     onChange(r.setup);
+  };
+
+  /** "Detect again" starts the whole fold setup over, so it asks first. */
+  const detectAgain = async () => {
+    const ok = await confirmAction({
+      title: "Detect panels and folds again?",
+      description: "This resets the fold setup: panel names and kinds, the base, the bottom, fold steps, directions and angles go back to what is detected. Window holes are kept. This cannot be undone.",
+      confirmLabel: "Detect again",
+    });
+    if (ok) detect();
   };
 
   const problems = useMemo(() => (fold ? validateFoldSetup(fold) : []), [fold]);
@@ -259,6 +275,15 @@ export function FoldSetupEditor({
   const liveQueue = queue.filter((it) => fold.hinges.some((h) => h.id === it.id));
   const toggleQueued = (id: string) => setQueue((q) => (q.some((x) => x.id === id) ? q.filter((x) => x.id !== id) : [...q, { id, step: quickStep }]));
   const stopQuick = () => { setQuick(false); setQueue([]); setQuickStep(1); setPreviewSort(true); };
+  // Closing slides the bar down first and only then lets go of the sort, so it does not empty out while it leaves.
+  const closeQuick = () => {
+    if (quickClosing) return;
+    setQuickClosing(true);
+    window.setTimeout(() => {
+      stopQuick();
+      setQuickClosing(false);
+    }, QUICK_SLIDE_MS);
+  };
   // Give a queued line another step (dragged into it, or moved with the keys); the list stays in step order.
   const setQueuedStep = (id: string, step: number) => setQueue((q) => q.map((x) => (x.id === id ? { ...x, step: Math.max(1, step) } : x)).sort((a, b) => a.step - b.step));
   // Drop a step and its lines; later steps move up one. The open step follows, and never goes below 1.
@@ -278,8 +303,8 @@ export function FoldSetupEditor({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="dark" size="sm" aria-pressed={quick} onClick={() => (quick ? stopQuick() : (setQuick(true), setSel(null)))}><ListOrdered className="size-4" aria-hidden /> Quick sort</Button>
-          <Button type="button" variant="dark" size="sm" onClick={detect}><Wand2 className="size-4" aria-hidden /> Detect again</Button>
+          <Button type="button" variant="dark" size="sm" aria-pressed={quick} onClick={() => (quick ? closeQuick() : (setQuick(true), setSel(null)))}><ListOrdered className="size-4" aria-hidden /> Quick sort</Button>
+          <Button type="button" variant="dark" size="sm" onClick={() => void detectAgain()}><Wand2 className="size-4" aria-hidden /> Detect again</Button>
           <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm select-none">
             <input type="checkbox" className="size-4 accent-primary" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} />
             Show labels on 3D view
@@ -540,7 +565,8 @@ export function FoldSetupEditor({
       </div>
       {quick ? (
         <QuickSortBar
-          bottom={barBottom}
+          bottom="0px"
+          closing={quickClosing}
           items={liveQueue.map((it) => ({ id: it.id, label: hingeName(it.id), step: it.step }))}
           step={quickStep}
           preview={previewSort}
@@ -550,8 +576,8 @@ export function FoldSetupEditor({
           onRemoveStep={removeQueuedStep}
           onRemove={(id) => setQueue((q) => q.filter((x) => x.id !== id))}
           onClear={() => { setQueue([]); setQuickStep(1); }}
-          onCancel={stopQuick}
-          onApply={() => { onChange(applyFoldSteps(fold, liveQueue)); stopQuick(); }}
+          onCancel={closeQuick}
+          onApply={() => { onChange(applyFoldSteps(fold, liveQueue)); closeQuick(); }}
         />
       ) : null}
       {onWindows && geo.geo ? (

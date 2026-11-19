@@ -114,6 +114,8 @@ export function TemplateWizard({ mode, categories, initial, svgColors, onCreated
   const [bgFile, setBgFile] = useState<File | null>(null);
   const [bgRemoved, setBgRemoved] = useState(false);
   const [saving, setSaving] = useState(false);
+  // While Quick sort is open it takes the very bottom of the window, so the save bar (Back to list, Open public page, Save changes) steps aside.
+  const [quickOpen, setQuickOpen] = useState(false);
   /** Bumped after each successful save so the always-open Starting 3D view editor reloads the saved template (new lines, fold, holes). */
   const [savedCount, setSavedCount] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -562,7 +564,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors, onCreated
   ) : null;
   const foldSection = flat ? (
     <section aria-label="3D fold" className="flex flex-col gap-4">
-      <FoldSetupEditor flat={flat} fold={fold} stale={foldStale} startView={startView} windows={windows} onWindows={setWindows} {...(mode === "edit" ? { memoryKey: initial.slug } : {})} barBottom={mode === "edit" ? "4.75rem" : "0.75rem"} onChange={(f) => { setFold(f); setFoldKey(flatKey); }} />
+      <FoldSetupEditor flat={flat} fold={fold} stale={foldStale} startView={startView} windows={windows} onWindows={setWindows} {...(mode === "edit" ? { memoryKey: initial.slug } : {})} onQuickChange={setQuickOpen} onChange={(f) => { setFold(f); setFoldKey(flatKey); }} />
     </section>
   ) : null;
   const windowsSection = (
@@ -763,7 +765,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors, onCreated
           </div>
         </div>
 
-        <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-3 border-t bg-background/95 px-4 py-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 backdrop-blur" role="region" aria-label="Save">
+        <div hidden={quickOpen} className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-3 border-t bg-background/95 px-4 py-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 backdrop-blur" role="region" aria-label="Save">
           <div className="min-w-0 text-sm" aria-live="polite">
             {problems.length ? <span className="text-destructive">{problems[0]}</span> : dirty ? <span className="font-medium">Unsaved changes</span> : <span className="text-muted-foreground">All changes saved</span>}
           </div>
@@ -824,7 +826,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors, onCreated
 
       <div className="mt-7 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
         <div className="flex items-center gap-2">
-          <Link href="/doraadmin/templates" className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">Cancel</Link>
+          <Link href="/doraadmin/templates" className="text-sm font-medium text-red-600 underline underline-offset-4 hover:text-red-700">Cancel</Link>
         </div>
         <div className="flex items-center gap-3">
           {blocker ? <span className="text-sm text-muted-foreground">{blocker}</span> : stepName === "Categories" ? <span className="text-sm text-muted-foreground">{categoryIds.length} selected</span> : null}
