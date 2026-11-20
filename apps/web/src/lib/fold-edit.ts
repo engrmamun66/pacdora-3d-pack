@@ -179,6 +179,18 @@ export const stepsOf = (setup: FoldSetup, piece?: number): number[] => [...new S
 /** Fold lines in the order they happen (ties keep a stable order); of one piece, or of all. */
 export const sortedHinges = (setup: FoldSetup, piece?: number): FoldHingeSpec[] => inPiece(setup, piece).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
 
+/**
+ * Set the angle (and optionally the direction) of every fold line in one step of a piece at once.
+ * A sheet with many petals has dozens of lines that fold the same way: this saves editing them one by one.
+ * `direction` 1 = inward (the print stays outside), -1 = outward; absent = each line keeps its own direction.
+ * The angle is a whole number of degrees from 1 to 180.
+ */
+export function setStepAngle(setup: FoldSetup, piece: number, step: number, angleDeg: number, direction?: 1 | -1): FoldSetup {
+  const a = Math.min(180, Math.max(1, Math.round(Number.isFinite(angleDeg) ? angleDeg : 90)));
+  const ids = new Set(inPiece(setup, piece).filter((h) => h.order === step).map((h) => h.id));
+  return { ...setup, hinges: setup.hinges.map((h) => (ids.has(h.id) ? { ...h, angleDeg: (direction ?? (h.angleDeg < 0 ? -1 : 1)) * a } : h)) };
+}
+
 /** Renumber the steps of the given lines (a piece's) 1, 2, 3... in the order of `seq`; the rest of the setup is untouched. */
 function renumber(setup: FoldSetup, order: Map<string, number>): FoldSetup {
   return { ...setup, hinges: setup.hinges.map((h) => ({ ...h, order: order.get(h.id) ?? h.order })) };

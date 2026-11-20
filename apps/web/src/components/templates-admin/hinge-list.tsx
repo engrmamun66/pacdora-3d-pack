@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { ChevronDown, ChevronUp, GripVertical } from "lucide-react";
 import type { FoldHingeSpec } from "@packaging/dieline-engine";
+import { Button } from "@/components/ui/button";
 
 const field = "h-9 rounded-lg border border-input bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 const COLS = "grid grid-cols-[2.25rem_minmax(6rem,1fr)_6.5rem_6rem_minmax(5.5rem,170px)_minmax(9rem,1.2fr)] items-center";
@@ -268,6 +269,71 @@ export function HingeList({
           })}
         </ul>
       </div>
+    </div>
+  );
+}
+
+export interface StepSummary {
+  step: number;
+  /** How many fold lines are in this step. */
+  count: number;
+  /** The angle all of them share, or null when they differ. */
+  angle: number | null;
+}
+
+/**
+ * Set the angle (and direction) of every fold line in one step at once. A flower or fan sheet has many
+ * lines that fold the same way (all the petals of one ring): this saves typing each row.
+ */
+export function StepAngleTool({ steps, onApply }: { steps: readonly StepSummary[]; onApply: (step: number, angle: number, direction?: 1 | -1) => void }) {
+  const [picked, setPicked] = useState<number | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [dir, setDir] = useState<"keep" | "1" | "-1">("keep");
+  // Step numbers get renumbered: fall back to the first step that has several lines.
+  const current = steps.find((s) => s.step === picked) ?? steps.find((s) => s.count > 1) ?? steps[0];
+  if (!current || !steps.some((s) => s.count > 1)) return null;
+  const shown = draft ?? String(current.angle ?? 90);
+  const apply = () => {
+    const n = Number(shown);
+    if (!Number.isFinite(n) || shown.trim() === "") return;
+    onApply(current.step, n, dir === "keep" ? undefined : (Number(dir) as 1 | -1));
+    setDraft(null);
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/30 px-3 py-2 text-sm" role="group" aria-label="Set a whole step at once">
+      <span className="text-xs font-medium text-muted-foreground">Set a whole step at once</span>
+      <label className="flex items-center gap-1.5">
+        <span className="text-xs text-muted-foreground">Step</span>
+        <select className={field} value={current.step} onChange={(e) => { setPicked(Number(e.target.value)); setDraft(null); }}>
+          {steps.map((s) => (
+            <option key={s.step} value={s.step}>{s.step} ({s.count} {s.count === 1 ? "line" : "lines"}{s.angle === null ? ", mixed angles" : `, ${s.angle}°`})</option>
+          ))}
+        </select>
+      </label>
+      <label className="flex items-center gap-1.5">
+        <span className="text-xs text-muted-foreground">Angle</span>
+        <input
+          className={`${field} w-16`}
+          type="number"
+          min={1}
+          max={180}
+          step={1}
+          value={shown}
+          aria-label="Angle for the whole step"
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); apply(); } }}
+        />
+        <span className="text-xs text-muted-foreground">°</span>
+      </label>
+      <label className="flex items-center gap-1.5">
+        <span className="text-xs text-muted-foreground">Direction</span>
+        <select className={field} value={dir} onChange={(e) => setDir(e.target.value as "keep" | "1" | "-1")} aria-label="Direction for the whole step">
+          <option value="keep">Keep the current direction</option>
+          <option value="1">Inward (print stays outside)</option>
+          <option value="-1">Outward (reverse)</option>
+        </select>
+      </label>
+      <Button type="button" variant="dark" size="xs" onClick={apply}>Apply to step {current.step}</Button>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FoldSetup } from "@packaging/dieline-engine";
-import { applyFoldSequence, applyFoldSteps, compactOrders, depthOf, linesKey, makeBase, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootAt, rootsOf, setGround, setMainName, sortedHinges, stepsOf, updateHinge, updatePanel, updatePartMeta } from "./fold-edit";
+import { applyFoldSequence, applyFoldSteps, compactOrders, depthOf, linesKey, makeBase, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootAt, rootsOf, setGround, setMainName, setStepAngle, sortedHinges, stepsOf, updateHinge, updatePanel, updatePartMeta } from "./fold-edit";
 
 const sq = [0, 0, 10, 0, 10, 10, 0, 10];
 const setup: FoldSetup = {
@@ -221,5 +221,43 @@ describe("applyFoldSteps", () => {
   it("skips unknown and repeated lines, and changes nothing without any", () => {
     expect(applyFoldSteps(four, [{ id: "zzz", step: 1 }])).toBe(four);
     expect(orders(applyFoldSteps(four, [{ id: "h2", step: 1 }, { id: "h2", step: 2 }]))).toEqual({ h2: 1, h1: 2, h3: 3, h4: 4 });
+  });
+});
+
+describe("setStepAngle", () => {
+  const fan: FoldSetup = {
+    rootId: "a",
+    panels: ["a", "b", "c", "d", "e"].map((id) => ({ id, label: id, role: "body" as const, printable: true, polygon: sq })),
+    hinges: [
+      { id: "h1", parentId: "a", childId: "b", line: [0, 0, 1, 0], angleDeg: 90, order: 1 },
+      { id: "h2", parentId: "a", childId: "c", line: [0, 0, 1, 0], angleDeg: 90, order: 1 },
+      { id: "h3", parentId: "b", childId: "d", line: [0, 0, 1, 0], angleDeg: -90, order: 2 },
+      { id: "h4", parentId: "c", childId: "e", line: [0, 0, 1, 0], angleDeg: 90, order: 2 },
+    ],
+  };
+  const angles = (s: FoldSetup) => s.hinges.map((h) => h.angleDeg);
+
+  it("sets the angle of every line in the step and leaves the other steps alone", () => {
+    expect(angles(setStepAngle(fan, 0, 1, 80))).toEqual([80, 80, -90, 90]);
+  });
+
+  it("keeps each line's own direction unless one is given", () => {
+    expect(angles(setStepAngle(fan, 0, 2, 25))).toEqual([90, 90, -25, 25]);
+    expect(angles(setStepAngle(fan, 0, 2, 25, -1))).toEqual([90, 90, -25, -25]);
+    expect(angles(setStepAngle(fan, 0, 2, 25, 1))).toEqual([90, 90, 25, 25]);
+  });
+
+  it("rounds and clamps the angle to 1..180, and falls back to 90 for nonsense", () => {
+    expect(angles(setStepAngle(fan, 0, 1, 0))).toEqual([1, 1, -90, 90]);
+    expect(angles(setStepAngle(fan, 0, 1, 500))).toEqual([180, 180, -90, 90]);
+    expect(angles(setStepAngle(fan, 0, 1, 33.6))).toEqual([34, 34, -90, 90]);
+    expect(angles(setStepAngle(fan, 0, 1, Number.NaN))).toEqual([90, 90, -90, 90]);
+  });
+
+  it("only touches the chosen piece and does not change the original", () => {
+    const before = JSON.stringify(fan);
+    expect(setStepAngle(fan, 1, 1, 10)).toEqual(fan); // no second piece: nothing changes
+    setStepAngle(fan, 0, 1, 10);
+    expect(JSON.stringify(fan)).toBe(before);
   });
 });

@@ -6,11 +6,11 @@ import { applyWindows, createImportedGenerator, detectFoldSetup, THICKNESS_RANGE
 import type { FlatDielineData } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
-import { applyFoldSteps, depthOf, makeBase, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootsOf, setGround, sortedHinges, stepsOf, updateHinge, updatePanel } from "@/lib/fold-edit";
+import { applyFoldSteps, depthOf, makeBase, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootsOf, setGround, setStepAngle, sortedHinges, stepsOf, updateHinge, updatePanel } from "@/lib/fold-edit";
 import { ConstructionEditor, PieceLinksEditor } from "./construction-editor";
 import { HelpTip, InfoTip } from "./help-tip";
 import { PiecesEditor } from "./pieces-editor";
-import { HingeList } from "./hinge-list";
+import { HingeList, StepAngleTool } from "./hinge-list";
 import { FoldRowPanel } from "./fold-row-panel";
 import { PanelKindHelp } from "./panel-kind-help";
 import { confirmAction } from "@/lib/confirm";
@@ -651,6 +651,16 @@ export function FoldSetupEditor({
                   {curTab.i > 0 ? <Button type="button" variant="dark" size="xs" onClick={() => onChange(makeMain(fold, roots[curTab.i]!))}>Make main body</Button> : null}
                 </div>
               </div>
+              {sortedHinges(fold, curTab.i).length ? (
+                <StepAngleTool
+                  steps={stepsOf(fold, curTab.i).map((step) => {
+                    const lines = sortedHinges(fold, curTab.i).filter((h) => h.order === step);
+                    const first = Math.abs(lines[0]!.angleDeg);
+                    return { step, count: lines.length, angle: lines.every((h) => Math.abs(h.angleDeg) === first) ? first : null };
+                  })}
+                  onApply={(step, angle, direction) => onChange(setStepAngle(fold, curTab.i, step, angle, direction))}
+                />
+              ) : null}
               {sortedHinges(fold, curTab.i).length ? (
                 <HingeList hinges={sortedHinges(fold, curTab.i)} label={label} selectedId={sel?.kind === "hinge" ? sel.id : null} onSelect={(id) => setSel({ kind: "hinge", id })} onSetHinge={setHinge} onMove={(id, to) => onChange(moveHinge(fold, id, to))} kinds={ROLE_OPTIONS} kindOf={(id) => fold.panels.find((p) => p.id === id)?.role ?? "body"} onKind={(id, role) => onChange(updatePanel(fold, id, { role: role as PanelRole }))} />
               ) : (
