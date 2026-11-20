@@ -37,6 +37,8 @@ export function QuickSortBar({
   onAddStep,
   onSelectStep,
   onEdit,
+  onHover,
+  partNames,
   activeId = null,
   count,
   onSetStep,
@@ -61,6 +63,10 @@ export function QuickSortBar({
   onSelectStep: (step: number) => void;
   /** A chip's name was clicked: edit that line's step, angle, kind and direction. */
   onEdit: (id: string) => void;
+  /** Names of the part(s) being sorted now (the box, a lid...). Absent when the sheet is a single piece. */
+  partNames?: readonly string[];
+  /** The pointer (or keyboard focus) is on this line's chip, or left it (null): the editor lights the panel it swings on the sheet and in 3D. */
+  onHover?: (id: string | null) => void;
   /** The line being edited in the side panel: its chip stays highlighted. */
   activeId?: string | null;
   /** How many steps to show (empty ones too), at least. */
@@ -189,6 +195,11 @@ export function QuickSortBar({
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="flex items-center gap-1">
           <h3 className="text-sm font-semibold">Quick sort</h3>
+          {partNames && partNames.length ? (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary" title="The part being sorted now. Every part has its own steps." aria-label={`${partNames.length === 1 ? "Part" : "Parts"} being sorted: ${partNames.join(", ")}`}>
+              {partNames.length === 1 ? "Part" : "Parts"}: {partNames.join(", ")}
+            </span>
+          ) : null}
           <InfoTip label="Quick sort">Click a step to open it, then click fold lines on the picture: they join the open step (now step {step}). A line already in another step moves to it; click a line in its own step to take it out. Add step makes a new empty step at the end. Lines with the same step fold together. Drag a chip into another step to move it.</InfoTip>
         </div>
         <p className="text-xs text-muted-foreground" aria-live="polite">
@@ -251,6 +262,10 @@ export function QuickSortBar({
                     setDragId(null);
                     setOverStep(null);
                   }}
+                  onPointerEnter={() => onHover?.(it.id)}
+                  onPointerLeave={() => onHover?.(null)}
+                  onFocus={() => onHover?.(it.id)}
+                  onBlur={() => onHover?.(null)}
                   className={`flex shrink-0 cursor-grab items-center gap-1 rounded-lg border border-b-2 py-0.5 pr-0.5 pl-0.5 text-xs shadow-xs transition-opacity active:cursor-grabbing ${activeId === it.id ? "border-primary border-b-primary bg-primary/10 ring-2 ring-primary/40" : "border-b-[#444444] bg-background dark:border-b-white/70"} ${dragId === it.id ? "opacity-40" : ""} ${fresh.includes(it.id) ? "chip-in" : ""}`}
                 >
                   <GripVertical className="size-3 text-muted-foreground" aria-hidden />

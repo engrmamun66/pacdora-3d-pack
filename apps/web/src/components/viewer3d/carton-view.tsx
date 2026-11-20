@@ -151,6 +151,8 @@ export interface CartonViewProps {
   onUserView?: (v: ViewSettings) => void;
   /** Called with the id of the panel under the mouse (null when none, while dragging, or when the mouse leaves). */
   onPanelHover?: (id: string | null) => void;
+  /** Called with the id of the panel the person clicks (a click, not a camera drag). Not called when the click misses the box. */
+  onPanelClick?: (id: string) => void;
 }
 
 /** Camera angles in degrees. */
@@ -252,7 +254,7 @@ export interface CartonViewHandle {
 
 /** Interactive 3D carton built from the engine's fold tree (three.js, no React renderer). */
 export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function CartonView(
-  { geo, layout = null, texture, textureRect, progress, outsideColor, insideColor, thickness = 0, watermark = null, boardGrain = 0, boardEdge, className, autoRotate = false, transparent = false, shadows = true, frameMm, rotateOnly = false, initialView = null, onViewChange, onUserView, onReady, onPanelHover },
+  { geo, layout = null, texture, textureRect, progress, outsideColor, insideColor, thickness = 0, watermark = null, boardGrain = 0, boardEdge, className, autoRotate = false, transparent = false, shadows = true, frameMm, rotateOnly = false, initialView = null, onViewChange, onUserView, onReady, onPanelHover, onPanelClick },
   ref,
 ) {
   const host = useRef<HTMLDivElement>(null);
@@ -267,6 +269,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   const interacting = useRef(false);
   const onReadyRef = useRef(onReady);
   const onPanelHoverRef = useRef(onPanelHover);
+  const onPanelClickRef = useRef(onPanelClick);
   const readyFired = useRef(false);
   const progressRef = useRef(progress);
   /** The layout (an arrangement of copies), the copies added to the scene besides the main box, and the size and centre of the whole group (null = one box). */
@@ -283,6 +286,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     onUserViewRef.current = onUserView;
     onReadyRef.current = onReady;
     onPanelHoverRef.current = onPanelHover;
+    onPanelClickRef.current = onPanelClick;
     progressRef.current = progress;
   });
   /** The panel that blinks (id), the blink overlays now on the model, and their shared materials. */
@@ -532,7 +536,13 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     if (!spec) {
       m.object.quaternion.copy(stand);
       m.object.scale.setScalar(1);
-      m.object.position.set(0, m.size.y / 2 + FLOOR, 0);
+      // Rest the model on the floor as it is NOW. The model is centred on the closed box, so when some panels fold below the
+      // base (the closed box reaches under the flat sheet) a height taken from the closed box would leave the flat sheet
+      // floating in the air. The lowest point moves smoothly while folding, so nothing jumps.
+      m.object.position.set(0, 0, 0);
+      m.object.updateMatrixWorld(true);
+      const low = new THREE.Box3().setFromObject(m.object).min.y;
+      m.object.position.set(0, Number.isFinite(low) ? FLOOR - low : m.size.y / 2 + FLOOR, 0);
       groupBounds.current = null;
       return;
     }
@@ -1444,8 +1454,26 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       cancelAnimationFrame(hoverFrame);
       setHovered(null);
     };
+    // Click: press and release in nearly the same spot (so a camera drag does not count) on a panel.
+    let down: { x: number; y: number } | null = null;
+    const onDown = (e: PointerEvent) => { down = { x: e.clientX, y: e.clientY }; };
+    const onUp = (e: PointerEvent) => {
+      const d = down;
+      down = null;
+      if (!d || !onPanelClickRef.current || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 5) return;
+      const t = three.current;
+      if (!t?.model) return;
+      const r = renderer.domElement.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return;
+      ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      picker.setFromCamera(ndc, camera);
+      const group = picker.intersectObject(t.model.object, true)[0]?.object.parent;
+      if (group && group.name && !group.name.startsWith("fold-")) onPanelClickRef.current(group.name);
+    };
     renderer.domElement.addEventListener("pointermove", onMove);
     renderer.domElement.addEventListener("pointerleave", onLeave);
+    renderer.domElement.addEventListener("pointerdown", onDown);
+    renderer.domElement.addEventListener("pointerup", onUp);
     renderer.setAnimationLoop((now: number) => {
       controls.update();
       arrowTick.current();
@@ -1465,6 +1493,8 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       cancelAnimationFrame(hoverFrame);
       renderer.domElement.removeEventListener("pointermove", onMove);
       renderer.domElement.removeEventListener("pointerleave", onLeave);
+      renderer.domElement.removeEventListener("pointerdown", onDown);
+      renderer.domElement.removeEventListener("pointerup", onUp);
       setHovered(null);
       controls.removeEventListener("change", onChange);
       renderer.setAnimationLoop(null);
