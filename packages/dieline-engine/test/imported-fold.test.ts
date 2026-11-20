@@ -207,6 +207,34 @@ describe("fold detection on hand-written dielines", () => {
     expect(validateFoldSetup(setup)).toEqual([]);
   });
 
+  it("a U-shaped cut that starts and ends on a fold (a handle slot) is empty space, not a panel", () => {
+    // A 300 wide flap above a body, joined by a fold; the slot is cut up from the fold.
+    const flat = flatOf([rect(0, 0, 300, 280), line(100, 100, 100, 60, 200, 60, 200, 100)], [line(0, 100, 300, 100)]);
+    const { setup, warnings } = detectFoldSetup(flat);
+    expect(setup.panels).toHaveLength(2);
+    expect(setup.hinges).toHaveLength(1);
+    // The slot is a notch in the flap: no panel is the size of the slot (100 x 40).
+    expect(setup.panels.some((p) => Math.abs(polyArea(p.polygon) - 4000) < 1e-6)).toBe(false);
+    expect(warnings.join(" ")).toMatch(/handle slot/);
+    expect(warnings.join(" ")).not.toMatch(/does not separate/);
+    expect(validateFoldSetup(setup)).toEqual([]);
+  });
+
+  it("a real flap (cut on the outline) is still a panel", () => {
+    const flat = flatOf([closed(0, 0, 100, 0, 100, 60, 50, 60, 50, 80, 0, 80)], [line(0, 60, 50, 60), line(50, 60, 50, 80)]);
+    const { warnings } = detectFoldSetup(flat);
+    expect(warnings.join(" ")).not.toMatch(/handle slot/);
+  });
+
+  it("a window inside a panel is a real hole in the generated 3D panel", () => {
+    const flat = flatOf([rect(0, 0, 100, 60), rect(10, 10, 20, 20)], [line(50, 0, 50, 60)]);
+    const { setup } = detectFoldSetup(flat);
+    const tree = generatorOf(flat, setup).generate({}).foldTree;
+    const holed = tree.panels.filter((p) => (p.holes?.length ?? 0) > 0);
+    expect(holed).toHaveLength(1);
+    expect(holed[0]!.holes).toHaveLength(1);
+  });
+
   it("an open slit and a cut touching the outline do not create panels", () => {
     const flat = flatOf([rect(0, 0, 100, 60), line(75, 0, 75, 20)], [line(50, 0, 50, 60)]);
     const { setup, warnings } = detectFoldSetup(flat);

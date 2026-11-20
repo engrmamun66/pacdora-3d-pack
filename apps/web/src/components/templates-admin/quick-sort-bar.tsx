@@ -21,7 +21,8 @@ export interface QuickItem {
 }
 
 /**
- * Quick sort bar, stuck to the bottom of the window while the fold editor is on screen.
+ * Quick sort bar, fixed to the bottom of the window while it is open (it does not move when the page scrolls).
+ * An empty placeholder of the same height sits in the page, so nothing hides behind the bar and the bar keeps the editor's left edge and width.
  * The fold lines the admin clicked are shown in groups, one group per step. Step 1 is open at first, and "Add step" opens
  * the next one: the lines clicked from then on join it. Lines of one step fold together. Drag a chip into another step
  * (or focus it and press Alt + left or right arrow), press x to drop it, Apply to use it.
@@ -65,6 +66,25 @@ export function QuickSortBar({
   const [overStep, setOverStep] = useState<number | null>(null);
   // Height of the bar. The grip at the top centre makes it taller (as tall as the window allows) so more steps show at once.
   const [height, setHeight] = useState(START_H);
+  // The placeholder in the page tells where the bar goes sideways (the editor's column); the bar itself is fixed to the window.
+  const slot = useRef<HTMLDivElement>(null);
+  const [column, setColumn] = useState<{ left: number; width: number } | null>(null);
+  useEffect(() => {
+    const el = slot.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      setColumn((c) => (c && c.left === r.left && c.width === r.width ? c : { left: r.left, width: r.width }));
+    };
+    measure();
+    const watch = new ResizeObserver(measure);
+    watch.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      watch.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
   const grip = useRef<{ y: number; h: number } | null>(null);
   const maxH = () => Math.max(MIN_H, window.innerHeight - 80);
   const resize = (h: number) => setHeight(Math.min(maxH(), Math.max(MIN_H, Math.round(h))));
@@ -113,10 +133,12 @@ export function QuickSortBar({
   const flush = parseFloat(bottom) === 0;
 
   return (
+    <>
+    <div ref={slot} aria-hidden style={{ height }} />
     <section
       aria-label="Quick sort"
-      style={{ bottom, height }}
-      className={`${closing ? "quick-down" : "quick-up"} sticky z-20 flex flex-col gap-2 border-t border-t-[#444444] ${flush ? "rounded-t-xl" : "rounded-xl"} bg-card px-4 py-2.5 shadow-[0_-6px_20px_-4px_rgba(0,0,0,0.28)]`}
+      style={{ bottom, height, left: column?.left ?? 0, width: column?.width ?? "100%", visibility: column ? "visible" : "hidden" }}
+      className={`${closing ? "quick-down" : "quick-up"} fixed z-20 flex flex-col gap-2 border-t border-t-[#444444] ${flush ? "rounded-t-xl" : "rounded-xl"} bg-card px-4 py-2.5 shadow-[0_-6px_20px_-4px_rgba(0,0,0,0.28)]`}
     >
       <div
         role="separator"
@@ -210,9 +232,9 @@ export function QuickSortBar({
                     setDragId(null);
                     setOverStep(null);
                   }}
-                  className={`flex shrink-0 cursor-grab items-center gap-1 rounded-lg border border-b-2 border-b-[#444444] bg-background dark:border-b-white/70 py-1 pr-1 pl-1 text-sm shadow-xs transition-opacity active:cursor-grabbing ${dragId === it.id ? "opacity-40" : ""} ${fresh.includes(it.id) ? "chip-in" : ""}`}
+                  className={`flex shrink-0 cursor-grab items-center gap-1 rounded-lg border border-b-2 border-b-[#444444] bg-background dark:border-b-white/70 py-0.5 pr-0.5 pl-0.5 text-xs shadow-xs transition-opacity active:cursor-grabbing ${dragId === it.id ? "opacity-40" : ""} ${fresh.includes(it.id) ? "chip-in" : ""}`}
                 >
-                  <GripVertical className="size-3.5 text-muted-foreground" aria-hidden />
+                  <GripVertical className="size-3 text-muted-foreground" aria-hidden />
                   <button
                     type="button"
                     className="max-w-44 truncate rounded px-1 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
@@ -242,8 +264,8 @@ export function QuickSortBar({
                 </div>
               ))}
               {g.out.map((it) => (
-                <div key={`out-${it.id}`} aria-hidden className="chip-out flex shrink-0 items-center gap-1 rounded-lg border border-b-2 border-b-[#444444] bg-background dark:border-b-white/70 py-1 pr-1 pl-1 text-sm shadow-xs">
-                  <GripVertical className="size-3.5 text-muted-foreground" aria-hidden />
+                <div key={`out-${it.id}`} aria-hidden className="chip-out flex shrink-0 items-center gap-1 rounded-lg border border-b-2 border-b-[#444444] bg-background dark:border-b-white/70 py-0.5 pr-0.5 pl-0.5 text-xs shadow-xs">
+                  <GripVertical className="size-3 text-muted-foreground" aria-hidden />
                   <span className="max-w-44 truncate px-1">{it.label}</span>
                   <span className="grid size-5 place-items-center"><X className="size-3" aria-hidden /></span>
                 </div>
@@ -264,5 +286,6 @@ export function QuickSortBar({
         })}
       </ol>
     </section>
+    </>
   );
 }

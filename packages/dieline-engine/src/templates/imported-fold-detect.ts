@@ -504,6 +504,40 @@ export function detectFoldSetup(flat: FlatDieline): DetectResult {
     if (host >= 0) holesIn.set(host, (holesIn.get(host) ?? 0) + 1);
   }
 
+  // 8b. A cut-out that a fold line closes (a handle slot: a U-shaped cut that starts and ends on a fold) is not a panel. Its region
+  // has no closed cut shape of its own, only open cut lines and folds, and it sits inside another panel. It is empty space.
+  const loopEdge = new Set<number>();
+  for (const l of loops) {
+    for (let i = 0; i < l.length; i++) {
+      const a = l[i]!;
+      const b = l[(i + 1) % l.length]!;
+      loopEdge.add(Math.min(a, b) * (nv + 1) + Math.max(a, b));
+    }
+  }
+  const openCuts = new Array<number>(faces.length).fill(0);
+  const closedCuts = new Array<number>(faces.length).fill(0);
+  const openToVoid = new Array<number>(faces.length).fill(0);
+  for (let e = 0; e < ne; e++) {
+    if (!alive[e] || ekind[e] !== CUT) continue;
+    const isLoop = loopEdge.has(Math.min(ea[e]!, eb[e]!) * (nv + 1) + Math.max(ea[e]!, eb[e]!));
+    for (const h of [2 * e, 2 * e + 1]) {
+      const f = faceOf[h]!;
+      if (f < 0 || !faces[f]!.material) continue;
+      if (isLoop) closedCuts[f]!++;
+      else {
+        openCuts[f]!++;
+        const other = faceOf[h ^ 1]!;
+        if (other < 0 || !faces[other]!.material) openToVoid[f]!++;
+      }
+    }
+  }
+  const pocket = new Set<number>();
+  faces.forEach((f, fi) => {
+    if (f.material && openCuts[fi]! > 0 && closedCuts[fi] === 0 && openToVoid[fi] === 0) pocket.add(fi);
+  });
+  for (const fi of pocket) faces[fi]!.material = false;
+  if (pocket.size > 0) warnings.push(`${pocket.size} cut-out${pocket.size === 1 ? "" : "s"} that ${pocket.size === 1 ? "starts and ends" : "start and end"} on a fold line (a handle slot, for example) ${pocket.size === 1 ? "was" : "were"} left as empty space, not a panel.`);
+
   const materialFaces = faces.map((f, i) => (f.material ? i : -1)).filter((i) => i >= 0);
   if (materialFaces.length === 0) {
     return { setup: { rootId: "", panels: [], hinges: [] }, warnings: [...warnings, "No closed panel shapes were found. Check that the outer cut outline is closed."] };
@@ -527,7 +561,7 @@ export function detectFoldSetup(flat: FlatDieline): DetectResult {
       continue;
     }
     if (f1 < 0 || f2 < 0 || !faces[f1]!.material || !faces[f2]!.material) {
-      notBetweenPanels++;
+      if (!pocket.has(f1) && !pocket.has(f2)) notBetweenPanels++;
       continue;
     }
     const key = `${Math.min(f1, f2)}:${Math.max(f1, f2)}`;
@@ -757,7 +791,7 @@ export function detectFoldSetup(flat: FlatDieline): DetectResult {
 
   for (const fi of kept) {
     const n = holesIn.get(fi) ?? 0;
-    if (n > 0) warnings.push(`${labelOf.get(fi)} has ${n} cut-out${n === 1 ? "" : "s"} or inner shape${n === 1 ? "" : "s"} inside it. The 3D model shows it as solid.`);
+    if (n > 0) warnings.push(`${labelOf.get(fi)} has ${n} hole${n === 1 ? "" : "s"} (a window or cut-out) inside it. ${n === 1 ? "It is" : "They are"} cut through in 3D when ${n === 1 ? "it lies" : "they lie"} clear of the panel's edges.`);
     if (faces[fi]!.extraParts > 0) warnings.push(`${labelOf.get(fi)} touches itself at a point. Only its largest part is used.`);
   }
 

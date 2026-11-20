@@ -316,6 +316,15 @@ export function createImportedGenerator(templateId: string, flat: FlatDieline, f
       rootId = "sheet";
       safeAreas = guides.map((polygon) => ({ panelId: "sheet", polygon }));
     }
+    // Closed cut shapes inside a panel (a window, a hand hole) are real holes: the 3D model is cut through there too.
+    // A shape that touches the panel's edge or a fold is left out here (it would split the panel), like a window that does not fit.
+    const innerLoops = cutLoops.filter((l, i) => cutLoops.filter((o, j) => j !== i && pointInPolygon(l.points[0]!, o.points)).length % 2 === 1);
+    if (innerLoops.length > 0) {
+      panels = panels.map((p) => {
+        const mine = innerLoops.filter((l) => l.points.length >= 3 && l.points.every((v) => pointInPolygon(v, p.polygon)) && !p.polygon.some((v) => l.points.some((w) => Math.hypot(v.x - w.x, v.y - w.y) < 1e-6))).map((l) => l.points);
+        return mine.length > 0 ? { ...p, holes: [...(p.holes ?? []), ...mine] } : p;
+      });
+    }
     const cutBounds = pieces.length > 1 ? sheetBox : bounds(outer);
     const bleedBounds = bounds(bleedLoop);
     const w = cutBounds.max.x - cutBounds.min.x;
