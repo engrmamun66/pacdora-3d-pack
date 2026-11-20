@@ -161,8 +161,8 @@ export function FoldSetupEditor({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
   const sheetSvg = useRef<SVGSVGElement>(null);
-  // Size of the panel names on the flat sheet: "mid" is the usual size, "sm" about 60% of it.
-  const [labelSize, setLabelSize] = useState<"sm" | "mid">("mid");
+  // Size of the panel names on the flat sheet: "sm" (about 60% of the usual size) at first; "mid" is the usual size.
+  const [labelSize, setLabelSize] = useState<"sm" | "mid">("sm");
   useEffect(() => {
     if (!tool) return;
     const onKey = (e: KeyboardEvent) => {
@@ -680,6 +680,8 @@ export function FoldSetupEditor({
                 <path d={flat.crease.map((p) => pathData(p.pts, p.closed)).join("")} stroke="#00a0e9" strokeWidth={size / 450} strokeDasharray={`${size / 120} ${size / 240}`} />
               </g>
               {fold.hinges.map((h) => {
+                // The step number badge: small, and a little smaller still when the sheet is zoomed in.
+                const dot = size / 120 / Math.sqrt(Math.max(1, base.w / (zoomed ?? base).w));
                 const at = queue.findIndex((x) => x.id === h.id);
                 const lit = sortHinge?.id === h.id;
                 const on = lit || mergePair?.id === h.id || (quick ? at >= 0 : sel?.kind === "hinge" && sel.id === h.id);
@@ -690,8 +692,8 @@ export function FoldSetupEditor({
                   <g key={h.id} className="cursor-pointer" onPointerEnter={() => tool === "merge" && setMergeHover(h.id)} onPointerLeave={() => tool === "merge" && setMergeHover((cur) => (cur === h.id ? null : cur))} onClick={(e) => { if (tool === "split") return; e.stopPropagation(); if (tool === "merge") applyEdit(mergePanels(fold, h.id), "Panels joined."); else if (quick) toggleQueued(h.id); else setSel({ kind: "hinge", id: h.id }); }}>
                     <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={size / 40} />
                     <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={h.angleDeg < 0 ? "#ea580c" : "#0f766e"} strokeWidth={size / (on ? 90 : 170)} strokeLinecap="round" />
-                    <circle cx={mx} cy={my} r={size / (quick && at >= 0 ? 55 : 70)} fill={on ? "#18181b" : quick ? "#71717a" : "#18181b"} />
-                    <text x={mx} y={my + size / 190} textAnchor="middle" fontSize={size / 80} fill="#ffffff" pointerEvents="none">{quick ? (at >= 0 ? queue[at]!.step : "") : h.order}</text>
+                    <circle cx={mx} cy={my} r={dot * (quick && at >= 0 ? 1.25 : 1)} fill={on ? "#18181b" : quick ? "#71717a" : "#18181b"} />
+                    <text x={mx} y={my + dot * 0.38} textAnchor="middle" fontSize={dot * 1.05} fill="#ffffff" pointerEvents="none">{quick ? (at >= 0 ? queue[at]!.step : "") : h.order}</text>
                   </g>
                 );
               })}
