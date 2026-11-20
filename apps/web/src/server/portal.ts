@@ -228,7 +228,7 @@ export interface PortalScene {
   threeD: ProjectDoc["threeD"];
   initialView: ViewSettings | null;
   watermark: WatermarkSpec | null;
-  /** The design samples (3D pictures the Client kept), newest first. */
+  /** The design samples (3D pictures the Client kept): the cover one first (it is the one open when the page loads), then the newest. */
   captures: PortalCapture[];
 }
 
@@ -254,7 +254,7 @@ export async function loadPortalScene(owner: PortalOwner, projectId: string): Pr
   } catch {
     return null;
   }
-  const captureRows = await db.projectCapture.findMany({ where: { projectId, userId: owner.userId }, orderBy: { createdAt: "desc" }, select: { id: true, storageKey: true, layoutName: true, progress: true, view: true } });
+  const captureRows = await db.projectCapture.findMany({ where: { projectId, userId: owner.userId }, orderBy: [{ cover: "desc" }, { createdAt: "desc" }], select: { id: true, storageKey: true, layoutName: true, progress: true, view: true } });
   const captures: PortalCapture[] = captureRows.map((c) => ({ id: c.id, url: captureUrl(c.id, c.storageKey), layoutName: c.layoutName, progress: c.progress, view: readViewSettings(c.view) }));
   let imported: PortalScene["imported"] = null;
   if (doc.template.generatorId === IMPORTED_GENERATOR_ID) {
