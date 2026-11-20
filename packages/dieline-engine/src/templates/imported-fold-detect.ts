@@ -844,23 +844,49 @@ export function detectFoldSetup(flat: FlatDieline): DetectResult {
     }
   });
   for (const l of neighbours.values()) l.sort((p, q) => p.other - q.other);
+  const lengths = candidates.map((c) => Math.hypot(pts.xs[c.hi]! - pts.xs[c.lo]!, pts.ys[c.hi]! - pts.ys[c.lo]!));
+  const hingeLength = (cand: number) => lengths[cand]!;
   const depth = new Map<number, number>();
   const parentOf = new Map<number, number>();
   const treeHinges: { parent: number; child: number; cand: number }[] = [];
   const used = new Set<number>();
   /** Grow the spanning tree of one piece from its base panel; returns how many panels it has. */
+  // A "weak" fold line is a tiny shared edge (a flap corner touching a neighbour) between two panels that both have a much longer one elsewhere.
+  // The tree is grown without them first; they only join a panel that nothing else reaches.
+  const longest = new Map<number, number>();
+  candidates.forEach((c, i) => {
+    for (const fi of [c.fa, c.fb]) longest.set(fi, Math.max(longest.get(fi) ?? 0, hingeLength(i)));
+  });
+  const weak = candidates.map((c, i) => lengths[i]! < 0.2 * longest.get(c.fa)! && lengths[i]! < 0.2 * longest.get(c.fb)!);
+  const isWeak = (cand: number) => weak[cand]!;
   const grow = (base: number): number => {
     depth.set(base, 0);
     const queue = [base];
-    for (let qi = 0; qi < queue.length; qi++) {
-      const u = queue[qi]!;
-      for (const { other, cand } of neighbours.get(u) ?? []) {
-        if (depth.has(other)) continue;
-        depth.set(other, depth.get(u)! + 1);
-        parentOf.set(other, u);
-        treeHinges.push({ parent: u, child: other, cand });
-        used.add(cand);
-        queue.push(other);
+    for (const allowWeak of [false, true]) {
+      for (let qi = 0; qi < queue.length; qi++) {
+        const u = queue[qi]!;
+        for (const { other, cand } of neighbours.get(u) ?? []) {
+          if (depth.has(other)) continue;
+          if (!allowWeak && isWeak(cand)) continue;
+          // Several panels one step nearer the base may reach this one: take the longest shared fold line, not just the first.
+          let from = u;
+          let via = cand;
+          let best = hingeLength(cand);
+          for (const alt of neighbours.get(other) ?? []) {
+            if (depth.get(alt.other) !== depth.get(u) || (!allowWeak && isWeak(alt.cand))) continue;
+            const l = hingeLength(alt.cand);
+            if (l > best + 1e-9) {
+              best = l;
+              from = alt.other;
+              via = alt.cand;
+            }
+          }
+          depth.set(other, depth.get(u)! + 1);
+          parentOf.set(other, from);
+          treeHinges.push({ parent: from, child: other, cand: via });
+          used.add(via);
+          queue.push(other);
+        }
       }
     }
     return queue.length;

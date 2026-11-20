@@ -243,6 +243,24 @@ describe("fold detection on hand-written dielines", () => {
     expect(validateFoldSetup(setup)).toEqual([]);
   });
 
+  it("a flap that touches the body only at a corner hangs off the panel it shares a fold line with", () => {
+    // Stem (x 0..100), side panel B (x 100..200, y 0..100) and flap C above B. C also touches the stem along a 5.5 mm piece of x = 100.
+    const outline = closed(0, -100, 100, -100, 100, -5.5, 105, -1.5, 105, -50, 200, -50, 200, 100, 0, 100);
+    const flat = flatOf([outline], [line(100, -5.5, 100, 100), line(100, 0, 200, 0)]);
+    const { setup } = detectFoldSetup(flat);
+    expect(setup.panels).toHaveLength(3);
+    expect(setup.hinges).toHaveLength(2);
+    const at = (x: number, y: number) => setup.panels.find((p) => {
+      const xs = p.polygon.filter((_, i) => i % 2 === 0);
+      const ys = p.polygon.filter((_, i) => i % 2 === 1);
+      return Math.min(...xs) <= x && x <= Math.max(...xs) && Math.min(...ys) <= y && y <= Math.max(...ys);
+    })!;
+    const b = at(150, 50);
+    const c = at(150, -25);
+    expect(setup.hinges.find((h) => h.childId === c.id)?.parentId).toBe(b.id);
+    expect(validateFoldSetup(setup)).toEqual([]);
+  });
+
   it("a fold line that ends well inside the sheet (a real gap, not a drawing slip) is still ignored", () => {
     const flat = flatOf([rect(0, 0, 100, 60)], [line(50, 10, 50, 50)]);
     const { setup, warnings } = detectFoldSetup(flat);

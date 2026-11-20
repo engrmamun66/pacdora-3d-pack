@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AppWindow, ListOrdered, Play, RotateCcw, Wand2, X } from "lucide-react";
+import { AppWindow, ListOrdered, Merge, Play, RotateCcw, Scissors, Undo2, Wand2, X } from "lucide-react";
 import { applyWindows, createImportedGenerator, detectFoldSetup, THICKNESS_RANGE, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldHingeSpec, type FoldSetup, type PanelRole, type WindowSpec, partFits } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
 import { applyFoldSteps, depthOf, makeBase, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootsOf, setGround, setStepAngle, sortedHinges, stepsOf, updateHinge, updatePanel } from "@/lib/fold-edit";
+import { cutPreview, mergePanels, panelAt, splitPanel, type PanelEdit } from "@/lib/panel-edit";
+import { notify } from "@/lib/notify";
 import { ConstructionEditor, PieceLinksEditor } from "./construction-editor";
 import { HelpTip, InfoTip } from "./help-tip";
 import { PiecesEditor } from "./pieces-editor";
@@ -37,6 +39,7 @@ const ROLE_OPTIONS: { value: PanelRole; label: string; hint: string }[] = [
 
 /** The open fold tab of each template being edited. It lives outside the component so it survives the rebuild after a save. */
 const openTabs = new Map<string, number>();
+
 
 const DEPTH_COLORS = ["#fde68a", "#bfdbfe", "#bbf7d0", "#fbcfe8", "#ddd6fe", "#fed7aa", "#a5f3fc"];
 const field = "h-9 rounded-lg border border-input bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
@@ -101,6 +104,27 @@ export function FoldSetupEditor({
   const [hover3d, setHover3d] = useState<string | null>(null);
   // The fold line whose chip in the Quick sort bar is under the pointer: its panel is lit on the sheet and on the 3D box.
   const [sortHover, setSortHover] = useState<string | null>(null);
+  // Hand tools for the panels: "merge" (click a fold line to join the two panels it separates) and "split" (two clicks draw a cut across a panel).
+  const [tool, setTool] = useState<"merge" | "split" | null>(null);
+  const [cutFrom, setCutFrom] = useState<[number, number] | null>(null);
+  const [cutTo, setCutTo] = useState<[number, number] | null>(null);
+  const [mergeHover, setMergeHover] = useState<string | null>(null);
+  const [undoStack, setUndoStack] = useState<FoldSetup[]>([]);
+  const sheetSvg = useRef<SVGSVGElement>(null);
+  // Size of the panel names on the flat sheet: "mid" is the usual size, "sm" about 60% of it.
+  const [labelSize, setLabelSize] = useState<"sm" | "mid">("mid");
+  useEffect(() => {
+    if (!tool) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (cutFrom) {
+        setCutFrom(null);
+        setCutTo(null);
+      } else setTool(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tool, cutFrom]);
   // The fold line of the panel just clicked while Quick sort is open: its row in the steps table is lit and scrolled into view.
   const [picked, setPicked] = useState<string | null>(null);
   // Which piece's fold list is shown (one tab per piece). Selecting something in the picture switches to its piece.
@@ -168,21 +192,30 @@ export function FoldSetupEditor({
   const flatNow = progress < 0.005;
   const wasFlat = useRef(flatNow);
   const turnedFrom = useRef<ViewSettings | null>(null);
-  useEffect(() => {
-    if (wasFlat.current === flatNow) return;
-    wasFlat.current = flatNow;
+  const lookFromBelow = (smooth: boolean) => {
     const h = view.current;
     if (!h || h.isKeepView()) return;
     const now = h.getView();
-    if (!now) return;
-    if (flatNow) {
-      turnedFrom.current = now;
-      h.setViewSmooth({ ...now, azimuthDeg: 0, elevationDeg: -89, rollDeg: 0 });
-    } else if (turnedFrom.current) {
-      h.setViewSmooth({ ...turnedFrom.current, progress: now.progress });
+    if (!now || now.elevationDeg <= -60) return; // already below
+    turnedFrom.current = now;
+    const to = { ...now, azimuthDeg: 0, elevationDeg: -89, rollDeg: 0 };
+    if (smooth) h.setViewSmooth(to);
+    else h.setView(to);
+  };
+  useEffect(() => {
+    if (wasFlat.current === flatNow) return;
+    wasFlat.current = flatNow;
+    if (flatNow) lookFromBelow(true);
+    else if (turnedFrom.current && view.current) {
+      const now = view.current.getView();
+      if (now) view.current.setViewSmooth({ ...turnedFrom.current, progress: now.progress });
       turnedFrom.current = null;
     }
-  }, [flatNow]);
+  });
+  // A sheet that is already open when the preview first appears (its start view or a fold amount of 0) is turned at once.
+  const onViewReady = () => {
+    if (flatNow) lookFromBelow(false);
+  };
 
   const detect = () => {
     const r = detectFoldSetup(flat as FlatDieline);
@@ -278,6 +311,73 @@ export function FoldSetupEditor({
   }, [flat]);
   const size = Math.max(bounds.w, bounds.h);
   const pad = size * 0.04;
+  // Zoom and pan of the flat sheet: the wheel zooms toward the pointer, a drag moves the sheet. `view` is null while the whole sheet is shown.
+  const base = { x: bounds.x - pad, y: bounds.y - pad, w: bounds.w + 2 * pad, h: bounds.h + 2 * pad };
+  const [zoomed, setZoomed] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const baseRef = useRef(base);
+  useEffect(() => {
+    baseRef.current = base;
+  });
+  const boundsKey = `${bounds.x}|${bounds.y}|${bounds.w}|${bounds.h}`;
+  const [seenBounds, setSeenBounds] = useState(boundsKey);
+  if (seenBounds !== boundsKey) {
+    setSeenBounds(boundsKey);
+    setZoomed(null); // a different sheet: show all of it again
+  }
+  const zoomBy = (factor: number, at?: [number, number]) =>
+    setZoomed((cur) => {
+      const b = baseRef.current;
+      const v = cur ?? b;
+      const w = Math.min(b.w * 1.5, Math.max(b.w / 30, v.w / factor));
+      const k = w / v.w;
+      const h = v.h * k;
+      const px = at ? at[0] : v.x + v.w / 2;
+      const py = at ? at[1] : v.y + v.h / 2;
+      return { x: px - (px - v.x) * k, y: py - (py - v.y) * k, w, h };
+    });
+  const hasFold = fold !== null;
+  useEffect(() => {
+    const svg = sheetSvg.current;
+    if (!svg) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const ctm = svg.getScreenCTM();
+      if (!ctm) return;
+      const pt = svg.createSVGPoint();
+      pt.x = e.clientX;
+      pt.y = e.clientY;
+      const at = pt.matrixTransform(ctm.inverse());
+      zoomBy(Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015)), [at.x, at.y]);
+    };
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", onWheel);
+  }, [hasFold]);
+  const dragged = useRef(false);
+  const startPan = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.button !== 0) return;
+    const svg = sheetSvg.current;
+    const ctm = svg?.getScreenCTM();
+    if (!svg || !ctm) return;
+    dragged.current = false;
+    const from = { x: e.clientX, y: e.clientY };
+    const origin = zoomed ?? base;
+    const unit = 1 / ctm.a; // sheet millimetres per screen pixel
+    const move = (m: PointerEvent) => {
+      const dx = m.clientX - from.x;
+      const dy = m.clientY - from.y;
+      if (!dragged.current && Math.hypot(dx, dy) < 5) return;
+      dragged.current = true;
+      setZoomed({ ...origin, x: origin.x - dx * unit, y: origin.y - dy * unit });
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  };
   const depth = useMemo(() => (fold ? depthOf(fold) : new Map<string, number>()), [fold]);
   const label = (id: string) => fold?.panels.find((p) => p.id === id)?.label ?? id;
 
@@ -342,6 +442,59 @@ export function FoldSetupEditor({
     const shown = used.length ? used : [curTab.k === "piece" ? curTab.i : 0];
     return shown.map((i) => pieceNameOf(fold, rootsOf(fold)[i] ?? fold.rootId));
   })();
+  // Hand edits of the panels. Each one can be undone with "Undo".
+  const applyEdit = (r: PanelEdit, done: string) => {
+    if (!r.setup) {
+      notify.error(r.error ?? "That edit could not be done.");
+      return false;
+    }
+    setUndoStack((st) => [...st.slice(-19), fold]);
+    onChange(r.setup);
+    setSel(null);
+    setMergeHover(null);
+    setCutFrom(null);
+    setCutTo(null);
+    notify.success(done);
+    return true;
+  };
+  const undoEdit = () => {
+    const prev = undoStack[undoStack.length - 1];
+    if (!prev) return;
+    setUndoStack((st) => st.slice(0, -1));
+    onChange(prev);
+    setSel(null);
+  };
+  const pickTool = (t: "merge" | "split") => {
+    setTool((cur) => (cur === t ? null : t));
+    setCutFrom(null);
+    setCutTo(null);
+    setMergeHover(null);
+    if (quick) closeQuick();
+  };
+  const toSheet = (e: { clientX: number; clientY: number }): [number, number] | null => {
+    const svg = sheetSvg.current;
+    const ctm = svg?.getScreenCTM();
+    if (!svg || !ctm) return null;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const r = pt.matrixTransform(ctm.inverse());
+    return [r.x, r.y];
+  };
+  const onSheetClick = (e: React.MouseEvent) => {
+    if (tool !== "split") return setSel(null);
+    const at = toSheet(e);
+    if (!at) return;
+    if (!cutFrom) {
+      if (!panelAt(fold, at)) return notify.error("Start the cut inside a panel.");
+      setCutFrom(at);
+      return;
+    }
+    const id = panelAt(fold, cutFrom);
+    if (id) applyEdit(splitPanel(fold, id, cutFrom, at), "Panel split in two. Set its fold angle in the list below.");
+  };
+  const chord = tool === "split" && cutFrom && cutTo ? cutPreview(fold, cutFrom, cutTo) : null;
+  const mergePair = tool === "merge" && mergeHover ? fold.hinges.find((h) => h.id === mergeHover) ?? null : null;
   const stopQuick = () => { setQuick(false); setSortHover(null); setPicked(null); setEditHinge(null); setQueue([]); setQuickStep(1); setQuickCount(1); setPreviewSort(true); };
   // "Sort again": Quick sort opens with this piece's lines already grouped in the steps they have now, and an empty step after them.
   const sortAgain = () => {
@@ -382,7 +535,10 @@ export function FoldSetupEditor({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="dark" size="sm" aria-pressed={quick} onClick={() => (quick ? closeQuick() : (setQuick(true), setSel(null)))}><ListOrdered className="size-4" aria-hidden /> Quick sort</Button>
+          <Button type="button" variant="dark" size="sm" aria-pressed={quick} onClick={() => (quick ? closeQuick() : (setTool(null), setCutFrom(null), setQuick(true), setSel(null)))}><ListOrdered className="size-4" aria-hidden /> Quick sort</Button>
+          <Button type="button" variant="dark" size="sm" aria-pressed={tool === "merge"} disabled={stale} title="Join two panels into one: click the fold line between them" onClick={() => pickTool("merge")}><Merge className="size-4" aria-hidden /> Merge panels</Button>
+          <Button type="button" variant="dark" size="sm" aria-pressed={tool === "split"} disabled={stale} title="Cut a panel in two: click two points to draw the cut line" onClick={() => pickTool("split")}><Scissors className="size-4" aria-hidden /> Split panel</Button>
+          {undoStack.length > 0 ? <Button type="button" variant="dark" size="sm" title="Undo the last merge or split" onClick={undoEdit}><Undo2 className="size-4" aria-hidden /> Undo</Button> : null}
           <Button type="button" variant="dark" size="sm" onClick={() => void detectAgain()}><Wand2 className="size-4" aria-hidden /> Detect again</Button>
           {onWindows ? (
             <Button type="button" variant="dark" size="sm" className="ml-auto" disabled={!geo.geo} title={geo.geo ? "Cut window holes that new projects start with" : "Set up the 3D fold first"} onClick={() => setWindowsOpen(true)}>
@@ -392,6 +548,15 @@ export function FoldSetupEditor({
         </div>
       </div>
 
+      {tool ? (
+        <p role="status" className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+          {tool === "merge"
+            ? "Merge: click the fold line (the numbered dot) between two panels to join them into one. Esc to stop."
+            : cutFrom
+              ? "Split: now click a second point. The cut runs through both points, from one edge of the panel to the other (nearly straight cuts snap to horizontal or vertical). Esc to start again."
+              : "Split: click a point inside the panel you want to cut. Esc to stop."}
+        </p>
+      ) : null}
       {windowResult && windowResult.problems.length > 0 ? (
         <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {windowResult.problems.length === 1 ? "A window hole does not fit" : `${windowResult.problems.length} window holes do not fit`} the dieline: {windowResult.problems[0]!.message} Open Window holes and move or delete {windowResult.problems.length === 1 ? "it" : "them"}; saving is blocked until then.
@@ -410,16 +575,28 @@ export function FoldSetupEditor({
         {/* flat sheet with panels and fold lines */}
         <div className="flex min-w-0 flex-col gap-2 xl:flex-none xl:basis-(--split) xl:pr-2">
           <div className="relative rounded-xl border bg-white p-2">
+            <div role="group" aria-label="Size of the panel names" className="absolute top-2 left-2 z-10 flex overflow-hidden rounded-md border bg-background/90 text-[11px] leading-none shadow-xs">
+              {([["sm", "Sm", "Small panel names"], ["mid", "Mid", "Medium panel names"]] as const).map(([v, text, tip]) => (
+                <button key={v} type="button" aria-pressed={labelSize === v} title={tip} onClick={() => setLabelSize(v)} className={`px-2 py-1 font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${labelSize === v ? "bg-black text-white" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>{text}</button>
+              ))}
+            </div>
+            <div role="group" aria-label="Zoom the sheet" className="absolute bottom-2 left-2 z-10 flex items-center overflow-hidden rounded-md border bg-background/90 text-xs leading-none shadow-xs">
+              <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => zoomBy(1 / 1.4)} className="px-2 py-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">−</button>
+              <span className="min-w-10 border-x px-1.5 py-1.5 text-center tabular-nums text-muted-foreground" aria-live="polite">{Math.round((base.w / (zoomed ?? base).w) * 100)}%</span>
+              <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => zoomBy(1.4)} className="px-2 py-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">+</button>
+              <button type="button" aria-label="Fit the whole sheet" title="Fit the whole sheet" disabled={zoomed === null} onClick={() => setZoomed(null)} className="border-l px-2 py-1.5 font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-40">Fit</button>
+            </div>
             <HelpTip label="About the colours and numbers">
               Colours show how deep a panel is from the base. Numbers on the fold lines are the fold steps. <span className="text-teal-700 dark:text-teal-300">Green</span> folds inward, <span className="text-orange-600">orange</span> outward.
             </HelpTip>
-            <svg viewBox={`${bounds.x - pad} ${bounds.y - pad} ${bounds.w + 2 * pad} ${bounds.h + 2 * pad}`} className="max-h-[60vh] w-full" role="img" aria-label="Flat sheet: panels in colour, fold lines numbered by fold step" onClick={() => setSel(null)}>
+            <svg ref={sheetSvg} viewBox={`${(zoomed ?? base).x} ${(zoomed ?? base).y} ${(zoomed ?? base).w} ${(zoomed ?? base).h}`} style={{ touchAction: "none" }} className={`max-h-[60vh] w-full select-none ${tool === "split" ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"}`} role="img" aria-label="Flat sheet: panels in colour, fold lines numbered by fold step. Scroll to zoom, drag to move." onPointerDown={startPan} onClickCapture={(e) => { if (dragged.current) { e.stopPropagation(); dragged.current = false; } }} onClick={onSheetClick} onPointerMove={tool === "split" && cutFrom ? (e) => setCutTo(toSheet(e)) : undefined}>
               {fold.panels.map((p) => {
                 const d = depth.get(p.id) ?? 0;
                 const on = sel?.kind === "panel" && sel.id === p.id;
                 const hot = (blinkMode && hoverId === p.id && !on) || (hover3d === p.id && !on);
                 const litSort = sortPanel === p.id;
-                const lit3d = (hover3d === p.id || litSort) && !on;
+                const litMerge = mergePair?.parentId === p.id || mergePair?.childId === p.id;
+                const lit3d = (hover3d === p.id || litSort || litMerge) && !on;
                 const [cx, cy] = centroid(p.polygon);
                 // Names are 1.5x the old size (half of the earlier 3x, which was too big), never wider than their panel: a narrow panel turns its name or shrinks it.
                 const xs = p.polygon.filter((_, i) => i % 2 === 0);
@@ -431,7 +608,7 @@ export function FoldSetupEditor({
                 const flatFs = Math.min(fsMax, (pw * 0.92) / nameLen, ph * 0.5);
                 const turnedFs = Math.min(fsMax, (ph * 0.92) / nameLen, pw * 0.8);
                 const turn = turnedFs > flatFs * 1.15;
-                const nameFs = turn ? turnedFs : flatFs;
+                const nameFs = (turn ? turnedFs : flatFs) * (labelSize === "sm" ? 0.6 : 1);
                 return (
                   <g key={p.id}>
                     <path
@@ -444,7 +621,9 @@ export function FoldSetupEditor({
                       onPointerEnter={() => setHoverId(p.id)}
                       onPointerLeave={() => setHoverId((cur) => (cur === p.id ? null : cur))}
                       onClick={(e) => {
+                        if (tool === "split") return; // the click goes on to the sheet: it is a point of the cut
                         e.stopPropagation();
+                        if (tool === "merge") return;
                         if (quick) {
                           const h = fold.hinges.find((x) => x.childId === p.id);
                           if (h) toggleQueued(h.id);
@@ -463,12 +642,12 @@ export function FoldSetupEditor({
               {fold.hinges.map((h) => {
                 const at = queue.findIndex((x) => x.id === h.id);
                 const lit = sortHinge?.id === h.id;
-                const on = lit || (quick ? at >= 0 : sel?.kind === "hinge" && sel.id === h.id);
+                const on = lit || mergePair?.id === h.id || (quick ? at >= 0 : sel?.kind === "hinge" && sel.id === h.id);
                 const [x1, y1, x2, y2] = h.line;
                 const mx = (x1 + x2) / 2;
                 const my = (y1 + y2) / 2;
                 return (
-                  <g key={h.id} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); if (quick) toggleQueued(h.id); else setSel({ kind: "hinge", id: h.id }); }}>
+                  <g key={h.id} className="cursor-pointer" onPointerEnter={() => tool === "merge" && setMergeHover(h.id)} onPointerLeave={() => tool === "merge" && setMergeHover((cur) => (cur === h.id ? null : cur))} onClick={(e) => { if (tool === "split") return; e.stopPropagation(); if (tool === "merge") applyEdit(mergePanels(fold, h.id), "Panels joined."); else if (quick) toggleQueued(h.id); else setSel({ kind: "hinge", id: h.id }); }}>
                     <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={size / 40} />
                     <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={h.angleDeg < 0 ? "#ea580c" : "#0f766e"} strokeWidth={size / (on ? 90 : 170)} strokeLinecap="round" />
                     <circle cx={mx} cy={my} r={size / (quick && at >= 0 ? 55 : 70)} fill={on ? "#18181b" : quick ? "#71717a" : "#18181b"} />
@@ -476,6 +655,12 @@ export function FoldSetupEditor({
                   </g>
                 );
               })}
+              {cutFrom ? (
+                <g pointerEvents="none">
+                  {chord ? <line x1={chord.p[0]} y1={chord.p[1]} x2={chord.q[0]} y2={chord.q[1]} stroke="#2563eb" strokeWidth={size / 200} strokeDasharray={`${size / 90} ${size / 180}`} /> : null}
+                  <circle cx={cutFrom[0]} cy={cutFrom[1]} r={size / 120} fill="#2563eb" />
+                </g>
+              ) : null}
             </svg>
           </div>
           <p className="text-sm text-muted-foreground">
@@ -538,7 +723,7 @@ export function FoldSetupEditor({
         <div className="flex min-w-0 flex-col gap-2 xl:min-w-0 xl:flex-1 xl:basis-0 xl:pl-2">
           <div className="relative overflow-hidden rounded-xl border bg-muted/40">
             {geo.geo ? (
-              <CartonView ref={view} className="h-[min(420px,50vh)] w-full" geo={shownGeo ?? geo.geo} texture={null} textureRect={null} progress={progress} outsideColor={boardColor} insideColor={boardLook.inside} thickness={boardThickness} boardGrain={boardLook.grain} boardEdge={{ color: boardLook.edge, flute: boardLook.flute }} initialView={startView} onPanelHover={setHover3d} onPanelClick={onPanel3dClick} onUserView={() => { turnedFrom.current = null; }} />
+              <CartonView ref={view} className="h-[min(420px,50vh)] w-full" geo={shownGeo ?? geo.geo} texture={null} textureRect={null} progress={progress} outsideColor={boardColor} insideColor={boardLook.inside} thickness={boardThickness} boardGrain={boardLook.grain} boardEdge={{ color: boardLook.edge, flute: boardLook.flute }} initialView={startView} onPanelHover={setHover3d} onPanelClick={onPanel3dClick} onUserView={() => { turnedFrom.current = null; }} onReady={onViewReady} />
             ) : (
               <p className="grid h-48 place-items-center px-4 text-center text-sm text-muted-foreground">{geo.error ?? "Fix the problems above to see the 3D preview."}</p>
             )}
