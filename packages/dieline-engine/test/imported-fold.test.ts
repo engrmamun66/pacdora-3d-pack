@@ -233,6 +233,16 @@ describe("fold detection on hand-written dielines", () => {
     expect(validateFoldSetup(setup)).toEqual([]);
   });
 
+  it("flaps beside a tab: fold lines that end a hair above the cut corner still separate flaps, body and tab", () => {
+    // A stem (x 100..200) with a flap on each side and a tab below it. The fold lines end 0.13 mm above the cut corner and the left one is 0.13 mm off the tab fold.
+    const outline = closed(50, 0, 250, 0, 250, 100.13, 200, 100.13, 192, 120, 108, 120, 100, 100.13, 50, 100.13);
+    const flat = flatOf([outline], [line(100.13, 0, 100.13, 99.87), line(200, 0, 200, 99.87), line(100, 99.87, 200, 99.87)]);
+    const { setup } = detectFoldSetup(flat);
+    expect(setup.panels).toHaveLength(4);
+    expect(setup.hinges).toHaveLength(3);
+    expect(validateFoldSetup(setup)).toEqual([]);
+  });
+
   it("a fold line that ends well inside the sheet (a real gap, not a drawing slip) is still ignored", () => {
     const flat = flatOf([rect(0, 0, 100, 60)], [line(50, 10, 50, 50)]);
     const { setup, warnings } = detectFoldSetup(flat);

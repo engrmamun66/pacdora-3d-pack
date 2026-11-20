@@ -1,5 +1,6 @@
 "use client";
 
+import { templateNameFromFile } from "@/lib/template-name";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -266,7 +267,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors, onCreated
     setNoRef([]);
     setExcluded([]);
     if (!name.trim() && mode === "create") {
-      const guess = file.name.replace(/\.svg$/i, "").replace(/[-_]+/g, " ").trim();
+      const guess = templateNameFromFile(file.name);
       setName(guess);
       if (!slugTouched) setSlug(slugify(guess));
     }

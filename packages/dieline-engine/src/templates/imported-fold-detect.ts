@@ -155,9 +155,14 @@ function closeFoldGaps(pts: Points, segs: Seg[]): { joined: number; tolerance: n
   const reach = tol * 2; // how far a line is extended along its own direction
 
   const ends = new Map<number, number>();
+  const onCut = new Set<number>(); // points where a cut line runs
   for (const s of segs) {
     ends.set(s.a, (ends.get(s.a) ?? 0) + 1);
     ends.set(s.b, (ends.get(s.b) ?? 0) + 1);
+    if (s.kind === CUT) {
+      onCut.add(s.a);
+      onCut.add(s.b);
+    }
   }
 
   const cell = Math.max(reach * 2, 1);
@@ -185,7 +190,8 @@ function closeFoldGaps(pts: Points, segs: Seg[]): { joined: number; tolerance: n
     for (const end of ["a", "b"] as const) {
       const own = segs[i]!; // read again: the first end may just have changed it
       const v = own[end];
-      if (ends.get(v) !== 1) continue; // already meets another line
+      // Already meets other lines: fine, unless it is a corner of two fold lines only (a flap corner), which is checked below against the cut beyond it.
+      if (onCut.has(v) || (ends.get(v) ?? 0) > 2) continue;
       const other = end === "a" ? own.b : own.a;
       const px = pts.xs[v]!;
       const py = pts.ys[v]!;
@@ -195,8 +201,11 @@ function closeFoldGaps(pts: Points, segs: Seg[]): { joined: number; tolerance: n
       const dy = (py - pts.ys[other]!) / dl;
 
       let touching = false;
+      let touchingCut = false;
       let rayT = Infinity; // distance along the line to the first line it meets
       let raySeg = -1;
+      let cutRayT = Infinity; // the same, for the first cut line only
+      let cutRaySeg = -1;
       let nearD = Infinity; // distance to the nearest point of any other line
       let nearX = 0;
       let nearY = 0;
@@ -213,7 +222,11 @@ function closeFoldGaps(pts: Points, segs: Seg[]): { joined: number; tolerance: n
         const d = Math.hypot(px - (ax + rx * tn), py - (ay + ry * tn));
         if (d <= SNAP) {
           touching = true;
-          break;
+          if (s.kind === CUT) {
+            touchingCut = true;
+            break;
+          }
+          continue; // meets another fold line: it may still stop a hair short of the cut beyond it
         }
         if (d < nearD) {
           nearD = d;
@@ -229,8 +242,18 @@ function closeFoldGaps(pts: Points, segs: Seg[]): { joined: number; tolerance: n
           rayT = t;
           raySeg = j;
         }
+        if (s.kind === CUT && t > 0 && t <= reach && u >= -eps && u <= 1 + eps && t < cutRayT) {
+          cutRayT = t;
+          cutRaySeg = j;
+        }
       }
-      if (touching) continue;
+      if (touchingCut) continue;
+      if (touching) {
+        // A line that ends on another fold line but has the cut outline a hair beyond it (a flap corner next to a tab): carry it on to the cut, or the two sides stay one panel.
+        if (cutRaySeg < 0 || cutRayT > tol * 0.5) continue;
+        rayT = cutRayT;
+        raySeg = cutRaySeg;
+      }
 
       let tx: number;
       let ty: number;
@@ -259,7 +282,7 @@ function closeFoldGaps(pts: Points, segs: Seg[]): { joined: number; tolerance: n
       if (target < 0) target = pts.at(tx, ty);
       if (target === v || target === other) continue;
       segs[i] = end === "a" ? { a: target, b: own.b, kind: own.kind } : { a: own.a, b: target, kind: own.kind };
-      ends.set(v, 0);
+      ends.set(v, Math.max(0, (ends.get(v) ?? 1) - 1));
       ends.set(target, (ends.get(target) ?? 0) + 1);
       joined++;
     }
