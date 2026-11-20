@@ -354,7 +354,7 @@ export function FoldSetupEditor({
   }, [hasFold]);
   const dragged = useRef(false);
   const startPan = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (e.button !== 0) return;
+    if (e.button > 2) return; // left, middle or right button
     const svg = sheetSvg.current;
     const ctm = svg?.getScreenCTM();
     if (!svg || !ctm) return;
@@ -589,7 +589,7 @@ export function FoldSetupEditor({
             <HelpTip label="About the colours and numbers">
               Colours show how deep a panel is from the base. Numbers on the fold lines are the fold steps. <span className="text-teal-700 dark:text-teal-300">Green</span> folds inward, <span className="text-orange-600">orange</span> outward.
             </HelpTip>
-            <svg ref={sheetSvg} viewBox={`${(zoomed ?? base).x} ${(zoomed ?? base).y} ${(zoomed ?? base).w} ${(zoomed ?? base).h}`} style={{ touchAction: "none" }} className={`max-h-[60vh] w-full select-none ${tool === "split" ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"}`} role="img" aria-label="Flat sheet: panels in colour, fold lines numbered by fold step. Scroll to zoom, drag to move." onPointerDown={startPan} onClickCapture={(e) => { if (dragged.current) { e.stopPropagation(); dragged.current = false; } }} onClick={onSheetClick} onPointerMove={tool === "split" && cutFrom ? (e) => setCutTo(toSheet(e)) : undefined}>
+            <svg ref={sheetSvg} viewBox={`${(zoomed ?? base).x} ${(zoomed ?? base).y} ${(zoomed ?? base).w} ${(zoomed ?? base).h}`} style={{ touchAction: "none" }} className={`max-h-[60vh] w-full select-none ${tool === "split" ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"}`} role="img" aria-label="Flat sheet: panels in colour, fold lines numbered by fold step. Scroll to zoom, drag with any mouse button to move." onPointerDown={startPan} onContextMenu={(e) => e.preventDefault()} onClickCapture={(e) => { if (dragged.current) { e.stopPropagation(); dragged.current = false; } }} onClick={onSheetClick} onPointerMove={tool === "split" && cutFrom ? (e) => setCutTo(toSheet(e)) : undefined}>
               {fold.panels.map((p) => {
                 const d = depth.get(p.id) ?? 0;
                 const on = sel?.kind === "panel" && sel.id === p.id;
