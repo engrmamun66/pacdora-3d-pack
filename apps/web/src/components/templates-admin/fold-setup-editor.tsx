@@ -172,14 +172,10 @@ export function FoldSetupEditor({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [tool, cutFrom]);
-  // The fold line of the panel just clicked while Quick sort is open: its row in the steps table is lit and scrolled into view.
+  // The fold line of the panel just clicked while Quick sort is open: its row in the steps table is lit (the page does not scroll to it).
   const [picked, setPicked] = useState<string | null>(null);
   // Which piece's fold list is shown (one tab per piece). Selecting something in the picture switches to its piece.
   const [tab, setTab] = useState(() => (memoryKey ? (openTabs.get(memoryKey) ?? 0) : 0));
-  useEffect(() => {
-    if (!picked) return;
-    document.querySelector(`[data-hinge-row="${CSS.escape(picked)}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [picked, tab]);
   useEffect(() => {
     if (memoryKey) openTabs.set(memoryKey, tab);
   }, [memoryKey, tab]);
