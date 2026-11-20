@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AppWindow, ListOrdered, Merge, Play, RotateCcw, Scissors, Undo2, Wand2, X } from "lucide-react";
+import { AppWindow, ListOrdered, Merge, Play, Redo2, RotateCcw, Scissors, Undo2, Wand2, X } from "lucide-react";
 import { applyWindows, createImportedGenerator, detectFoldSetup, THICKNESS_RANGE, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldHingeSpec, type FoldSetup, type PanelRole, type WindowSpec, partFits } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
@@ -71,7 +71,7 @@ const centroid = (poly: readonly number[]): [number, number] => {
 export function FoldSetupEditor({
   flat,
   fold,
-  onChange,
+  onChange: emit,
   stale,
   onQuickChange,
   startView = null,
@@ -109,7 +109,54 @@ export function FoldSetupEditor({
   const [cutFrom, setCutFrom] = useState<[number, number] | null>(null);
   const [cutTo, setCutTo] = useState<[number, number] | null>(null);
   const [mergeHover, setMergeHover] = useState<string | null>(null);
-  const [undoStack, setUndoStack] = useState<FoldSetup[]>([]);
+  // Undo / redo of every change to the fold setup (panels, steps, angles, names...), also with Ctrl / Cmd + Z and Ctrl + Y / Ctrl + Shift + Z.
+  // Changes that come one right after the other (typing a name, dragging a slider) count as one step.
+  const [history, setHistory] = useState<{ past: FoldSetup[]; future: FoldSetup[]; at: FoldSetup | null; hot: boolean }>({ past: [], future: [], at: fold, hot: false });
+  if (history.at !== fold && (history.past.length > 0 || history.future.length > 0)) setHistory({ past: [], future: [], at: fold, hot: false }); // the setup was replaced from outside
+  const onChange = (f: FoldSetup | null) => {
+    if (fold && f !== fold) {
+      // "hot" lasts half a second after a change: changes in that time (typing, dragging) join the step before.
+      const together = history.hot && history.past.length > 0;
+      setHistory((h) => ({ past: together ? h.past : [...h.past.slice(-99), fold], future: [], at: f, hot: true }));
+      window.setTimeout(() => setHistory((h) => (h.hot ? { ...h, hot: false } : h)), 500);
+    }
+    emit(f);
+  };
+  const undoEdit = () => {
+    const prev = history.past[history.past.length - 1];
+    if (!prev || !fold) return;
+    setHistory((h) => ({ past: h.past.slice(0, -1), future: [fold, ...h.future], at: prev, hot: false }));
+    emit(prev);
+    setSel(null);
+  };
+  const redoEdit = () => {
+    const next = history.future[0];
+    if (!next || !fold) return;
+    setHistory((h) => ({ past: [...h.past, fold], future: h.future.slice(1), at: next, hot: false }));
+    emit(next);
+    setSel(null);
+  };
+  const historyKeys = useRef({ undo: undoEdit, redo: redoEdit });
+  useEffect(() => {
+    historyKeys.current = { undo: undoEdit, redo: redoEdit };
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.altKey || !(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      const redo = (k === "z" && e.shiftKey) || (k === "y" && !e.metaKey && !e.shiftKey);
+      if (k !== "z" && !redo) return;
+      const t = e.target;
+      // Typing in a field keeps the browser's own undo; so does an open dialog (the window editor has its own).
+      if (t instanceof HTMLElement && (t.isContentEditable || t.closest("input, textarea, select, [contenteditable='true']"))) return;
+      if (document.querySelector("dialog[open], [role='dialog']")) return;
+      e.preventDefault();
+      if (redo) historyKeys.current.redo();
+      else historyKeys.current.undo();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const sheetSvg = useRef<SVGSVGElement>(null);
   // Size of the panel names on the flat sheet: "mid" is the usual size, "sm" about 60% of it.
   const [labelSize, setLabelSize] = useState<"sm" | "mid">("mid");
@@ -442,13 +489,12 @@ export function FoldSetupEditor({
     const shown = used.length ? used : [curTab.k === "piece" ? curTab.i : 0];
     return shown.map((i) => pieceNameOf(fold, rootsOf(fold)[i] ?? fold.rootId));
   })();
-  // Hand edits of the panels. Each one can be undone with "Undo".
+  // Hand edits of the panels (merge, split).
   const applyEdit = (r: PanelEdit, done: string) => {
     if (!r.setup) {
       notify.error(r.error ?? "That edit could not be done.");
       return false;
     }
-    setUndoStack((st) => [...st.slice(-19), fold]);
     onChange(r.setup);
     setSel(null);
     setMergeHover(null);
@@ -456,13 +502,6 @@ export function FoldSetupEditor({
     setCutTo(null);
     notify.success(done);
     return true;
-  };
-  const undoEdit = () => {
-    const prev = undoStack[undoStack.length - 1];
-    if (!prev) return;
-    setUndoStack((st) => st.slice(0, -1));
-    onChange(prev);
-    setSel(null);
   };
   const pickTool = (t: "merge" | "split") => {
     setTool((cur) => (cur === t ? null : t));
@@ -538,7 +577,8 @@ export function FoldSetupEditor({
           <Button type="button" variant="dark" size="sm" aria-pressed={quick} onClick={() => (quick ? closeQuick() : (setTool(null), setCutFrom(null), setQuick(true), setSel(null)))}><ListOrdered className="size-4" aria-hidden /> Quick sort</Button>
           <Button type="button" variant="dark" size="sm" aria-pressed={tool === "merge"} disabled={stale} title="Join two panels into one: click the fold line between them" onClick={() => pickTool("merge")}><Merge className="size-4" aria-hidden /> Merge panels</Button>
           <Button type="button" variant="dark" size="sm" aria-pressed={tool === "split"} disabled={stale} title="Cut a panel in two: click two points to draw the cut line" onClick={() => pickTool("split")}><Scissors className="size-4" aria-hidden /> Split panel</Button>
-          {undoStack.length > 0 ? <Button type="button" variant="dark" size="sm" title="Undo the last merge or split" onClick={undoEdit}><Undo2 className="size-4" aria-hidden /> Undo</Button> : null}
+          <Button type="button" variant="dark" size="sm" disabled={history.past.length === 0} title="Undo the last change (Ctrl / Cmd + Z)" aria-keyshortcuts="Control+Z Meta+Z" onClick={undoEdit}><Undo2 className="size-4" aria-hidden /> Undo</Button>
+          <Button type="button" variant="dark" size="sm" disabled={history.future.length === 0} title="Redo (Ctrl + Y, or Ctrl / Cmd + Shift + Z)" aria-keyshortcuts="Control+Y Control+Shift+Z Meta+Shift+Z" onClick={redoEdit}><Redo2 className="size-4" aria-hidden /> Redo</Button>
           <Button type="button" variant="dark" size="sm" onClick={() => void detectAgain()}><Wand2 className="size-4" aria-hidden /> Detect again</Button>
           {onWindows ? (
             <Button type="button" variant="dark" size="sm" className="ml-auto" disabled={!geo.geo} title={geo.geo ? "Cut window holes that new projects start with" : "Set up the 3D fold first"} onClick={() => setWindowsOpen(true)}>
