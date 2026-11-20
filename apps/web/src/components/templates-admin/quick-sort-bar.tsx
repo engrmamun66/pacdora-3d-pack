@@ -32,7 +32,10 @@ export function QuickSortBar({
   step,
   preview,
   onPreviewChange,
+  total,
   onAddStep,
+  onSelectStep,
+  count,
   onSetStep,
   onRemoveStep,
   onRemove,
@@ -45,10 +48,16 @@ export function QuickSortBar({
   items: QuickItem[];
   /** The step the next clicked line joins. */
   step: number;
+  /** How many panels fold in all (every fold line swings one panel): the number to pick from. */
+  total: number;
   /** Whether the 3D box folds in the order being sorted. */
   preview: boolean;
   onPreviewChange: (on: boolean) => void;
   onAddStep: () => void;
+  /** Make this step the open one: the lines clicked next join it. */
+  onSelectStep: (step: number) => void;
+  /** How many steps to show (empty ones too), at least. */
+  count: number;
   /** Give a line this step. */
   onSetStep: (id: string, step: number) => void;
   /** Drop a whole step with its lines; the steps after it move up one. */
@@ -125,7 +134,8 @@ export function QuickSortBar({
   }, [step]);
 
   // One group per step in use, in order; the open step is always shown, even while it is still empty.
-  const stepNumbers = [...new Set([...items.map((i) => i.step), ...leaving.map((i) => i.step), step])].sort((a, b) => a - b);
+  const last = Math.max(count, step, ...items.map((i) => i.step), ...leaving.map((i) => i.step));
+  const stepNumbers = Array.from({ length: last }, (_, i) => i + 1);
   const groups = stepNumbers.map((n) => ({ step: n, items: items.filter((i) => i.step === n), out: leaving.filter((i) => i.step === n) }));
   const usedSteps = groups.filter((g) => g.items.length).length;
   const idle = items.length === 0 && step === 1;
@@ -171,10 +181,10 @@ export function QuickSortBar({
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="flex items-center gap-1">
           <h3 className="text-sm font-semibold">Quick sort</h3>
-          <InfoTip label="Quick sort">Click the fold lines on the picture. They join step {step}, which is open now. Press Add step to open the next one. Lines with the same step fold together. Drag a chip into another step to move it.</InfoTip>
+          <InfoTip label="Quick sort">Click a step to open it, then click fold lines on the picture: they join the open step (now step {step}). A line already in another step moves to it; click a line in its own step to take it out. Add step makes a new empty step at the end. Lines with the same step fold together. Drag a chip into another step to move it.</InfoTip>
         </div>
         <p className="text-xs text-muted-foreground" aria-live="polite">
-          {items.length === 0 ? "Click a fold line to add it" : `${items.length} ${items.length === 1 ? "line" : "lines"} in ${usedSteps} ${usedSteps === 1 ? "step" : "steps"}`}
+          {`${items.length} ${items.length === 1 ? "panel" : "panels"} selected / ${total} ${total === 1 ? "panel" : "panels"}${items.length ? ` - in ${usedSteps} ${usedSteps === 1 ? "step" : "steps"}` : ""}`}
         </p>
         <label className="ml-auto flex shrink-0 cursor-pointer items-center gap-1.5 text-sm">
           <input type="checkbox" checked={preview} onChange={(e) => onPreviewChange(e.target.checked)} className="size-4 accent-foreground" />
@@ -184,7 +194,7 @@ export function QuickSortBar({
           <Button type="button" variant="dark" size="sm" onClick={() => {
             scrollToNew.current = true;
             onAddStep();
-          }} title={`Open step ${step + 1}: the lines you click next join it`}>
+          }} title={`Make a new empty step ${last + 1}: the lines you click next join it`}>
             <Plus className="size-4" aria-hidden /> Add step
           </Button>
           <Button type="button" variant="dark" size="sm" disabled={idle} onClick={onClear} title="Remove every line and step"><Trash2 className="size-4" aria-hidden /> Clear</Button>
@@ -208,6 +218,7 @@ export function QuickSortBar({
                   setOverStep(g.step);
                 }
               }}
+              onClick={() => onSelectStep(g.step)}
               onDragLeave={() => setOverStep((s) => (s === g.step ? null : s))}
               onDrop={(e) => {
                 e.preventDefault();
@@ -215,9 +226,9 @@ export function QuickSortBar({
                 setDragId(null);
                 setOverStep(null);
               }}
-              className={`flex shrink-0 flex-wrap items-center gap-1.5 rounded-xl border py-1.5 pr-2 pl-1.5 transition-colors ${open ? "border-primary/50 bg-primary/5" : "bg-muted/30"} ${target ? "border-primary bg-primary/10 ring-2 ring-primary/30" : ""}`}
+              className={`flex shrink-0 flex-wrap items-center gap-1.5 rounded-xl border py-1.5 pr-2 pl-1.5 cursor-pointer transition-colors ${open ? "border-primary/50 bg-primary/5" : "bg-muted/30 hover:bg-muted/50"} ${target ? "border-primary bg-primary/10 ring-2 ring-primary/30" : ""}`}
             >
-              <span className={`inline-flex h-6 items-center rounded-full px-2.5 text-xs font-semibold tabular-nums ${open ? "bg-primary text-primary-foreground" : "bg-foreground/10 text-foreground"}`}>Step {g.step}</span>
+              <button type="button" aria-pressed={open} aria-label={`Open step ${g.step}: the lines you click next join it`} className={`inline-flex h-6 items-center rounded-full px-2.5 text-xs font-semibold tabular-nums focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${open ? "bg-primary text-primary-foreground" : "bg-foreground/10 text-foreground"}`}>Step {g.step}</button>
               {g.items.length === 0 ? <span className="px-1 text-xs text-muted-foreground">Click fold lines to add them here</span> : null}
               {g.items.map((it) => (
                 <div
@@ -256,7 +267,10 @@ export function QuickSortBar({
                   <button
                     type="button"
                     aria-label={`Remove ${it.label}`}
-                    onClick={() => onRemove(it.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemove(it.id);
+                    }}
                     className="grid size-5 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   >
                     <X className="size-3" aria-hidden />
@@ -275,7 +289,10 @@ export function QuickSortBar({
                   type="button"
                   aria-label={`Remove step ${g.step}${g.items.length ? " and its lines" : ""}`}
                   title={g.items.length ? `Remove step ${g.step} and its lines` : `Remove step ${g.step}`}
-                  onClick={() => onRemoveStep(g.step)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveStep(g.step);
+                  }}
                   className="ml-auto grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 >
                   <X className="size-3.5" aria-hidden />

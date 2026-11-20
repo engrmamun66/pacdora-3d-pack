@@ -122,6 +122,8 @@ export function FoldSetupEditor({
   }, [quick, onQuickChange]);
   const [queue, setQueue] = useState<{ id: string; step: number }[]>([]);
   const [quickStep, setQuickStep] = useState(1);
+  // How many steps the bar shows. Empty steps stay in the bar (they are dropped when the sort is applied), so a line can be added to any of them.
+  const [quickCount, setQuickCount] = useState(1);
   // "Preview 3D folding" in the Quick sort bar: while on, the 3D box folds in the order being sorted (steps of the clicked lines first).
   const [previewSort, setPreviewSort] = useState(true);
   const [warnings, setWarnings] = useState<readonly string[]>([]);
@@ -156,6 +158,7 @@ export function FoldSetupEditor({
     setQuick(false);
     setQueue([]);
     setQuickStep(1);
+    setQuickCount(1);
     onChange(r.setup);
   };
 
@@ -277,8 +280,25 @@ export function FoldSetupEditor({
     return h ? label(h.childId) : id;
   };
   const liveQueue = queue.filter((it) => fold.hinges.some((h) => h.id === it.id));
-  const toggleQueued = (id: string) => setQueue((q) => (q.some((x) => x.id === id) ? q.filter((x) => x.id !== id) : [...q, { id, step: quickStep }]));
-  const stopQuick = () => { setQuick(false); setQueue([]); setQuickStep(1); setPreviewSort(true); };
+  const stepsShown = Math.max(quickCount, quickStep, ...liveQueue.map((it) => it.step));
+  // A click on a line adds it to the chosen step; a line that is already in another step moves to it; a click in its own step takes it out.
+  const toggleQueued = (id: string) => setQueue((q) => {
+    const at = q.find((x) => x.id === id);
+    if (!at) return [...q, { id, step: quickStep }];
+    if (at.step !== quickStep) return q.map((x) => (x.id === id ? { ...x, step: quickStep } : x));
+    return q.filter((x) => x.id !== id);
+  });
+  const stopQuick = () => { setQuick(false); setQueue([]); setQuickStep(1); setQuickCount(1); setPreviewSort(true); };
+  // "Sort again": Quick sort opens with this piece's lines already grouped in the steps they have now, and an empty step after them.
+  const sortAgain = () => {
+    const orders = stepsOf(fold, curTab.k === "piece" ? curTab.i : 0);
+    setQueue(sortedHinges(fold, curTab.k === "piece" ? curTab.i : 0).map((h) => ({ id: h.id, step: orders.indexOf(h.order) + 1 })));
+    setQuickCount(orders.length + 1);
+    setQuickStep(orders.length + 1);
+    setQuickClosing(false);
+    setQuick(true);
+    setSel(null);
+  };
   // Closing slides the bar down first and only then lets go of the sort, so it does not empty out while it leaves.
   const closeQuick = () => {
     if (quickClosing) return;
@@ -294,6 +314,7 @@ export function FoldSetupEditor({
   const removeQueuedStep = (n: number) => {
     setQueue((q) => q.filter((x) => x.step !== n).map((x) => (x.step > n ? { ...x, step: x.step - 1 } : x)));
     setQuickStep((cur) => (cur >= n ? Math.max(1, cur - 1) : cur));
+    setQuickCount(Math.max(1, stepsShown - 1));
   };
   const selHinge = sel?.kind === "hinge" ? fold.hinges.find((h) => h.id === sel.id) : undefined;
   const setHinge = (id: string, patch: Partial<Pick<FoldHingeSpec, "angleDeg" | "order">>) => onChange(updateHinge(fold, id, patch));
@@ -599,7 +620,10 @@ export function FoldSetupEditor({
                     {pieceCount > 1 ? `${pieceName(roots[curTab.i]!)} has its own steps. ` : ""}Lines with the same step number fold together. Drag a row by its handle (or focus it and press the up / down arrow keys) to change which fold happens first. Type a step number to fold several lines together: give them the same number.
                   </InfoTip>
                 </p>
-                {curTab.i > 0 ? <Button type="button" variant="dark" size="xs" onClick={() => onChange(makeMain(fold, roots[curTab.i]!))}>Make main body</Button> : null}
+                <div className="flex items-center gap-2">
+                  {sortedHinges(fold, curTab.i).length ? <Button type="button" variant="dark" size="xs" disabled={stale} aria-pressed={quick} title="Open Quick sort with the lines already grouped in their steps" onClick={sortAgain}><ListOrdered className="size-3.5" aria-hidden /> Sort again</Button> : null}
+                  {curTab.i > 0 ? <Button type="button" variant="dark" size="xs" onClick={() => onChange(makeMain(fold, roots[curTab.i]!))}>Make main body</Button> : null}
+                </div>
               </div>
               {sortedHinges(fold, curTab.i).length ? (
                 <HingeList hinges={sortedHinges(fold, curTab.i)} label={label} selectedId={sel?.kind === "hinge" ? sel.id : null} onSelect={(id) => setSel({ kind: "hinge", id })} onSetHinge={setHinge} onMove={(id, to) => onChange(moveHinge(fold, id, to))} kinds={ROLE_OPTIONS} kindOf={(id) => fold.panels.find((p) => p.id === id)?.role ?? "body"} onKind={(id, role) => onChange(updatePanel(fold, id, { role: role as PanelRole }))} />
@@ -616,13 +640,16 @@ export function FoldSetupEditor({
           closing={quickClosing}
           items={liveQueue.map((it) => ({ id: it.id, label: hingeName(it.id), step: it.step }))}
           step={quickStep}
+          total={fold.hinges.length}
+          count={stepsShown}
+          onSelectStep={setQuickStep}
           preview={previewSort}
           onPreviewChange={setPreviewSort}
-          onAddStep={() => setQuickStep((n) => n + 1)}
+          onAddStep={() => { setQuickCount(stepsShown + 1); setQuickStep(stepsShown + 1); }}
           onSetStep={setQueuedStep}
           onRemoveStep={removeQueuedStep}
           onRemove={(id) => setQueue((q) => q.filter((x) => x.id !== id))}
-          onClear={() => { setQueue([]); setQuickStep(1); }}
+          onClear={() => { setQueue([]); setQuickStep(1); setQuickCount(1); }}
           onCancel={closeQuick}
           onApply={() => { onChange(applyFoldSteps(fold, liveQueue)); closeQuick(); }}
         />

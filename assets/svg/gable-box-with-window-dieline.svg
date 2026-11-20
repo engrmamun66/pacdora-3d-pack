@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1228 612" width="1228" height="612" font-family="Inter, system-ui, sans-serif" font-size="14">
+  <title>Gable box with window - dieline</title>
+  <defs>
+    <marker id="arrow-dim" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,1.5 10,5 0,8.5z" fill="#1a8cff"/></marker>
+    <marker id="arrow-total" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,1.5 10,5 0,8.5z" fill="#8c8c8c"/></marker>
+  </defs>
+
+  <rect id="background" width="1228" height="612" fill="#ececec"/>
+
+  <!-- Bleed: the outline offset outwards by 5 px; its inside is the white sheet -->
+  <g id="bleed" fill="#ffffff" stroke="#55c43f" stroke-width="1.3" stroke-linejoin="round">
+    <path d="M136.5,206.4L161.5,108.4L161.5,57.8L161.8,54.6L162.6,51.2L163.9,48.0L165.7,45.1L167.9,42.4L170.6,40.2L173.5,38.4L176.7,37.1L180.1,36.3L183.5,36.0L186.9,36.3L190.3,37.1L193.5,38.4L196.4,40.2L199.1,42.4L201.3,45.1L203.1,48.0L204.4,51.2L205.2,54.6L203.7,42.3L214.1,21.7L215.2,20.2L216.7,19.3L218.5,19.0L405.0,19.0L406.7,19.3L408.2,20.2L409.3,21.5L422.2,43.8L419.6,51.9L421.0,49.1L422.8,46.6L425.0,44.4L427.5,42.5L430.3,41.1L433.3,40.1L436.3,39.6L439.4,39.6L442.5,40.0L445.5,40.9L448.3,42.3L450.8,44.1L453.1,46.3L454.9,48.7L456.4,51.5L457.4,54.4L458.0,57.5L458.0,108.3L482.2,193.0L543.2,67.5L545.5,64.0L548.3,60.9L551.6,58.3L555.3,56.2L559.2,54.6L563.3,53.7L567.5,53.3L571.7,53.7L575.8,54.6L579.7,56.2L583.4,58.3L586.7,60.9L589.5,64.0L591.9,67.5L649.6,192.2L671.0,108.4L671.0,57.8L671.3,54.6L672.1,51.2L673.4,48.0L675.2,45.1L677.4,42.4L680.1,40.2L683.0,38.4L686.2,37.1L689.6,36.3L693.0,36.0L696.4,36.3L699.8,37.1L703.0,38.4L705.9,40.2L708.6,42.4L710.8,45.1L712.6,48.0L713.9,51.2L714.7,54.6L713.2,42.3L723.6,21.7L724.7,20.2L726.2,19.3L728.0,19.0L914.5,19.0L916.2,19.3L917.7,20.2L918.8,21.5L931.7,43.8L929.1,51.9L930.5,49.1L932.3,46.6L934.5,44.4L937.0,42.5L939.8,41.1L942.8,40.1L945.8,39.6L948.9,39.6L952.0,40.0L955.0,40.9L957.8,42.3L960.3,44.1L962.6,46.3L964.4,48.7L965.9,51.5L966.9,54.4L967.5,57.5L967.5,108.3L991.7,193.0L1052.7,67.5L1055.0,64.0L1057.8,60.9L1061.1,58.3L1064.8,56.2L1068.7,54.6L1072.8,53.7L1077.0,53.3L1081.2,53.7L1085.3,54.6L1089.2,56.2L1092.9,58.3L1096.2,60.9L1099.0,64.0L1101.4,67.5L1164.5,204.9L1164.9,205.9L1165.0,207.0L1165.0,411.0L1164.6,412.9L1163.5,414.5L1080.0,498.1L1080.0,522.2L1079.9,524.0L1079.4,526.0L1078.6,527.9L1077.5,529.7L1076.2,531.2L1074.7,532.5L1072.9,533.6L1071.0,534.4L1069.0,534.9L1067.2,535.0L990.5,535.0L989.0,534.8L987.6,534.0L986.5,532.9L985.7,531.5L985.5,530.0L985.5,423.1L910.5,498.1L910.5,522.2L910.4,524.0L909.9,526.0L909.1,527.9L908.0,529.7L906.7,531.2L905.2,532.5L903.4,533.6L901.5,534.4L899.5,534.9L897.7,535.0L743.8,535.0L742.0,534.9L740.0,534.4L738.1,533.6L736.3,532.5L734.8,531.2L733.5,529.7L732.4,527.9L731.6,526.0L731.1,524.0L731.0,522.2L731.0,498.1L656.0,423.1L656.0,530.0L655.8,531.5L655.0,532.9L653.9,534.0L652.5,534.8L651.0,535.0L573.8,535.0L572.0,534.9L570.0,534.4L568.1,533.6L566.3,532.5L564.8,531.2L563.5,529.7L562.4,527.9L561.6,526.0L561.1,524.0L561.0,522.2L561.0,498.1L486.0,423.1L486.0,530.0L485.8,531.5L485.0,532.9L483.9,534.0L482.5,534.8L481.0,535.0L403.8,535.0L402.0,534.9L400.1,534.4L398.3,533.7L396.6,532.6L395.2,531.3L393.9,529.9L392.8,528.2L392.1,526.4L391.6,524.5L391.5,522.7L391.5,501.0L231.5,501.0L231.5,522.7L231.4,524.5L230.9,526.4L230.2,528.2L229.1,529.9L227.8,531.3L226.4,532.6L224.7,533.7L222.9,534.4L221.0,534.9L219.2,535.0L141.5,535.0L140.0,534.8L138.6,534.0L137.5,532.9L136.7,531.5L136.5,530.0L136.5,411.0Z"/>
+  </g>
+
+  <!-- Crease / fold lines (dashed) -->
+  <g id="crease" fill="none" stroke="#ff6666" stroke-width="1" stroke-dasharray="2.5 2">
+    <path d="M141.5,207H1160M141.5,411H1160"/>
+    <path d="M141.5,207V411M481,207V411M651,207V411M990.5,207V411"/>
+    <path d="M166.5,109H453M676,109H962.5"/>
+  </g>
+
+  <!-- Cut lines (solid) -->
+  <g id="cut" fill="none" stroke="#2c44c4" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round">
+    <path id="outline" d="M91,221L141.5,207L166.5,109V58A17,17 0 0 1 200.5,58L218.5,24H405L423.5,56A15,15 0 0 1 453,58V109L481,207L547.5,70A23,23 0 0 1 587.5,70L651,207L676,109V58A17,17 0 0 1 710,58L728,24H914.5L933,56A15,15 0 0 1 962.5,58V109L990.5,207L1057,70A23,23 0 0 1 1097,70L1160,207V411L1075,496V522A8,8 0 0 1 1067,530H990.5V411L905.5,496V522A8,8 0 0 1 897.5,530H744A8,8 0 0 1 736,522V496L651,411V530H574A8,8 0 0 1 566,522V496L481,411V530H404A7.5,7.5 0 0 1 396.5,522.5V496H226.5V522.5A7.5,7.5 0 0 1 219,530H141.5V411L91,397V221Z"/>
+    <path id="handle-hole-1" d="M254,109V80A14,14 0 0 1 268,66H354.5A14,14 0 0 1 368.5,80V109"/>
+    <path id="handle-hole-2" d="M763.5,109V80A14,14 0 0 1 777.5,66H864A14,14 0 0 1 878,80V109"/>
+    <rect id="slot-1" x="564.5" y="87.5" width="4" height="63.5" rx="2"/>
+    <rect id="slot-2" x="1074" y="87.5" width="4" height="63.5" rx="2"/>
+    <rect id="window" x="684.5" y="241.5" width="271.5" height="136.5" rx="18"/>
+  </g>
+
+  <!-- Panel size dimensions (blue) -->
+  <g id="dimensions-panel" stroke="#1a8cff" stroke-width="1.2" fill="none">
+    <path d="M226,208.5V409.5" marker-start="url(#arrow-dim)" marker-end="url(#arrow-dim)"/>
+    <path d="M143,360H479.5" marker-start="url(#arrow-dim)" marker-end="url(#arrow-dim)"/>
+    <path d="M482.5,258H649.5" marker-start="url(#arrow-dim)" marker-end="url(#arrow-dim)"/>
+  </g>
+  <g id="dimension-labels-panel" fill="#1a8cff" text-anchor="middle" dominant-baseline="central" stroke="#ffffff" stroke-width="6" paint-order="stroke" stroke-linejoin="round">
+    <text x="226" y="308">180 mm</text>
+    <text x="311" y="359">300 mm</text>
+    <text x="566" y="257">150 mm</text>
+  </g>
+
+  <!-- Overall size dimensions (grey) -->
+  <g id="dimensions-total" stroke="#8c8c8c" stroke-width="1.5" fill="none">
+    <path d="M66,25.5V528.5" marker-start="url(#arrow-total)" marker-end="url(#arrow-total)"/>
+    <path d="M66,24H210M66,530H135" stroke-width="1"/>
+    <path d="M92.5,555H1158.5" marker-start="url(#arrow-total)" marker-end="url(#arrow-total)"/>
+    <path d="M91,397V565M1160,411V565" stroke-width="1"/>
+  </g>
+  <g id="dimension-labels-total" fill="#333333" text-anchor="middle" dominant-baseline="central">
+    <text x="625" y="574" stroke="#ececec" stroke-width="6" paint-order="stroke">944.5 mm</text>
+    <text transform="translate(45,277) rotate(-90)" stroke="#ececec" stroke-width="6" paint-order="stroke">446.6 mm</text>
+  </g>
+</svg>
