@@ -207,6 +207,41 @@ describe("fold detection on hand-written dielines", () => {
     expect(validateFoldSetup(setup)).toEqual([]);
   });
 
+  it("a fold line that stops a fraction of a millimetre short of the cut edge still splits the sheet", () => {
+    // Both ends 0.4 mm short: drawing programs leave gaps like this. Without gap closing the line is dangling and the sheet is one panel.
+    const flat = flatOf([rect(0, 0, 100, 60)], [line(50, 0.4, 50, 59.6)]);
+    const { setup, warnings } = detectFoldSetup(flat);
+    expect(setup.panels).toHaveLength(2);
+    expect(setup.hinges).toHaveLength(1);
+    expect(Math.hypot(setup.hinges[0]!.line[2] - setup.hinges[0]!.line[0], setup.hinges[0]!.line[3] - setup.hinges[0]!.line[1])).toBeCloseTo(60, 6);
+    expect(warnings.join(" ")).toMatch(/2 fold line ends were joined/);
+    expect(validateFoldSetup(setup)).toEqual([]);
+  });
+
+  it("a fan of fold lines from a corner, each stopping short of the opposite edge, gives one panel per petal", () => {
+    // Lines from the corner (0, 100) toward (25, 0), (50, 0) and (75, 0), each ending 0.5 mm early along its own direction.
+    const toward = (x: number) => {
+      const len = Math.hypot(x, 100);
+      const f = (len - 0.5) / len;
+      return line(0, 100, x * f, 100 - 100 * f);
+    };
+    const flat = flatOf([rect(0, 0, 100, 100)], [toward(25), toward(50), toward(75)]);
+    const { setup, warnings } = detectFoldSetup(flat);
+    expect(setup.panels).toHaveLength(4);
+    expect(setup.hinges).toHaveLength(3);
+    expect(warnings.join(" ")).toMatch(/3 fold line ends were joined/);
+    expect(validateFoldSetup(setup)).toEqual([]);
+  });
+
+  it("a fold line that ends well inside the sheet (a real gap, not a drawing slip) is still ignored", () => {
+    const flat = flatOf([rect(0, 0, 100, 60)], [line(50, 10, 50, 50)]);
+    const { setup, warnings } = detectFoldSetup(flat);
+    expect(setup.panels).toHaveLength(1);
+    expect(setup.hinges).toHaveLength(0);
+    expect(warnings.join(" ")).toMatch(/ends inside a panel|end inside a panel/);
+    expect(warnings.join(" ")).not.toMatch(/joined/);
+  });
+
   it("a U-shaped cut that starts and ends on a fold (a handle slot) is empty space, not a panel", () => {
     // A 300 wide flap above a body, joined by a fold; the slot is cut up from the fold.
     const flat = flatOf([rect(0, 0, 300, 280), line(100, 100, 100, 60, 200, 60, 200, 100)], [line(0, 100, 300, 100)]);

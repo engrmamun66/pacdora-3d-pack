@@ -126,6 +126,147 @@ function simplifyLoop(vids: readonly number[], xs: readonly number[], ys: readon
   return pts;
 }
 
+/** A fold line end that stops within this share of the sheet size (mm, clamped below) of another line is joined to it. */
+const GAP_FRACTION = 0.008;
+const GAP_MIN = 0.3;
+const GAP_MAX = 3;
+
+/**
+ * Drawing programs leave small gaps: a fold line that should run from one cut edge to the other stops a fraction of
+ * a millimetre short of it. Such a line would count as dangling and be dropped, and the sheet would stay one panel.
+ * Every free fold-line end is extended along its own direction to the first other line (a cut or a fold) it would meet
+ * within the gap tolerance; when none is met that way, it is moved onto the nearest line within the tolerance. A corner
+ * point of the line it meets (for example the cusp between two scallops) wins when it is close, so no sliver is left.
+ * Open cut lines (slits) are never extended: they may end in the material on purpose.
+ */
+function closeFoldGaps(pts: Points, segs: Seg[]): { joined: number; tolerance: number } {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < pts.size; i++) {
+    minX = Math.min(minX, pts.xs[i]!);
+    minY = Math.min(minY, pts.ys[i]!);
+    maxX = Math.max(maxX, pts.xs[i]!);
+    maxY = Math.max(maxY, pts.ys[i]!);
+  }
+  const tol = Math.min(GAP_MAX, Math.max(GAP_MIN, Math.max(maxX - minX, maxY - minY) * GAP_FRACTION));
+  if (!segs.some((s) => s.kind === CREASE)) return { joined: 0, tolerance: tol };
+  const reach = tol * 2; // how far a line is extended along its own direction
+
+  const ends = new Map<number, number>();
+  for (const s of segs) {
+    ends.set(s.a, (ends.get(s.a) ?? 0) + 1);
+    ends.set(s.b, (ends.get(s.b) ?? 0) + 1);
+  }
+
+  const cell = Math.max(reach * 2, 1);
+  const cellKey = (ix: number, iy: number) => (ix + 32768) * 65536 + (iy + 32768);
+  const grid = new Map<number, number[]>();
+  segs.forEach((s, i) => {
+    const x0 = Math.min(pts.xs[s.a]!, pts.xs[s.b]!) - reach;
+    const x1 = Math.max(pts.xs[s.a]!, pts.xs[s.b]!) + reach;
+    const y0 = Math.min(pts.ys[s.a]!, pts.ys[s.b]!) - reach;
+    const y1 = Math.max(pts.ys[s.a]!, pts.ys[s.b]!) + reach;
+    for (let ix = Math.floor(x0 / cell); ix <= Math.floor(x1 / cell); ix++) {
+      for (let iy = Math.floor(y0 / cell); iy <= Math.floor(y1 / cell); iy++) {
+        const k = cellKey(ix, iy);
+        const list = grid.get(k);
+        if (list) list.push(i);
+        else grid.set(k, [i]);
+      }
+    }
+  });
+
+  let joined = 0;
+  const count = segs.length;
+  for (let i = 0; i < count; i++) {
+    if (segs[i]!.kind !== CREASE) continue;
+    for (const end of ["a", "b"] as const) {
+      const own = segs[i]!; // read again: the first end may just have changed it
+      const v = own[end];
+      if (ends.get(v) !== 1) continue; // already meets another line
+      const other = end === "a" ? own.b : own.a;
+      const px = pts.xs[v]!;
+      const py = pts.ys[v]!;
+      const dl = Math.hypot(px - pts.xs[other]!, py - pts.ys[other]!);
+      if (dl < 1e-9) continue;
+      const dx = (px - pts.xs[other]!) / dl;
+      const dy = (py - pts.ys[other]!) / dl;
+
+      let touching = false;
+      let rayT = Infinity; // distance along the line to the first line it meets
+      let raySeg = -1;
+      let nearD = Infinity; // distance to the nearest point of any other line
+      let nearX = 0;
+      let nearY = 0;
+      for (const j of grid.get(cellKey(Math.floor(px / cell), Math.floor(py / cell))) ?? []) {
+        if (j === i) continue;
+        const s = segs[j]!;
+        const ax = pts.xs[s.a]!;
+        const ay = pts.ys[s.a]!;
+        const rx = pts.xs[s.b]! - ax;
+        const ry = pts.ys[s.b]! - ay;
+        const len2 = rx * rx + ry * ry;
+        if (len2 === 0) continue;
+        const tn = Math.min(1, Math.max(0, ((px - ax) * rx + (py - ay) * ry) / len2));
+        const d = Math.hypot(px - (ax + rx * tn), py - (ay + ry * tn));
+        if (d <= SNAP) {
+          touching = true;
+          break;
+        }
+        if (d < nearD) {
+          nearD = d;
+          nearX = ax + rx * tn;
+          nearY = ay + ry * tn;
+        }
+        const den = dx * ry - dy * rx;
+        if (Math.abs(den) < 1e-9 * Math.sqrt(len2)) continue; // parallel
+        const t = ((ax - px) * ry - (ay - py) * rx) / den;
+        const u = ((ax - px) * dy - (ay - py) * dx) / den;
+        const eps = SNAP / Math.sqrt(len2);
+        if (t > 0 && t <= reach && u >= -eps && u <= 1 + eps && t < rayT) {
+          rayT = t;
+          raySeg = j;
+        }
+      }
+      if (touching) continue;
+
+      let tx: number;
+      let ty: number;
+      let cornerOf = -1; // segment whose corner may be used instead
+      if (raySeg >= 0) {
+        tx = px + dx * rayT;
+        ty = py + dy * rayT;
+        cornerOf = raySeg;
+      } else if (nearD <= tol) {
+        tx = nearX;
+        ty = nearY;
+      } else continue;
+
+      let target = -1;
+      if (cornerOf >= 0) {
+        const s = segs[cornerOf]!;
+        let best = tol * 0.25;
+        for (const w of [s.a, s.b]) {
+          const dw = Math.hypot(tx - pts.xs[w]!, ty - pts.ys[w]!);
+          if (dw <= best) {
+            best = dw;
+            target = w;
+          }
+        }
+      }
+      if (target < 0) target = pts.at(tx, ty);
+      if (target === v || target === other) continue;
+      segs[i] = end === "a" ? { a: target, b: own.b, kind: own.kind } : { a: own.a, b: target, kind: own.kind };
+      ends.set(v, 0);
+      ends.set(target, (ends.get(target) ?? 0) + 1);
+      joined++;
+    }
+  }
+  return { joined, tolerance: tol };
+}
+
 export function detectFoldSetup(flat: FlatDieline): DetectResult {
   const warnings: string[] = [];
   const pts = new Points();
@@ -157,6 +298,12 @@ export function detectFoldSetup(flat: FlatDieline): DetectResult {
   for (const p of flat.crease) addPath(p, CREASE);
   if (segs.length === 0) {
     return { setup: { rootId: "", panels: [], hinges: [] }, warnings: ["No usable cut or fold lines were found."] };
+  }
+
+  // 1b. Join fold-line ends that stop a hair short of the line they should reach.
+  const gaps = closeFoldGaps(pts, segs);
+  if (gaps.joined > 0) {
+    warnings.push(`${gaps.joined} fold line ${gaps.joined === 1 ? "end was" : "ends were"} joined to a line up to ${gaps.tolerance.toFixed(1)} mm away (a small gap in the drawing).`);
   }
 
   // 2. Spatial grid over segments and vertices.
