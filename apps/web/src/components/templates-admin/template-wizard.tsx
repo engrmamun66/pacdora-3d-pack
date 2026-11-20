@@ -824,7 +824,8 @@ export function TemplateWizard({ mode, categories, initial, svgColors, onCreated
         </section>
       ) : null}
 
-      <div className="mt-7 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
+      {/* Sticky: Back / Next stay at the bottom of the window while the step scrolls. Quick sort takes the very bottom, so the bar steps aside then. */}
+      <div hidden={quickOpen} className="sticky bottom-0 z-10 -mx-5 -mb-5 mt-7 flex flex-wrap items-center justify-between gap-3 rounded-b-2xl border-t bg-card/95 px-5 py-3 backdrop-blur sm:-mx-7 sm:-mb-7 sm:px-7" role="region" aria-label="Steps navigation">
         <div className="flex items-center gap-2">
           <Link href="/doraadmin/templates" className="text-sm font-medium text-red-600 underline underline-offset-4 hover:text-red-700">Cancel</Link>
         </div>
