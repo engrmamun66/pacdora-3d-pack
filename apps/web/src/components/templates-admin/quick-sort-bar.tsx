@@ -2,6 +2,7 @@
 
 import { InfoTip } from "./help-tip";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { GripVertical, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -35,6 +36,8 @@ export function QuickSortBar({
   total,
   onAddStep,
   onSelectStep,
+  onEdit,
+  activeId = null,
   count,
   onSetStep,
   onRemoveStep,
@@ -56,6 +59,10 @@ export function QuickSortBar({
   onAddStep: () => void;
   /** Make this step the open one: the lines clicked next join it. */
   onSelectStep: (step: number) => void;
+  /** A chip's name was clicked: edit that line's step, angle, kind and direction. */
+  onEdit: (id: string) => void;
+  /** The line being edited in the side panel: its chip stays highlighted. */
+  activeId?: string | null;
   /** How many steps to show (empty ones too), at least. */
   count: number;
   /** Give a line this step. */
@@ -145,7 +152,8 @@ export function QuickSortBar({
   return (
     <>
     <div ref={slot} aria-hidden style={{ height }} />
-    <section
+    {/* In <body>, not here: a parent with a transform or filter would make "fixed" relative to itself and push the bar sideways. */}
+    {typeof document === "undefined" ? null : createPortal(<section
       aria-label="Quick sort"
       style={{ bottom, height, left: column?.left ?? 0, width: column?.width ?? "100%", visibility: column ? "visible" : "hidden" }}
       className={`${closing ? "quick-down" : "quick-up"} fixed z-20 flex flex-col gap-2 border-t border-t-[#444444] ${flush ? "rounded-t-xl" : "rounded-xl"} bg-card px-4 py-2.5 shadow-[0_-6px_20px_-4px_rgba(0,0,0,0.28)]`}
@@ -243,14 +251,18 @@ export function QuickSortBar({
                     setDragId(null);
                     setOverStep(null);
                   }}
-                  className={`flex shrink-0 cursor-grab items-center gap-1 rounded-lg border border-b-2 border-b-[#444444] bg-background dark:border-b-white/70 py-0.5 pr-0.5 pl-0.5 text-xs shadow-xs transition-opacity active:cursor-grabbing ${dragId === it.id ? "opacity-40" : ""} ${fresh.includes(it.id) ? "chip-in" : ""}`}
+                  className={`flex shrink-0 cursor-grab items-center gap-1 rounded-lg border border-b-2 py-0.5 pr-0.5 pl-0.5 text-xs shadow-xs transition-opacity active:cursor-grabbing ${activeId === it.id ? "border-primary border-b-primary bg-primary/10 ring-2 ring-primary/40" : "border-b-[#444444] bg-background dark:border-b-white/70"} ${dragId === it.id ? "opacity-40" : ""} ${fresh.includes(it.id) ? "chip-in" : ""}`}
                 >
                   <GripVertical className="size-3 text-muted-foreground" aria-hidden />
                   <button
                     type="button"
                     className="max-w-44 truncate rounded px-1 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                    title={it.label}
-                    aria-label={`Step ${it.step}: ${it.label}. Alt plus left or right arrow moves it to another step.`}
+                    title={`Edit ${it.label}`}
+                    aria-label={`Step ${it.step}: ${it.label}. Click to edit it. Alt plus left or right arrow moves it to another step.`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit(it.id);
+                    }}
                     onKeyDown={(e) => {
                       if (!e.altKey) return;
                       if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
@@ -302,7 +314,7 @@ export function QuickSortBar({
           );
         })}
       </ol>
-    </section>
+    </section>, document.body)}
     </>
   );
 }

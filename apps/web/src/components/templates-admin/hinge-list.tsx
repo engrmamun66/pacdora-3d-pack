@@ -5,7 +5,7 @@ import { ChevronDown, ChevronUp, GripVertical } from "lucide-react";
 import type { FoldHingeSpec } from "@packaging/dieline-engine";
 
 const field = "h-9 rounded-lg border border-input bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
-const COLS = "grid grid-cols-[2.25rem_minmax(9rem,1fr)_6.5rem_6rem_minmax(6rem,170px)_minmax(12rem,1.2fr)] items-center";
+const COLS = "grid grid-cols-[2.25rem_minmax(6rem,1fr)_6.5rem_6rem_minmax(5.5rem,170px)_minmax(9rem,1.2fr)] items-center";
 const SETTLE_MS = 180;
 /** How long a row takes to glide to its new place when the order changes (arrows, typed step, keys). */
 const GLIDE_MS = 320;
@@ -188,7 +188,7 @@ export function HingeList({
 
   return (
     <div className="overflow-x-auto rounded-xl border">
-      <div className="min-w-[760px]">
+      <div className="min-w-[600px]">
         <div className={`${COLS} gap-x-1 border-b bg-muted/40 px-1 py-2 text-xs font-medium text-muted-foreground`}>
           <span className="sr-only">Drag to reorder</span>
           <span aria-hidden />

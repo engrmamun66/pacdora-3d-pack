@@ -11,6 +11,7 @@ import { ConstructionEditor, PieceLinksEditor } from "./construction-editor";
 import { HelpTip, InfoTip } from "./help-tip";
 import { PiecesEditor } from "./pieces-editor";
 import { HingeList } from "./hinge-list";
+import { FoldRowPanel } from "./fold-row-panel";
 import { PanelKindHelp } from "./panel-kind-help";
 import { confirmAction } from "@/lib/confirm";
 import { QUICK_SLIDE_MS, QuickSortBar } from "./quick-sort-bar";
@@ -124,6 +125,8 @@ export function FoldSetupEditor({
   const [quickStep, setQuickStep] = useState(1);
   // How many steps the bar shows. Empty steps stay in the bar (they are dropped when the sort is applied), so a line can be added to any of them.
   const [quickCount, setQuickCount] = useState(1);
+  // The fold line whose row is open in a dialog (opened from a chip of the Quick sort bar).
+  const [editHinge, setEditHinge] = useState<string | null>(null);
   // "Preview 3D folding" in the Quick sort bar: while on, the 3D box folds in the order being sorted (steps of the clicked lines first).
   const [previewSort, setPreviewSort] = useState(true);
   const [warnings, setWarnings] = useState<readonly string[]>([]);
@@ -288,7 +291,7 @@ export function FoldSetupEditor({
     if (at.step !== quickStep) return q.map((x) => (x.id === id ? { ...x, step: quickStep } : x));
     return q.filter((x) => x.id !== id);
   });
-  const stopQuick = () => { setQuick(false); setQueue([]); setQuickStep(1); setQuickCount(1); setPreviewSort(true); };
+  const stopQuick = () => { setQuick(false); setEditHinge(null); setQueue([]); setQuickStep(1); setQuickCount(1); setPreviewSort(true); };
   // "Sort again": Quick sort opens with this piece's lines already grouped in the steps they have now, and an empty step after them.
   const sortAgain = () => {
     const orders = stepsOf(fold, curTab.k === "piece" ? curTab.i : 0);
@@ -564,6 +567,29 @@ export function FoldSetupEditor({
           </form>
         ) : null}
       </dialog>
+      {editHinge && fold.hinges.some((h) => h.id === editHinge) ? (() => {
+        const h = fold.hinges.find((x) => x.id === editHinge)!;
+        return (
+          <FoldRowPanel
+            hinge={h}
+            name={label(h.childId)}
+            parentName={label(h.parentId)}
+            kinds={ROLE_OPTIONS}
+            kind={fold.panels.find((p) => p.id === h.childId)?.role ?? "body"}
+            onClose={() => setEditHinge(null)}
+            onChange={(v) => {
+              // Each change applies to this row only: its step and angle, and the kind of the panel it swings.
+              let next = fold;
+              if (v.order !== undefined || v.angleDeg !== undefined) next = updateHinge(next, h.id, { ...(v.order !== undefined ? { order: v.order } : {}), ...(v.angleDeg !== undefined ? { angleDeg: v.angleDeg } : {}) });
+              if (v.kind !== undefined) next = updatePanel(next, h.childId, { role: v.kind as PanelRole });
+              onChange(next);
+              // The chip follows its new step.
+              const step = v.order;
+              if (step !== undefined) setQueue((q) => (q.some((x) => x.id === h.id) ? q.map((x) => (x.id === h.id ? { ...x, step } : x)).sort((a, b) => a.step - b.step) : q));
+            }}
+          />
+        );
+      })() : null}
       {selHinge ? (
         <section aria-label="Fold settings" className="rounded-xl border p-4 text-sm">
           <p className="font-medium">{label(selHinge.parentId)} → {label(selHinge.childId)}</p>
@@ -643,6 +669,8 @@ export function FoldSetupEditor({
           total={fold.hinges.length}
           count={stepsShown}
           onSelectStep={setQuickStep}
+          onEdit={setEditHinge}
+          activeId={editHinge}
           preview={previewSort}
           onPreviewChange={setPreviewSort}
           onAddStep={() => { setQuickCount(stepsShown + 1); setQuickStep(stepsShown + 1); }}
