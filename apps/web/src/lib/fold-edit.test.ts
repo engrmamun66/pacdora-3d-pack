@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FoldSetup } from "@packaging/dieline-engine";
-import { applyFoldSequence, applyFoldSteps, compactOrders, depthOf, linesKey, makeBase, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootAt, rootsOf, setGround, setMainName, setStepAngle, sortedHinges, stepsOf, updateHinge, updatePanel, updatePartMeta } from "./fold-edit";
+import { applyFoldSequence, applyFoldSteps, compactOrders, depthOf, linesKey, makeBase, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootAt, rootsOf, setGround, setMainName, setStepAngle, setStepNumber, sortedHinges, stepsOf, updateHinge, updatePanel, updatePartMeta } from "./fold-edit";
 
 const sq = [0, 0, 10, 0, 10, 10, 0, 10];
 const setup: FoldSetup = {
@@ -259,5 +259,32 @@ describe("setStepAngle", () => {
     expect(setStepAngle(fan, 1, 1, 10)).toEqual(fan); // no second piece: nothing changes
     setStepAngle(fan, 0, 1, 10);
     expect(JSON.stringify(fan)).toBe(before);
+  });
+});
+
+describe("setStepNumber", () => {
+  const sheet = (orders: number[]): FoldSetup => ({
+    rootId: "a",
+    panels: ["a", "b", "c", "d", "e"].map((id) => ({ id, label: id, role: "body" as const, printable: true, polygon: sq })),
+    hinges: orders.map((order, i) => ({ id: `h${i + 1}`, parentId: "a", childId: "bcde"[i]!, line: [0, 0, 1, 0] as [number, number, number, number], angleDeg: 90, order })),
+  });
+  const orders = (s: FoldSetup) => s.hinges.map((h) => h.order);
+
+  it("gives all lines of the step the new number and closes the gaps", () => {
+    expect(orders(setStepNumber(sheet([1, 1, 2, 3]), 0, 1, 5))).toEqual([3, 3, 1, 2]);
+  });
+  it("joins a step that already has that number", () => {
+    expect(orders(setStepNumber(sheet([1, 1, 2, 3]), 0, 1, 3))).toEqual([2, 2, 1, 2]);
+  });
+  it("a number between two steps puts the lines between them", () => {
+    // steps 1, 2, 4: moving step 4 to 2 joins 2; steps 1, 3, 5: moving step 5 to 2 puts it between.
+    expect(orders(setStepNumber(sheet([1, 3, 5]), 0, 5, 2))).toEqual([1, 3, 2]);
+  });
+  it("changes nothing for the same number, a missing step or a bad number", () => {
+    const s = sheet([1, 1, 2, 3]);
+    expect(setStepNumber(s, 0, 1, 1)).toBe(s);
+    expect(setStepNumber(s, 0, 9, 2)).toBe(s);
+    expect(orders(setStepNumber(s, 0, 3, Number.NaN))).toEqual([1, 1, 2, 3]);
+    expect(orders(setStepNumber(s, 0, 1, 0))).toEqual([1, 1, 2, 3]); // 0 is clamped to 1: the same step
   });
 });

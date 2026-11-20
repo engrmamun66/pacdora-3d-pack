@@ -5,7 +5,9 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import type { FoldHingeSpec } from "@packaging/dieline-engine";
 
-const field = "h-9 w-full rounded-lg border border-input bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
+const field = "h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
+/** Angles the buttons under the angle field set at once. */
+const QUICK_ANGLES = [45, 90, 180] as const;
 const MAX_STEP = 100;
 
 export interface FoldRowPatch {
@@ -22,7 +24,7 @@ export interface FoldRowPatch {
 function LiveNumber({ value, min, max, label, hint, onValue }: { value: number; min: number; max: number; label: string; hint?: string; onValue: (n: number) => void }) {
   const [draft, setDraft] = useState<string | null>(null);
   return (
-    <label className="flex flex-col gap-1 font-medium">
+    <label className="flex flex-col gap-0.5 text-xs font-medium">
       {label}
       <input
         className={field}
@@ -39,7 +41,7 @@ function LiveNumber({ value, min, max, label, hint, onValue }: { value: number; 
         }}
         onBlur={() => setDraft(null)}
       />
-      {hint ? <span className="text-xs font-normal text-muted-foreground">{hint}</span> : null}
+      {hint ? <span className="text-[11px] font-normal text-muted-foreground">{hint}</span> : null}
     </label>
   );
 }
@@ -61,7 +63,7 @@ export function FoldRowPanel({
   /** The panel that swings, and the panel it hangs from. */
   name: string;
   parentName: string;
-  kinds: readonly { value: string; label: string }[];
+  kinds: readonly { value: string; label: string; hint?: string }[];
   kind: string;
   onChange: (patch: FoldRowPatch) => void;
   onClose: () => void;
@@ -77,26 +79,38 @@ export function FoldRowPanel({
   if (typeof document === "undefined") return null;
   const sign = hinge.angleDeg < 0 ? -1 : 1;
   return createPortal(
-    <aside aria-label={`Fold settings of ${name}`} className="row-panel-in fixed inset-y-0 left-0 z-50 flex w-[min(20rem,100vw)] flex-col border-r bg-background text-foreground shadow-2xl">
-      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-        <h2 className="min-w-0 truncate font-semibold">Fold: {name}</h2>
+    <aside aria-label={`Fold settings of ${name}`} className="row-panel-in fixed inset-y-0 left-0 z-50 flex w-[min(15rem,100vw)] flex-col border-r bg-background text-foreground shadow-2xl">
+      <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+        <h2 className="min-w-0 truncate text-sm font-semibold">Fold: {name}</h2>
         <button type="button" aria-label="Close" title="Close (Esc)" className="rounded p-1 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" onClick={onClose}><X className="size-4" /></button>
       </div>
-      <div key={hinge.id} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4 text-sm">
-        <p className="text-muted-foreground">{name} folds along its edge with {parentName}. Changes apply at once.</p>
+      <div key={hinge.id} className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-3 text-xs">
+        <p className="text-[11px] leading-snug text-muted-foreground">{name} folds along its edge with {parentName}.</p>
         <LiveNumber label="Step" min={1} max={MAX_STEP} value={hinge.order} hint="Lines with the same step fold together." onValue={(n) => onChange({ order: n })} />
-        <LiveNumber label="Angle (°)" min={1} max={180} value={Math.abs(hinge.angleDeg)} onValue={(n) => onChange({ angleDeg: sign * n })} />
-        <label className="flex flex-col gap-1 font-medium">Kind
-          <select className={field} value={kind} onChange={(e) => onChange({ kind: e.target.value })}>
-            {kinds.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 font-medium">Direction
-          <select className={field} value={sign} onChange={(e) => onChange({ angleDeg: Number(e.target.value) * Math.abs(hinge.angleDeg) })}>
-            <option value={1}>Inward (print stays outside)</option>
-            <option value={-1}>Outward (reverse)</option>
-          </select>
-        </label>
+        <div className="flex flex-col gap-1">
+          <LiveNumber label="Angle (°)" min={1} max={180} value={Math.abs(hinge.angleDeg)} onValue={(n) => onChange({ angleDeg: sign * n })} />
+          <div role="group" aria-label="Set the angle" className="flex gap-1">
+            {QUICK_ANGLES.map((a) => (
+              <button key={a} type="button" aria-pressed={Math.abs(hinge.angleDeg) === a} title={`Set the angle to ${a}°`} onClick={() => onChange({ angleDeg: sign * a })} className={`h-7 flex-1 rounded-md border text-xs font-medium tabular-nums transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${Math.abs(hinge.angleDeg) === a ? "border-black bg-black text-white" : "bg-background hover:bg-muted"}`}>{a}</button>
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-col gap-0.5 text-xs font-medium">
+          <span id="fold-kind-label">Kind</span>
+          <div role="group" aria-labelledby="fold-kind-label" className="flex flex-wrap gap-1">
+            {kinds.map((k) => (
+              <button key={k.value} type="button" aria-pressed={kind === k.value} title={k.hint ?? k.label} onClick={() => onChange({ kind: k.value })} className={`h-7 rounded-md border px-2 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${kind === k.value ? "border-black bg-black text-white" : "bg-background hover:bg-muted"}`}>{k.label}</button>
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-col gap-0.5 text-xs font-medium">
+          <span id="fold-direction-label">Direction</span>
+          <div role="group" aria-labelledby="fold-direction-label" className="flex gap-1">
+            {([[1, "Inward", "Inward: the print stays outside"], [-1, "Outward", "Outward: reverse"]] as const).map(([v, text, tip]) => (
+              <button key={v} type="button" aria-pressed={sign === v} title={tip} onClick={() => onChange({ angleDeg: v * Math.abs(hinge.angleDeg) })} className={`h-7 flex-1 rounded-md border text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${sign === v ? "border-black bg-black text-white" : "bg-background hover:bg-muted"}`}>{text}</button>
+            ))}
+          </div>
+        </div>
       </div>
     </aside>,
     document.body,

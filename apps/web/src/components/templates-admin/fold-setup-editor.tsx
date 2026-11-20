@@ -6,13 +6,13 @@ import { applyWindows, createImportedGenerator, detectFoldSetup, THICKNESS_RANGE
 import type { FlatDielineData } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
-import { applyFoldSteps, depthOf, makeBase, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootsOf, setGround, setStepAngle, sortedHinges, stepsOf, updateHinge, updatePanel } from "@/lib/fold-edit";
+import { applyFoldSteps, depthOf, makeBase, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootsOf, setGround, setStepNumber, sortedHinges, stepsOf, updateHinge, updatePanel } from "@/lib/fold-edit";
 import { cutPreview, mergePanels, panelAt, splitPanel, type PanelEdit } from "@/lib/panel-edit";
 import { notify } from "@/lib/notify";
 import { ConstructionEditor, PieceLinksEditor } from "./construction-editor";
 import { HelpTip, InfoTip } from "./help-tip";
 import { PiecesEditor } from "./pieces-editor";
-import { HingeList, StepAngleTool } from "./hinge-list";
+import { HingeList, StepNumberTool } from "./hinge-list";
 import { FoldRowPanel } from "./fold-row-panel";
 import { PanelKindHelp } from "./panel-kind-help";
 import { confirmAction } from "@/lib/confirm";
@@ -462,6 +462,7 @@ export function FoldSetupEditor({
   // A click on a line adds it to the chosen step; a line that is already in another step moves to it; a click in its own step takes it out.
   const toggleQueued = (id: string) => {
     setPicked(id);
+    if (editHinge) setEditHinge(id); // the side panel follows the panel clicked, wherever it is clicked
     const piece = pieceMap(fold).get(fold.hinges.find((h) => h.id === id)?.childId ?? "");
     if (piece !== undefined) setTab(piece); // show the table of the piece this line belongs to
     setQueue((q) => {
@@ -702,14 +703,6 @@ export function FoldSetupEditor({
           <p className="text-sm text-muted-foreground">
             {fold.panels.length} panels, {fold.hinges.length} fold lines, {steps.length} {steps.length === 1 ? "step" : "steps"}{parts.length ? `, ${parts.length + 1} pieces` : ""}.
           </p>
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-            <label htmlFor="ground-panel" className="font-medium">Bottom (on the ground)</label>
-            <InfoTip label="Bottom (on the ground)">The panel chosen here lies flat on the floor with its printed side down, like the bottom of a box. Pick the panel that is the base, and the box stands up on it.</InfoTip>
-            <select id="ground-panel" className={`${field} min-w-0 flex-1 basis-40`} value={fold.groundId ?? ""} onChange={(e) => onChange(setGround(fold, e.target.value || null))}>
-              <option value="">Automatic</option>
-              {fold.panels.map((p) => <option key={p.id} value={p.id}>{p.label || p.id}</option>)}
-            </select>
-          </div>
         </div>
 
         {/* Divider: drag it left or right to give the sheet or the 3D view more room (double click: 50 / 50). Side by side from xl up. */}
@@ -926,13 +919,13 @@ export function FoldSetupEditor({
                 </div>
               </div>
               {sortedHinges(fold, curTab.i).length ? (
-                <StepAngleTool
+                <StepNumberTool
                   steps={stepsOf(fold, curTab.i).map((step) => {
                     const lines = sortedHinges(fold, curTab.i).filter((h) => h.order === step);
                     const first = Math.abs(lines[0]!.angleDeg);
                     return { step, count: lines.length, angle: lines.every((h) => Math.abs(h.angleDeg) === first) ? first : null };
                   })}
-                  onApply={(step, angle, direction) => onChange(setStepAngle(fold, curTab.i, step, angle, direction))}
+                  onApply={(step, toStep) => onChange(setStepNumber(fold, curTab.i, step, toStep))}
                 />
               ) : null}
               {sortedHinges(fold, curTab.i).length ? (

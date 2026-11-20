@@ -283,58 +283,53 @@ export interface StepSummary {
 }
 
 /**
- * Set the angle (and direction) of every fold line in one step at once. A flower or fan sheet has many
- * lines that fold the same way (all the petals of one ring): this saves typing each row.
+ * Change the number of a whole step at once: all its lines get the new number. A number another step has joins that step (they fold
+ * together); a number between two steps puts the lines between them. The numbers are then closed up (1, 2, 3...).
  */
-export function StepAngleTool({ steps, onApply }: { steps: readonly StepSummary[]; onApply: (step: number, angle: number, direction?: 1 | -1) => void }) {
+export function StepNumberTool({ steps, onApply }: { steps: readonly StepSummary[]; onApply: (step: number, toStep: number) => void }) {
   const [picked, setPicked] = useState<number | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
-  const [dir, setDir] = useState<"keep" | "1" | "-1">("keep");
-  // Step numbers get renumbered: fall back to the first step that has several lines.
+  // Step numbers get renumbered: fall back to the first step when the picked one is gone.
   const current = steps.find((s) => s.step === picked) ?? steps.find((s) => s.count > 1) ?? steps[0];
-  if (!current || !steps.some((s) => s.count > 1)) return null;
-  const shown = draft ?? String(current.angle ?? 90);
+  if (!current || steps.length === 0) return null;
+  const shown = draft ?? String(current.step);
+  const to = Math.round(Number(shown));
+  const valid = shown.trim() !== "" && Number.isFinite(to) && to >= 1 && to <= 100;
   const apply = () => {
-    const n = Number(shown);
-    if (!Number.isFinite(n) || shown.trim() === "") return;
-    onApply(current.step, n, dir === "keep" ? undefined : (Number(dir) as 1 | -1));
+    if (!valid || to === current.step) return;
+    onApply(current.step, to);
+    // The lines now stand where `to` ranks among the other steps.
+    const others = new Set(steps.map((s) => s.step).filter((s) => s !== current.step));
+    others.add(to);
+    setPicked([...others].sort((a, b) => a - b).indexOf(to) + 1);
     setDraft(null);
   };
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/30 px-3 py-2 text-sm" role="group" aria-label="Set a whole step at once">
-      <span className="text-xs font-medium text-muted-foreground">Set a whole step at once</span>
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/30 px-3 py-2 text-sm" role="group" aria-label="Change the number of a whole step">
+      <span className="text-xs font-medium text-muted-foreground">Change a step number</span>
       <label className="flex items-center gap-1.5">
         <span className="text-xs text-muted-foreground">Step</span>
         <select className={field} value={current.step} onChange={(e) => { setPicked(Number(e.target.value)); setDraft(null); }}>
           {steps.map((s) => (
-            <option key={s.step} value={s.step}>{s.step} ({s.count} {s.count === 1 ? "line" : "lines"}{s.angle === null ? ", mixed angles" : `, ${s.angle}°`})</option>
+            <option key={s.step} value={s.step}>{s.step} ({s.count} {s.count === 1 ? "line" : "lines"})</option>
           ))}
         </select>
       </label>
       <label className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">Angle</span>
+        <span className="text-xs text-muted-foreground">New number</span>
         <input
           className={`${field} w-16`}
           type="number"
           min={1}
-          max={180}
+          max={100}
           step={1}
           value={shown}
-          aria-label="Angle for the whole step"
+          aria-label="New step number for the whole step"
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); apply(); } }}
         />
-        <span className="text-xs text-muted-foreground">°</span>
       </label>
-      <label className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">Direction</span>
-        <select className={field} value={dir} onChange={(e) => setDir(e.target.value as "keep" | "1" | "-1")} aria-label="Direction for the whole step">
-          <option value="keep">Keep the current direction</option>
-          <option value="1">Inward (print stays outside)</option>
-          <option value="-1">Outward (reverse)</option>
-        </select>
-      </label>
-      <Button type="button" variant="dark" size="xs" onClick={apply}>Apply to step {current.step}</Button>
+      <Button type="button" variant="dark" size="xs" disabled={!valid || to === current.step} onClick={apply}>Change step {current.step} to {valid ? to : "…"}</Button>
     </div>
   );
 }

@@ -191,6 +191,18 @@ export function setStepAngle(setup: FoldSetup, piece: number, step: number, angl
   return { ...setup, hinges: setup.hinges.map((h) => (ids.has(h.id) ? { ...h, angleDeg: (direction ?? (h.angleDeg < 0 ? -1 : 1)) * a } : h)) };
 }
 
+/**
+ * Give every fold line of one step of a piece a new step number, then close the gaps (1, 3, 3, 7 becomes 1, 2, 2, 3).
+ * A number another step already has joins that step (the lines fold together); a number between two steps puts the lines between them;
+ * a number past the last one makes them the last step. The number is a whole number from 1 to 100.
+ */
+export function setStepNumber(setup: FoldSetup, piece: number, step: number, toStep: number): FoldSetup {
+  const to = Math.min(100, Math.max(1, Math.round(Number.isFinite(toStep) ? toStep : step)));
+  const ids = new Set(inPiece(setup, piece).filter((h) => h.order === step).map((h) => h.id));
+  if (ids.size === 0 || to === step) return setup;
+  return compactOrders({ ...setup, hinges: setup.hinges.map((h) => (ids.has(h.id) ? { ...h, order: to } : h)) });
+}
+
 /** Renumber the steps of the given lines (a piece's) 1, 2, 3... in the order of `seq`; the rest of the setup is untouched. */
 function renumber(setup: FoldSetup, order: Map<string, number>): FoldSetup {
   return { ...setup, hinges: setup.hinges.map((h) => ({ ...h, order: order.get(h.id) ?? h.order })) };
