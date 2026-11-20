@@ -101,8 +101,14 @@ export function FoldSetupEditor({
   const [hover3d, setHover3d] = useState<string | null>(null);
   // The fold line whose chip in the Quick sort bar is under the pointer: its panel is lit on the sheet and on the 3D box.
   const [sortHover, setSortHover] = useState<string | null>(null);
+  // The fold line of the panel just clicked while Quick sort is open: its row in the steps table is lit and scrolled into view.
+  const [picked, setPicked] = useState<string | null>(null);
   // Which piece's fold list is shown (one tab per piece). Selecting something in the picture switches to its piece.
   const [tab, setTab] = useState(() => (memoryKey ? (openTabs.get(memoryKey) ?? 0) : 0));
+  useEffect(() => {
+    if (!picked) return;
+    document.querySelector(`[data-hinge-row="${CSS.escape(picked)}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [picked, tab]);
   useEffect(() => {
     if (memoryKey) openTabs.set(memoryKey, tab);
   }, [memoryKey, tab]);
@@ -289,12 +295,17 @@ export function FoldSetupEditor({
   const liveQueue = queue.filter((it) => fold.hinges.some((h) => h.id === it.id));
   const stepsShown = Math.max(quickCount, quickStep, ...liveQueue.map((it) => it.step));
   // A click on a line adds it to the chosen step; a line that is already in another step moves to it; a click in its own step takes it out.
-  const toggleQueued = (id: string) => setQueue((q) => {
-    const at = q.find((x) => x.id === id);
-    if (!at) return [...q, { id, step: quickStep }];
-    if (at.step !== quickStep) return q.map((x) => (x.id === id ? { ...x, step: quickStep } : x));
-    return q.filter((x) => x.id !== id);
-  });
+  const toggleQueued = (id: string) => {
+    setPicked(id);
+    const piece = pieceMap(fold).get(fold.hinges.find((h) => h.id === id)?.childId ?? "");
+    if (piece !== undefined) setTab(piece); // show the table of the piece this line belongs to
+    setQueue((q) => {
+      const at = q.find((x) => x.id === id);
+      if (!at) return [...q, { id, step: quickStep }];
+      if (at.step !== quickStep) return q.map((x) => (x.id === id ? { ...x, step: quickStep } : x));
+      return q.filter((x) => x.id !== id);
+    });
+  };
   // Quick sort: a click on a panel in the 3D view picks its fold line, like a click on the panel in the flat sheet.
   const onPanel3dClick = (id: string) => {
     if (!quick || quickClosing) return;
@@ -309,7 +320,7 @@ export function FoldSetupEditor({
     const shown = used.length ? used : [curTab.k === "piece" ? curTab.i : 0];
     return shown.map((i) => pieceNameOf(fold, rootsOf(fold)[i] ?? fold.rootId));
   })();
-  const stopQuick = () => { setQuick(false); setSortHover(null); setEditHinge(null); setQueue([]); setQuickStep(1); setQuickCount(1); setPreviewSort(true); };
+  const stopQuick = () => { setQuick(false); setSortHover(null); setPicked(null); setEditHinge(null); setQueue([]); setQuickStep(1); setQuickCount(1); setPreviewSort(true); };
   // "Sort again": Quick sort opens with this piece's lines already grouped in the steps they have now, and an empty step after them.
   const sortAgain = () => {
     const orders = stepsOf(fold, curTab.k === "piece" ? curTab.i : 0);
@@ -682,7 +693,7 @@ export function FoldSetupEditor({
                 />
               ) : null}
               {sortedHinges(fold, curTab.i).length ? (
-                <HingeList hinges={sortedHinges(fold, curTab.i)} label={label} selectedId={sel?.kind === "hinge" ? sel.id : null} onSelect={(id) => setSel({ kind: "hinge", id })} onSetHinge={setHinge} onMove={(id, to) => onChange(moveHinge(fold, id, to))} kinds={ROLE_OPTIONS} kindOf={(id) => fold.panels.find((p) => p.id === id)?.role ?? "body"} onKind={(id, role) => onChange(updatePanel(fold, id, { role: role as PanelRole }))} />
+                <HingeList hinges={sortedHinges(fold, curTab.i)} label={label} selectedId={quick ? picked : sel?.kind === "hinge" ? sel.id : null} onSelect={(id) => setSel({ kind: "hinge", id })} onSetHinge={setHinge} onMove={(id, to) => onChange(moveHinge(fold, id, to))} kinds={ROLE_OPTIONS} kindOf={(id) => fold.panels.find((p) => p.id === id)?.role ?? "body"} onKind={(id, role) => onChange(updatePanel(fold, id, { role: role as PanelRole }))} />
               ) : (
                 <p className="rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">This piece has no fold lines.</p>
               )}

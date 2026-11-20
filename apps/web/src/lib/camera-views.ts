@@ -6,19 +6,21 @@ export interface CameraViewPreset {
   elevationDeg: number;
   /** Straight-on views (one side of the box) show this letter as their icon instead of a little box. */
   letter?: string;
+  /** Keyboard shortcut: letters typed one after the other (see `camera-view-menu.tsx`). */
+  keys: string;
 }
 
 export const CAMERA_VIEWS: readonly CameraViewPreset[] = [
-  { id: "front-right", label: "Front Right", azimuthDeg: 40, elevationDeg: 12 },
-  { id: "front-left", label: "Front Left", azimuthDeg: -40, elevationDeg: 12 },
-  { id: "top-left", label: "Top Left", azimuthDeg: -40, elevationDeg: 38 },
-  { id: "top-right", label: "Top Right", azimuthDeg: 40, elevationDeg: 38 },
-  { id: "front", letter: "F", label: "Front", azimuthDeg: 0, elevationDeg: 0 },
-  { id: "top", letter: "T", label: "Top", azimuthDeg: 0, elevationDeg: 89 },
-  { id: "left", letter: "L", label: "Left", azimuthDeg: -90, elevationDeg: 0 },
-  { id: "right", letter: "R", label: "Right", azimuthDeg: 90, elevationDeg: 0 },
-  { id: "back", letter: "B", label: "Back", azimuthDeg: 180, elevationDeg: 0 },
-  { id: "bottom", letter: "Bo", label: "Bottom", azimuthDeg: 0, elevationDeg: -89 },
+  { id: "front-right", keys: "FR", label: "Front Right", azimuthDeg: 40, elevationDeg: 12 },
+  { id: "front-left", keys: "FL", label: "Front Left", azimuthDeg: -40, elevationDeg: 12 },
+  { id: "top-left", keys: "TL", label: "Top Left", azimuthDeg: -40, elevationDeg: 38 },
+  { id: "top-right", keys: "TR", label: "Top Right", azimuthDeg: 40, elevationDeg: 38 },
+  { id: "front", keys: "F", letter: "F", label: "Front", azimuthDeg: 0, elevationDeg: 0 },
+  { id: "top", keys: "T", letter: "T", label: "Top", azimuthDeg: 0, elevationDeg: 89 },
+  { id: "left", keys: "L", letter: "L", label: "Left", azimuthDeg: -90, elevationDeg: 0 },
+  { id: "right", keys: "R", letter: "R", label: "Right", azimuthDeg: 90, elevationDeg: 0 },
+  { id: "back", keys: "B", letter: "B", label: "Back", azimuthDeg: 180, elevationDeg: 0 },
+  { id: "bottom", keys: "Bo", letter: "Bo", label: "Bottom", azimuthDeg: 0, elevationDeg: -89 },
 ];
 
 type V3 = [number, number, number];

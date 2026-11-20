@@ -14,6 +14,11 @@ describe("camera views", () => {
     const letters = Object.fromEntries(CAMERA_VIEWS.filter((v) => v.letter).map((v) => [v.id, v.letter]));
     expect(letters).toEqual({ front: "F", top: "T", left: "L", right: "R", back: "B", bottom: "Bo" });
   });
+  it("every preset has its own shortcut: F T L R B and FL FR TL TR Bo", () => {
+    expect(Object.fromEntries(CAMERA_VIEWS.map((v) => [v.id, v.keys]))).toEqual({
+      "front-left": "FL", "front-right": "FR", "top-left": "TL", "top-right": "TR", front: "F", top: "T", left: "L", right: "R", back: "B", bottom: "Bo",
+    });
+  });
   it("the icon shows one face from the front, three from a corner, and the right sides", () => {
     expect(viewIconFaces(0, 0).map((f) => f.kind)).toEqual(["front"]);
     expect(viewIconFaces(40, 38)).toHaveLength(3);

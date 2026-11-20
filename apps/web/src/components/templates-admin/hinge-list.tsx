@@ -209,12 +209,13 @@ export function HingeList({
             return (
               <li
                 key={h.id}
+                data-hinge-row={h.id}
                 ref={(el) => {
                   if (el) rows.current.set(h.id, el);
                   else rows.current.delete(h.id);
                 }}
                 style={style}
-                className={`${COLS} relative gap-x-1 border-b bg-background px-1 py-1.5 last:border-b-0 motion-reduce:!transition-none ${selected ? "bg-primary/5" : ""} ${dragging ? "z-10 rounded-lg border shadow-lg ring-2 ring-primary/40" : ""}`}
+                className={`${COLS} relative gap-x-1 border-b bg-background px-1 py-1.5 last:border-b-0 motion-reduce:!transition-none ${selected ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : ""} ${dragging ? "z-10 rounded-lg border shadow-lg ring-2 ring-primary/40" : ""}`}
               >
                 <button
                   type="button"
