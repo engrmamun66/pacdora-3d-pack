@@ -162,9 +162,10 @@ function stackByFoldOrder(geo: DielineGeometry, closed: Map<string, Mat4>): Map<
   return new Map([...level].filter(([, v]) => v > 0));
 }
 
-function foldedBounds(geo: DielineGeometry, world: Map<string, Mat4>, turn?: THREE.Quaternion) {
+function foldedBounds(geo: DielineGeometry, world: Map<string, Mat4>, turn?: THREE.Quaternion, only?: ReadonlySet<string>) {
   const box = new THREE.Box3();
   for (const p of geo.foldTree.panels) {
+    if (only && !only.has(p.id)) continue;
     for (const v of flattenOutline(panelOutline(p))) {
       const q = transformPoint(world.get(p.id)!, flatPoint(v));
       const point = new THREE.Vector3(q.x, q.y, q.z);
@@ -302,6 +303,22 @@ function addRoundedFolds(
   }
 }
 
+/** The panels of the main body: every panel reachable from the root without going into an extra part. */
+function mainBodyPanels(tree: DielineGeometry["foldTree"]): Set<string> {
+  const partRoots = new Set((tree.parts ?? []).map((q) => q.rootId));
+  const main = new Set<string>([tree.rootId]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const h of tree.hinges) {
+      if (main.has(h.parentId) && !main.has(h.childId) && !partRoots.has(h.childId)) {
+        main.add(h.childId);
+        grew = true;
+      }
+    }
+  }
+  return main;
+}
+
 export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions = {}): CartonModel {
   if ((opts.outsideTexture || opts.insideTexture) && !opts.textureRect) throw new Error("textureRect is required with outsideTexture or insideTexture");
   const world = foldTree(geo.foldTree, opts);
@@ -373,7 +390,17 @@ export function buildCartonModel(geo: DielineGeometry, opts: CartonModelOptions 
     const c = offset.applyQuaternion(turn.clone().invert());
     inner.position.set(c.x, c.y, c.z);
   } else {
-    inner.position.set(-centre.x, -centre.y, -centre.z);
+    // With extra parts (a lid) the MAIN BODY sits at the middle of the grid, at every fold amount, not the middle of the body and the parts together.
+    // Height stays with the whole box; the viewer rests the model on the floor itself.
+    let at = centre;
+    if ((geo.foldTree.parts?.length ?? 0) > 0) {
+      const mainBox = foldedBounds(geo, closedWorld, undefined, mainBodyPanels(geo.foldTree));
+      if (!mainBox.isEmpty()) {
+        const mc = mainBox.getCenter(new THREE.Vector3());
+        at = new THREE.Vector3(mc.x, mc.y, centre.z);
+      }
+    }
+    inner.position.set(-at.x, -at.y, -at.z);
   }
 
   /** Where each panel finally stands (its fold, plus the shift of a stacked flap), for the rounded folds. */

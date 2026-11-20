@@ -162,6 +162,28 @@ export function FoldSetupEditor({
     else view.current?.resetView();
   }, [startView]);
 
+  // The flat sheet seen from above is the dieline turned over (up and down swapped), because the box folds upward and the print faces down.
+  // So when the sheet is fully open, the camera goes below it and shows it the way the dieline is drawn; when it folds, the camera goes back.
+  // Not while the view is locked, and not after the person moved the camera themselves while the sheet was open.
+  const flatNow = progress < 0.005;
+  const wasFlat = useRef(flatNow);
+  const turnedFrom = useRef<ViewSettings | null>(null);
+  useEffect(() => {
+    if (wasFlat.current === flatNow) return;
+    wasFlat.current = flatNow;
+    const h = view.current;
+    if (!h || h.isKeepView()) return;
+    const now = h.getView();
+    if (!now) return;
+    if (flatNow) {
+      turnedFrom.current = now;
+      h.setViewSmooth({ ...now, azimuthDeg: 0, elevationDeg: -89, rollDeg: 0 });
+    } else if (turnedFrom.current) {
+      h.setViewSmooth({ ...turnedFrom.current, progress: now.progress });
+      turnedFrom.current = null;
+    }
+  }, [flatNow]);
+
   const detect = () => {
     const r = detectFoldSetup(flat as FlatDieline);
     setWarnings(r.warnings);
@@ -516,7 +538,7 @@ export function FoldSetupEditor({
         <div className="flex min-w-0 flex-col gap-2 xl:min-w-0 xl:flex-1 xl:basis-0 xl:pl-2">
           <div className="relative overflow-hidden rounded-xl border bg-muted/40">
             {geo.geo ? (
-              <CartonView ref={view} className="h-[min(420px,50vh)] w-full" geo={shownGeo ?? geo.geo} texture={null} textureRect={null} progress={progress} outsideColor={boardColor} insideColor={boardLook.inside} thickness={boardThickness} boardGrain={boardLook.grain} boardEdge={{ color: boardLook.edge, flute: boardLook.flute }} initialView={startView} onPanelHover={setHover3d} onPanelClick={onPanel3dClick} />
+              <CartonView ref={view} className="h-[min(420px,50vh)] w-full" geo={shownGeo ?? geo.geo} texture={null} textureRect={null} progress={progress} outsideColor={boardColor} insideColor={boardLook.inside} thickness={boardThickness} boardGrain={boardLook.grain} boardEdge={{ color: boardLook.edge, flute: boardLook.flute }} initialView={startView} onPanelHover={setHover3d} onPanelClick={onPanel3dClick} onUserView={() => { turnedFrom.current = null; }} />
             ) : (
               <p className="grid h-48 place-items-center px-4 text-center text-sm text-muted-foreground">{geo.error ?? "Fix the problems above to see the 3D preview."}</p>
             )}
