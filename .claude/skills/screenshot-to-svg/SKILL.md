@@ -1,6 +1,8 @@
 ---
 name: screenshot-to-svg
-description: Recreate a screenshot or image (UI, icon, logo, diagram, line drawing, dieline sketch) as a clean, hand-built SVG file. Use when the user gives an image path or pastes a screenshot and asks to "make an SVG", "vectorize", "trace" or "convert this screenshot to SVG".
+description: Recreate a screenshot or image (UI, icon, logo, diagram, line drawing, dieline sketch) as a clean, hand-built SVG file. Use when the user gives an image path or pastes a screenshot and asks to "make an SVG", "vectorize", "trace" or "convert this screenshot to SVG". Call it in one line as /screenshot-to-svg <file-name> <image-path>.
+argument-hint: "<file-name> [image-path]  (or paste/attach the image)"
+arguments: [name, image]
 ---
 
 # Screenshot to SVG
@@ -10,16 +12,33 @@ Rebuild what the image shows as real vector shapes (rect, circle, path, text), n
 ## 0. Check the source first
 
 - Only work from images the user owns or has the right to use (their own screenshots, designs, sketches, standard shapes).
-- This project must not copy Pacdora content: do not vectorize Pacdora dielines, catalog previews or branding, even from a screenshot. Pacdora is UX inspiration only. If the image looks like one, stop and say so; offer to build the shape from public standards (FEFCO/ECMA) with the dieline engine instead.
+- Do not copy watermarks into the SVG. Leave out any brand name, logo or text that is repeated or laid over the image as a watermark (for example a faint repeated word or logo, or diagonal stripe patterns across the shapes). Keep the shapes under it clean (plain fill, nothing from the watermark). Rebuild only the real drawing: outlines, creases, holes, dimensions and their labels.
 - Brand logos and trademarks: reproduce only if the user says it is theirs.
 
-## 1. Ask for the file name (always, before creating any SVG)
+## 1. Get the two inputs: file name and image
 
-Before writing the SVG, ask the user what to name the file. Do not guess, and do not start building until they answer.
-- Ask in one short question, e.g. "What file name for the SVG?" (AskUserQuestion with a suggested name from the image, e.g. `login-form`, plus "Other", or a plain question).
-- Accept the name with or without `.svg`. Make it safe: lowercase letters, digits, `-` and `_` only (turn spaces into `-`), no slashes or `..`, then add `.svg`.
+Arguments given by the user: `$ARGUMENTS`
+(name = `$name`, image = `$image`; if you still see those placeholders as literal text, split `$ARGUMENTS` yourself: the first token is the name, the second is the image path.)
+
+**Usage examples** (show one to the user if they seem unsure):
+- `/screenshot-to-svg login-form /Users/mamun/shots/login.png`
+- `/screenshot-to-svg "login form" ~/Desktop/login.png` (quote values with spaces)
+- `/screenshot-to-svg login-form` plus an image pasted or attached in the same message
+- `/screenshot-to-svg` with nothing: ask for both
+
+**File name (`name`)**
+- If given in the arguments, use it. Do NOT ask again.
+- If missing, ask one short question, e.g. "What file name for the SVG?" (AskUserQuestion with a suggestion from the image such as `login-form`, plus "Other"). Do not guess, and do not start building until they answer.
+- Accept the name with or without `.svg`. Make it safe: lowercase letters, digits, `-` and `_` only (turn spaces into `-`), no slashes or `..`, then add `.svg`. If you changed it, tell the user the final name.
 - If `assets/svg/<name>.svg` already exists, tell the user and ask: overwrite, or another name. Never overwrite silently.
-- Doing a first read of the image to suggest a name is fine. Only the build waits for the answer.
+
+**Image (`image`)** - use the first that applies:
+1. A path in the arguments (starts with `/`, `./`, `~` or `@`, or ends in `.png`, `.jpg`, `.jpeg`, `.webp`): read that file. Expand `~`. If it does not exist, say so and ask for the right path.
+2. An image pasted or attached in the user's message: use it (its saved path is shown next to the image, if any).
+3. Neither: ask the user to paste the image or give its path, and wait.
+If the first argument looks like an image path and there is no second argument, treat it as the image, and ask for the name.
+
+A first look at the image to suggest a name is fine. Only the build waits for the answers.
 
 ## 2. Look and plan
 
