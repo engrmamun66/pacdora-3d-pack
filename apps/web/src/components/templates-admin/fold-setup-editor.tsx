@@ -27,6 +27,9 @@ import { boardLookOf } from "@/lib/board-look";
 import { WindowEditorModal } from "./window-editor-modal";
 import { RangeSlider } from "@/components/ui/range-slider";
 
+/** The "Bottom (on the ground)" picker is hidden for now (the code stays; set this to true to show it again). A ground panel set earlier still applies. */
+const SHOW_GROUND_PICKER = false;
+
 const ROLE_OPTIONS: { value: PanelRole; label: string; hint: string }[] = [
   { value: "body", label: "Wall / main panel", hint: "A side of the box or the front of a card." },
   { value: "closure", label: "Lid or bottom", hint: "A big panel that closes the top or bottom." },
@@ -703,6 +706,16 @@ export function FoldSetupEditor({
           <p className="text-sm text-muted-foreground">
             {fold.panels.length} panels, {fold.hinges.length} fold lines, {steps.length} {steps.length === 1 ? "step" : "steps"}{parts.length ? `, ${parts.length + 1} pieces` : ""}.
           </p>
+          {SHOW_GROUND_PICKER ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+              <label htmlFor="ground-panel" className="font-medium">Bottom (on the ground)</label>
+              <InfoTip label="Bottom (on the ground)">The panel chosen here lies flat on the floor with its printed side down, like the bottom of a box. Pick the panel that is the base, and the box stands up on it.</InfoTip>
+              <select id="ground-panel" className={`${field} min-w-0 flex-1 basis-40`} value={fold.groundId ?? ""} onChange={(e) => onChange(setGround(fold, e.target.value || null))}>
+                <option value="">Automatic</option>
+                {fold.panels.map((p) => <option key={p.id} value={p.id}>{p.label || p.id}</option>)}
+              </select>
+            </div>
+          ) : null}
         </div>
 
         {/* Divider: drag it left or right to give the sheet or the 3D view more room (double click: 50 / 50). Side by side from xl up. */}

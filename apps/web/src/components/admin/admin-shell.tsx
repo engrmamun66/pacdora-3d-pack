@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createPref } from "@/lib/local-pref";
 import { ExternalLink, Menu, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Sun, X } from "lucide-react";
 
 type Theme = "light" | "dark" | "system";
@@ -15,42 +16,6 @@ type SidebarState = "expanded" | "collapsed";
 
 // Runs before the first paint so a saved dark theme or a collapsed sidebar does not flash the other way.
 const NO_FLASH = `(function(){try{var r=document.getElementById('admin-root');if(!r)return;var t=localStorage.getItem('${THEME_KEY}');var d=t==='dark'||((!t||t==='system')&&matchMedia('(prefers-color-scheme: dark)').matches);if(d)r.classList.add('dark');r.setAttribute('data-sidebar',localStorage.getItem('${SIDEBAR_KEY}')==='collapsed'?'collapsed':'expanded')}catch(e){}})()`;
-
-/**
- * A choice kept in localStorage that React can read without a flash or a hydration mismatch.
- * If storage is blocked (private mode) the choice lasts for this visit only.
- */
-function createPref<T extends string>(key: string, fallback: T, valid: (v: string | null) => v is T) {
-  let memory: T | null = null;
-  const listeners = new Set<() => void>();
-  const read = (): T => {
-    if (memory) return memory;
-    try {
-      const v = localStorage.getItem(key);
-      return valid(v) ? v : fallback;
-    } catch {
-      return fallback;
-    }
-  };
-  const subscribe = (onChange: () => void) => {
-    listeners.add(onChange);
-    window.addEventListener("storage", onChange);
-    return () => {
-      listeners.delete(onChange);
-      window.removeEventListener("storage", onChange);
-    };
-  };
-  const write = (v: T) => {
-    memory = v;
-    try {
-      localStorage.setItem(key, v);
-    } catch {
-      /* kept in memory only */
-    }
-    listeners.forEach((f) => f());
-  };
-  return { read, subscribe, write, fallback };
-}
 
 const themePref = createPref<Theme>("admin-theme", "system", (v): v is Theme => v === "light" || v === "dark" || v === "system");
 const sidebarPref = createPref<SidebarState>(SIDEBAR_KEY, "expanded", (v): v is SidebarState => v === "collapsed" || v === "expanded");

@@ -1,7 +1,8 @@
 "use client";
 
 import { templateNameFromFile } from "@/lib/template-name";
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { createPref } from "@/lib/local-pref";
+import { useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, ChevronLeft, ChevronRight, FileUp, ImagePlus, RotateCcw, Trash2, Wand2 } from "lucide-react";
@@ -27,6 +28,9 @@ import { linesKey } from "@/lib/fold-edit";
 import { colorRoles, type SvgColorSettings } from "@/lib/svg-colors";
 import type { ViewSettings } from "@/lib/view-settings";
 import { TEMPLATE_STATUSES, isPublicStatus, type TemplateStatus } from "@/lib/template-status";
+
+/** Whether the section menu of the wizard is hidden, kept in this browser. */
+const navPref = createPref<"open" | "shut">("template-wizard-nav", "open", (v): v is "open" | "shut" => v === "open" || v === "shut");
 
 type Unit = "auto" | "mm" | "cm" | "in" | "pt" | "px";
 interface Options {
@@ -213,8 +217,9 @@ export function TemplateWizard({ mode, categories, initial, svgColors, onCreated
 
   const [activeSection, setActiveSection] = useState("sec-details");
   // The section menu on the left can fold into a thin strip (wide screens).
-  const [navShut, setNavShut] = useState(false);
-  const toggleNav = () => setNavShut((v) => !v);
+  // The section menu on the left stays hidden (or shown) the way it was left, also on the next template or visit.
+  const navShut = useSyncExternalStore(navPref.subscribe, navPref.read, () => navPref.fallback) === "shut";
+  const toggleNav = () => navPref.write(navShut ? "open" : "shut");
   useEffect(() => {
     if (mode !== "edit") return;
     const ids = ["sec-details", "sec-categories", "sec-lines", "sec-fold", "sec-windows", "sec-view"];
