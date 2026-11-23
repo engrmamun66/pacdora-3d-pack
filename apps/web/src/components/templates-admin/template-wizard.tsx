@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, ChevronLeft, ChevronRight, FileUp, ImagePlus, RotateCcw, Trash2, Wand2 } from "lucide-react";
 import { applyWindows, createImportedGenerator, generateDieline, getPreset, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldSetup, type WindowSpec } from "@packaging/dieline-engine";
-import { SvgImportError, excludePaths, importSvg, stripAppLayers, suggestRoles, toFlatDieline, type ImportedDieline, type Role } from "@packaging/svg-import";
+import { SvgImportError, applyLineEdits, excludePaths, importSvg, stripAppLayers, suggestRoles, toFlatDieline, type ImportedDieline, type Role } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { saveTemplate } from "@/app/doraadmin/template-actions";
 import { notify } from "@/lib/notify";
@@ -19,6 +19,7 @@ import { ImportedPreview } from "./imported-preview";
 import { RoleSampleButton } from "./role-sample";
 import { SvgPreviewButton } from "./svg-preview";
 import { FoldSetupEditor } from "./fold-setup-editor";
+import { FoldLinesDialog } from "./fold-lines-dialog";
 import { ViewSettingsInline } from "./view-settings-dialog";
 import { TemplateWindowsField } from "./template-windows-field";
 import { importedStartParams } from "@/lib/imported-start";
@@ -133,7 +134,19 @@ export function TemplateWizard({ mode, categories, initial, svgColors, onCreated
   const parsed = useMemo<Parsed | null>(() => (text ? tryImport(text, opts) : null), [text, opts]);
   // The drawing as imported ("full"), then without what the admin left out in the clean-up step ("dieline", used everywhere else).
   const [excluded, setExcluded] = useState<number[]>(initial.excluded);
-  const full: ImportedDieline | null = parsed?.ok ? parsed.dieline : parsed ? null : initial.dieline;
+  const fullBase: ImportedDieline | null = parsed?.ok ? parsed.dieline : parsed ? null : initial.dieline;
+  // Fold lines the admin made longer or shorter by hand ("Edit fold lines"): new points by the line's id, on top of the drawing.
+  const [lineEdits, setLineEdits] = useState<Record<number, number[]>>({});
+  const [linesOpen, setLinesOpen] = useState(false);
+  const full = useMemo<ImportedDieline | null>(() => {
+    const edits = Object.entries(lineEdits).map(([id, pts]) => ({ id: Number(id), pts }));
+    if (!fullBase || edits.length === 0) return fullBase;
+    try {
+      return applyLineEdits(fullBase, edits);
+    } catch {
+      return fullBase;
+    }
+  }, [fullBase, lineEdits]);
   const cleaned = useMemo<{ d: ImportedDieline | null; error: string | null }>(() => {
     if (!full) return { d: null, error: null };
     try {
@@ -204,13 +217,13 @@ export function TemplateWizard({ mode, categories, initial, svgColors, onCreated
   const snapshot = JSON.stringify({
     name: name.trim(), slug, description: description.trim(), status, sortOrder,
     cats: [...categoryIds].sort(), roles: sortedRoles(roles), opts, dt: defaultThickness, win: windows,
-    newSvg: text !== null, ex: [...excluded].sort((a, b) => a - b), bg: bgFile ? "new" : bgRemoved ? "removed" : "same", fold, refs: [...refStyles].sort(),
+    newSvg: text !== null, ex: [...excluded].sort((a, b) => a - b), bg: bgFile ? "new" : bgRemoved ? "removed" : "same", fold, refs: [...refStyles].sort(), le: lineEdits,
   });
   const [baseline] = useState(() =>
     JSON.stringify({
       name: initial.name.trim(), slug: initial.slug, description: initial.description.trim(), status: initial.status, sortOrder: initial.sortOrder,
       cats: [...initial.categoryIds].sort(), roles: sortedRoles(initial.roles), opts: initial.options, dt: initial.material?.value ?? null, win: initial.windows,
-      newSvg: false, ex: [...initial.excluded].sort((a, b) => a - b), bg: "same", fold: initial.fold, refs: [...initial.referenceStyles].sort(),
+      newSvg: false, ex: [...initial.excluded].sort((a, b) => a - b), bg: "same", fold: initial.fold, refs: [...initial.referenceStyles].sort(), le: {},
     }),
   );
   const dirty = mode === "create" || snapshot !== baseline;
@@ -271,6 +284,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors, onCreated
     setOverrides({});
     setNoRef([]);
     setExcluded([]);
+    setLineEdits({});
     if (!name.trim() && mode === "create") {
       const guess = templateNameFromFile(file.name);
       setName(guess);
@@ -317,6 +331,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors, onCreated
         ...(text ? { svg: text } : {}),
         unit: opts.unit, scale: opts.scale, pxPerInch: opts.pxPerInch,
         excluded,
+        lineEdits: Object.entries(lineEdits).map(([id, pts]) => ({ id: Number(id), pts })),
         roles,
         fold: foldOk ? fold : null,
         referenceStyles: refStyles,
@@ -334,6 +349,7 @@ export function TemplateWizard({ mode, categories, initial, svgColors, onCreated
         } else if (finalSlug !== initial.slug) {
           router.replace(`/doraadmin/templates/${finalSlug}/edit`); // renamed: the page address changes
         }
+        setLineEdits({}); // saved with the template now
         setSavedCount((n) => n + 1);
         router.refresh(); // edit stays here; the page remounts with the saved data
       } else notify.error(r.message);
@@ -570,7 +586,17 @@ export function TemplateWizard({ mode, categories, initial, svgColors, onCreated
   ) : null;
   const foldSection = flat ? (
     <section aria-label="3D fold" className="flex flex-col gap-4">
-      <FoldSetupEditor flat={flat} fold={fold} stale={foldStale} startView={startView} windows={windows} onWindows={setWindows} {...(mode === "edit" ? { memoryKey: initial.slug } : {})} onQuickChange={setQuickOpen} onChange={(f) => { setFold(f); setFoldKey(flatKey); }} />
+      <FoldSetupEditor flat={flat} fold={fold} stale={foldStale} startView={startView} windows={windows} onWindows={setWindows} {...(mode === "edit" ? { memoryKey: initial.slug } : {})} onQuickChange={setQuickOpen} {...(canClean ? { onEditLines: () => setLinesOpen(true) } : {})} onChange={(f) => { setFold(f); setFoldKey(flatKey); }} />
+      {linesOpen && dieline ? (
+        <FoldLinesDialog
+          lines={dieline.paths.filter((p) => !p.closed && p.id !== undefined && roles[p.style] === "crease").map((p) => ({ id: p.id!, pts: p.pts }))}
+          cut={dieline.paths.filter((p) => roles[p.style] === "cut").map((p) => ({ pts: p.pts, closed: p.closed }))}
+          widthMm={dieline.widthMm}
+          heightMm={dieline.heightMm}
+          onClose={() => setLinesOpen(false)}
+          onApply={(changes) => setLineEdits((cur) => ({ ...cur, ...Object.fromEntries(changes.map((c) => [c.id, c.pts])) }))}
+        />
+      ) : null}
     </section>
   ) : null;
   const windowsSection = (

@@ -10,6 +10,7 @@ import {
   outlineArea,
   panelOutline,
   detectFoldSetup,
+  extendFoldLines,
   flatPoint,
   flattenOutline,
   foldTree,
@@ -268,6 +269,71 @@ describe("fold detection on hand-written dielines", () => {
     expect(setup.hinges).toHaveLength(0);
     expect(warnings.join(" ")).toMatch(/ends inside a panel|end inside a panel/);
     expect(warnings.join(" ")).not.toMatch(/joined/);
+  });
+
+  it("fold lines that stop several mm short of the outline are made longer, along their own line, and split the sheet", () => {
+    // 6 mm short at every end (6 % of the sheet): more than a drawing slip, less than a real gap.
+    const flat = flatOf([rect(0, 0, 100, 100)], [line(50, 6, 50, 94), line(6, 50, 94, 50)]);
+    const grown = extendFoldLines(flat);
+    expect(grown.extended).toBe(4);
+    expect(grown.flat.crease[0]!.pts).toEqual([50, 0, 50, 100]);
+    expect(grown.flat.crease[1]!.pts).toEqual([0, 50, 100, 50]);
+    const { setup, warnings } = detectFoldSetup(flat);
+    expect(setup.panels).toHaveLength(4);
+    expect(warnings.join(" ")).toMatch(/made longer/);
+    expect(validateFoldSetup(setup)).toEqual([]);
+  });
+
+  it("panels joined in a ring report the line left open and all the lines of the ring, and the open line can be chosen", () => {
+    // Four quarters of a square: each touches two others, so the four fold lines form a ring and one has to stay open.
+    const flat = flatOf([rect(0, 0, 100, 100)], [line(50, 0, 50, 100), line(0, 50, 100, 50)]);
+    const first = detectFoldSetup(flat);
+    expect(first.setup.panels).toHaveLength(4);
+    expect(first.setup.hinges).toHaveLength(3);
+    expect(first.loops).toHaveLength(1);
+    const ring = first.loops![0]!;
+    expect(ring.lines).toHaveLength(4);
+    expect(ring.lines[0]).toBe(ring.open);
+    // Choose a different line of the ring to stay open: the tree is rebuilt without it, and the old open line is a hinge now.
+    const other = ring.lines[2]!;
+    const again = detectFoldSetup(flat, { openLines: [other.line] });
+    expect(again.setup.panels).toHaveLength(4);
+    expect(again.setup.hinges).toHaveLength(3);
+    expect(again.loops).toHaveLength(1);
+    const near = (a: readonly number[], b: readonly number[]) => a.every((v, i) => Math.abs(v - b[i]!) < 0.2);
+    const sameLine = (a: readonly number[], b: readonly number[]) => near(a, b) || near(a, [b[2]!, b[3]!, b[0]!, b[1]!]);
+    expect(sameLine(again.loops![0]!.open.line, other.line)).toBe(true);
+    expect(again.setup.hinges.some((h) => sameLine(h.line, other.line))).toBe(false);
+    expect(again.setup.hinges.some((h) => sameLine(h.line, ring.open.line))).toBe(true);
+    expect(validateFoldSetup(again.setup)).toEqual([]);
+  });
+
+  it("a very short shared edge that closes a ring is not offered as a slit", () => {
+    // Left panel A, and on the right a tall panel B above a thin strip C (2 mm): A touches C only along 2 mm, so A-B, B-C, C-A is a ring
+    // whose open line would be that 2 mm edge. It is not a real fold, so there is nothing to choose.
+    const flat = flatOf([rect(0, 0, 100, 60)], [line(60, 0, 60, 60), line(60, 58, 100, 58)]);
+    const { setup, loops, warnings } = detectFoldSetup(flat);
+    expect(setup.panels).toHaveLength(3);
+    expect(loops).toBeUndefined();
+    expect(warnings.join(" ")).toMatch(/very short shared edge/);
+  });
+
+  it("a sheet without a ring reports none", () => {
+    expect(detectFoldSetup(flatOf([rect(0, 0, 100, 60)], [line(50, 0, 50, 60)])).loops).toBeUndefined();
+  });
+
+  it("a fold line end past the outline is cut back to the outline", () => {
+    const flat = flatOf([rect(0, 0, 100, 60)], [line(50, -10, 50, 70)]);
+    const cut = extendFoldLines(flat);
+    expect(cut.trimmed).toBe(2);
+    expect(cut.flat.crease[0]!.pts).toEqual([50, 0, 50, 60]);
+    const { setup } = detectFoldSetup(flat);
+    expect(setup.panels).toHaveLength(2);
+  });
+
+  it("an end that already touches a line, and one far from every line, are left alone", () => {
+    const flat = flatOf([rect(0, 0, 100, 60)], [line(50, 0, 50, 60), line(20, 20, 20, 30)]);
+    expect(extendFoldLines(flat).flat).toBe(flat);
   });
 
   it("a U-shaped cut that starts and ends on a fold (a handle slot) is empty space, not a panel", () => {

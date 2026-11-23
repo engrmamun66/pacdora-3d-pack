@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AppWindow, ListOrdered, Merge, Play, Redo2, RotateCcw, Scissors, Undo2, Wand2, X } from "lucide-react";
-import { applyWindows, createImportedGenerator, detectFoldSetup, THICKNESS_RANGE, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldHingeSpec, type FoldSetup, type PanelRole, type WindowSpec, partFits } from "@packaging/dieline-engine";
+import { AppWindow, ListOrdered, Merge, Pencil, Play, Redo2, RotateCcw, Scissors, Undo2, Wand2, X } from "lucide-react";
+import { applyWindows, createImportedGenerator, detectFoldSetup, THICKNESS_RANGE, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldHingeSpec, type FoldRing, type FoldSetup, type PanelRole, type WindowSpec, partFits } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
@@ -14,6 +14,7 @@ import { HelpTip, InfoTip } from "./help-tip";
 import { PiecesEditor } from "./pieces-editor";
 import { HingeList, StepNumberTool } from "./hinge-list";
 import { FoldRowPanel } from "./fold-row-panel";
+import { FoldSeamsDialog } from "./fold-seams-dialog";
 import { PanelKindHelp } from "./panel-kind-help";
 import { confirmAction } from "@/lib/confirm";
 import { QUICK_SLIDE_MS, QuickSortBar } from "./quick-sort-bar";
@@ -77,6 +78,7 @@ export function FoldSetupEditor({
   onChange: emit,
   stale,
   onQuickChange,
+  onEditLines,
   startView = null,
   memoryKey,
   windows = [],
@@ -91,6 +93,8 @@ export function FoldSetupEditor({
   onChange: (f: FoldSetup | null) => void;
   /** True when the lines changed after the fold was set up: it must be detected again or removed. */
   stale: boolean;
+  /** Given, an "Edit fold lines" button (next to Detect again) opens the raw data of the fold lines. */
+  onEditLines?: () => void;
   /** Told when Quick sort opens or closes, so the page can clear the bottom of the window for it. */
   onQuickChange?: (open: boolean) => void;
   /** The template's saved starting 3D view: the preview opens with it, returns to it on reset, and moves to it when it changes. */
@@ -263,9 +267,15 @@ export function FoldSetupEditor({
     if (flatNow) lookFromBelow(false);
   };
 
-  const detect = () => {
-    const r = detectFoldSetup(flat as FlatDieline);
+  // Rings of panels found by the last detection (petals around a corner, for example): one fold line of each stays open, and the admin may choose which.
+  const [rings, setRings] = useState<readonly FoldRing[]>([]);
+  const [seamsOpen, setSeamsOpen] = useState(false);
+  const detect = (openLines?: readonly (readonly number[])[]) => {
+    const r = detectFoldSetup(flat as FlatDieline, openLines ? { openLines } : {});
     setWarnings(r.warnings);
+    setRings(r.loops ?? []);
+    setSeamsOpen(false);
+    setEditHinge(null);
     setSel(null);
     setQuick(false);
     setQueue([]);
@@ -445,7 +455,7 @@ export function FoldSetupEditor({
           This template is <strong>flat only</strong>: clients can resize it, add artwork and export it, but there is no 3D view.{" "}
           <InfoTip label="3D view">To give it a 3D view, we find the panels between your cut and fold lines, then you check how each fold goes.</InfoTip>
         </p>
-        <Button type="button" variant="dark" onClick={detect}><Wand2 className="size-4" aria-hidden /> Detect panels and folds</Button>
+        <Button type="button" variant="dark" onClick={() => detect()}><Wand2 className="size-4" aria-hidden /> Detect panels and folds</Button>
       </div>
     );
   }
@@ -580,6 +590,7 @@ export function FoldSetupEditor({
           <Button type="button" variant="dark" size="sm" disabled={history.past.length === 0} title="Undo the last change (Ctrl / Cmd + Z)" aria-keyshortcuts="Control+Z Meta+Z" onClick={undoEdit}><Undo2 className="size-4" aria-hidden /> Undo</Button>
           <Button type="button" variant="dark" size="sm" disabled={history.future.length === 0} title="Redo (Ctrl + Y, or Ctrl / Cmd + Shift + Z)" aria-keyshortcuts="Control+Y Control+Shift+Z Meta+Shift+Z" onClick={redoEdit}><Redo2 className="size-4" aria-hidden /> Redo</Button>
           <Button type="button" variant="dark" size="sm" onClick={() => void detectAgain()}><Wand2 className="size-4" aria-hidden /> Detect again</Button>
+          {onEditLines ? <Button type="button" variant="dark" size="sm" onClick={onEditLines} title="Change the fold lines as raw data, to make a line longer or shorter. Then press Detect again."><Pencil className="size-4" aria-hidden /> Edit fold lines</Button> : null}
           {onWindows ? (
             <Button type="button" variant="dark" size="sm" className="ml-auto" disabled={!geo.geo} title={geo.geo ? "Cut window holes that new projects start with" : "Set up the 3D fold first"} onClick={() => setWindowsOpen(true)}>
               <AppWindow className="size-4" aria-hidden /> Window holes{windows.length > 0 ? <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[10px] leading-4 font-semibold text-primary-foreground">{windows.length}</span> : null}
@@ -604,6 +615,25 @@ export function FoldSetupEditor({
       ) : null}
       {stale ? <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">The lines changed after the fold was set up. Detect the panels again before saving.</p> : null}
       {problems.length ? <ul role="alert" className="list-disc rounded-lg border border-destructive/30 bg-destructive/10 py-2 pl-7 pr-3 text-sm text-destructive">{problems.map((p) => <li key={p}>{p}</li>)}</ul> : null}
+      {rings.length ? (
+        <section aria-label="Slits" className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+          <Scissors className="size-4 shrink-0" aria-hidden />
+          <p className="min-w-0 flex-1">
+            <strong>{rings.length} {rings.length === 1 ? "circle of panels needs" : "circles of panels need"} a slit.</strong> Panels joined in a circle (like the petals around a corner) cannot all fold along every line, so one fold line of each circle stays open. We picked one for each; check them.
+          </p>
+          <Button type="button" variant="dark" size="sm" onClick={() => setSeamsOpen(true)}><Scissors className="size-4" aria-hidden /> Set the slits</Button>
+        </section>
+      ) : null}
+      {seamsOpen && rings.length > 0 && fold ? (
+        <FoldSeamsDialog
+          rings={rings}
+          panels={fold.panels.map((p) => ({ id: p.id, label: p.label || p.id, polygon: p.polygon }))}
+          cut={flat.cut.map((p) => ({ pts: [...p.pts], closed: p.closed }))}
+          label={label}
+          onClose={() => setSeamsOpen(false)}
+          onApply={(seams) => detect(seams)}
+        />
+      ) : null}
       {warnings.length ? (
         <details className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
           <summary className="cursor-pointer font-medium">{warnings.length} note{warnings.length === 1 ? "" : "s"} from the detection</summary>

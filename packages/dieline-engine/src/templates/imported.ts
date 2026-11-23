@@ -7,6 +7,7 @@ import { type Vec2, vec } from "../primitives/vec2";
 import { ENGINE_VERSION, ParamValidationError } from "./carton-common";
 import { CONSTRUCTION_DEFAULTS, DIM_KEYS, DIM_LABELS, partKey, DIM_NAMES, FACTOR_RANGE, FLAP_SIZE_KEYS, THICKNESS_RANGE, type DimKey, type SizeMode, importedPlan, predictNames, resolveConstruction, sizeTargets } from "./imported-construction";
 import { type FoldSetup, validateFoldSetup } from "./imported-fold";
+import { extendFoldLines } from "./imported-heal";
 import { type PartSizes, type ResizePlan, sheetMap, slotEdits, stretchPlanOf } from "./imported-resize";
 import type { GeneratorDefinition, ParamDescriptor } from "./registry";
 
@@ -162,7 +163,9 @@ export function scaleImportedPaths(flat: FlatDieline, width: number, paths: read
 const MAX_SEGMENTS = 60_000;
 
 /** Generator for one imported dieline. `id` is only used as the geometry's template id. */
-export function createImportedGenerator(templateId: string, flat: FlatDieline, fold?: FoldSetup | null): GeneratorDefinition {
+export function createImportedGenerator(templateId: string, drawn: FlatDieline, fold?: FoldSetup | null): GeneratorDefinition {
+  // Fold lines that stop short of the outline (or run past it) are made longer or shorter, the same way the fold detection does it.
+  const flat = extendFoldLines(drawn).flat;
   assertImportable(flat);
   if (fold) {
     const problems = validateFoldSetup(fold);

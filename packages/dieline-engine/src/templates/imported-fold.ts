@@ -2,6 +2,7 @@ import type { FlatDieline } from "./imported";
 import type { PanelRole, PartPlacement } from "../fold-tree/types";
 import { type Construction, validateConstruction } from "./imported-construction";
 import { detectFoldSetup as detect } from "./imported-fold-detect";
+import { extendFoldLines } from "./imported-heal";
 import { HINGE_TOLERANCE, flatSignedArea, segmentOnPolygonEdge } from "./imported-fold-util";
 
 /**
@@ -96,15 +97,45 @@ export const PLACEMENT_SIDES = ["right", "left", "front", "back"] as const;
 /** Largest distance or shift (mm) accepted for a part. */
 export const MAX_PART_SHIFT_MM = 5000;
 
+/** One fold line of a ring of panels: its two end points (mm, sheet frame) and the two panels it joins. */
+export interface FoldRingLine {
+  readonly line: readonly [number, number, number, number];
+  readonly a: string;
+  readonly b: string;
+}
+
+/**
+ * A ring: panels joined in a circle by fold lines (the petals around a corner, for example). A box cannot fold with every
+ * line of a ring in use, so one stays open (a seam). `open` is the line left open now; `lines` are all the lines of the ring
+ * (the open one first), and the admin may choose another one to stay open.
+ */
+export interface FoldRing {
+  readonly open: FoldRingLine;
+  readonly lines: readonly FoldRingLine[];
+}
+
+export interface DetectOptions {
+  /** Fold lines (x1, y1, x2, y2 in the sheet frame) that must stay open, as chosen for a ring. */
+  readonly openLines?: readonly (readonly number[])[];
+}
+
 export interface DetectResult {
   readonly setup: FoldSetup;
+  /** The rings found, each with the line that was left open. Absent = none. */
+  readonly loops?: readonly FoldRing[];
   /** Plain-language notes for the admin (e.g. "2 fold lines could not be used"). */
   readonly warnings: readonly string[];
 }
 
 /** Find panels (regions enclosed by cut and fold lines) and a hinge tree. Never throws on odd input: returns warnings. */
-export function detectFoldSetup(flat: FlatDieline): DetectResult {
-  return detect(flat);
+export function detectFoldSetup(flat: FlatDieline, options: DetectOptions = {}): DetectResult {
+  // Fold lines that stop short of the outline (or run past it) are made longer or shorter first; the lines are never moved.
+  const healed = extendFoldLines(flat);
+  const r = detect(healed.flat, options);
+  const notes: string[] = [];
+  if (healed.extended > 0) notes.push(`${healed.extended} fold line ${healed.extended === 1 ? "end was" : "ends were"} made longer to reach the cut line or another fold (up to ${healed.reach.toFixed(0)} mm). The lines were not moved.`);
+  if (healed.trimmed > 0) notes.push(`${healed.trimmed} fold line ${healed.trimmed === 1 ? "end was" : "ends were"} cut back to the cut line, where ${healed.trimmed === 1 ? "it" : "they"} ran past it.`);
+  return notes.length > 0 ? { ...r, warnings: [...notes, ...r.warnings] } : r;
 }
 
 /** Problems that make a setup unusable (empty list = fine). Used on save, server side. */

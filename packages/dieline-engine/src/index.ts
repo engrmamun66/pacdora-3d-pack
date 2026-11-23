@@ -17,6 +17,7 @@ export * from "./templates/slotted-box";
 export * from "./templates/registry";
 export * from "./templates/imported";
 export * from "./templates/imported-fold";
+export { extendFoldLines, type ExtendResult } from "./templates/imported-heal";
 export { planResize, resizeRatios, sheetMap, slotEdits, stretchPlanOf, type PartPlan, type SlotEdits, type PartSizes, type ResizePlan, type SizeClass } from "./templates/imported-resize";
 export {
   CONSTRUCTION_DEFAULTS,

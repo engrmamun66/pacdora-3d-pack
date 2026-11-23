@@ -5,7 +5,7 @@ import { revalidatePath, updateTag } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { ImportedDielineError, applyWindows, assertImportable, createImportedGenerator, getGenerator, getPreset, importedDefaults, validateFoldSetup, type FlatDieline, type FoldSetup, type GeneratorDefinition, type WindowSpec } from "@packaging/dieline-engine";
-import { SvgImportError, excludePaths, importSvg, toFlatDieline, type ImportedDieline, type Role } from "@packaging/svg-import";
+import { SvgImportError, applyLineEdits, excludePaths, importSvg, toFlatDieline, type ImportedDieline, type Role } from "@packaging/svg-import";
 import { MAX_SVG_CHARS, thumbnailSvg } from "@/lib/template-import";
 import { isValidSlug } from "@/lib/slug";
 import { templateWindowsSchema } from "@/lib/template-windows";
@@ -161,6 +161,8 @@ const saveSchema = z.object({
   roles: z.record(z.string().max(80), roleSchema).default({}),
   /** Clean-up step: ids of the paths left out of the dieline (see ImportedPath.id). */
   excluded: z.array(z.number().int().min(0).max(1_000_000)).max(200_000).default([]),
+  /** Hand-edited fold lines (the "Edit fold lines" tool): new points for open lines, by the line's id. Checked again here. */
+  lineEdits: z.array(z.object({ id: z.number().int().min(0).max(1_000_000), pts: z.array(z.number().finite()).min(4).max(20_000) })).max(5_000).default([]),
   /** How it folds in 3D (imported templates); null = flat only. Validated again here. */
   fold: z.unknown().optional(),
   /** Ignored line styles kept as an optional faint "Reference" picture on the dieline page. */
@@ -351,6 +353,15 @@ export async function saveTemplate(input: unknown): Promise<SaveTemplateResult> 
     options = g.options;
   } else {
     return { ok: false, message: "Upload an SVG file first." };
+  }
+  // Hand-edited fold lines (before the clean-up, so stored `full` and `dieline` both carry them).
+  if (v.lineEdits.length > 0) {
+    try {
+      base = applyLineEdits(base, v.lineEdits);
+    } catch (e) {
+      if (e instanceof SvgImportError) return { ok: false, message: e.message };
+      throw e;
+    }
   }
   // Clean-up step: parts the admin left out. Done here again so the stored geometry never comes from the browser.
   const excluded = [...new Set(v.excluded)].filter((id) => base.paths.some((p) => p.id === id)).sort((a, b) => a - b);

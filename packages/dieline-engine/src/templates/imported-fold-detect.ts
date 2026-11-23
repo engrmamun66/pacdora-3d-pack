@@ -1,5 +1,5 @@
 import type { FlatDieline, FlatPath } from "./imported";
-import type { DetectResult, FoldHingeSpec, FoldPanelSpec, FoldSetup } from "./imported-fold";
+import type { DetectOptions, DetectResult, FoldHingeSpec, FoldPanelSpec, FoldRing, FoldRingLine, FoldSetup } from "./imported-fold";
 import { deepestAsMain, flatCentroid, flatSignedArea, segmentOnPolygonEdge, HINGE_TOLERANCE } from "./imported-fold-util";
 
 /**
@@ -17,6 +17,11 @@ const SNAP = 0.02;
 const MIN_FACE_AREA = 0.05;
 /** Hinges shorter than this (mm) are ignored. */
 const MIN_HINGE_LENGTH = 0.1;
+/** A shared edge shorter than this (mm), or than this share of the longest line of its ring, is not a fold and is not offered as a slit. */
+const TINY_SEAM_MM = 3;
+const TINY_SEAM_SHARE = 0.1;
+/** A fold line the admin chose to keep open matches a detected one when both ends are this close (mm). */
+const OPEN_MATCH = 0.15;
 /** Probe distance (mm) used to find a point just inside a face. */
 const PROBE = 1e-3;
 
@@ -290,7 +295,7 @@ function closeFoldGaps(pts: Points, segs: Seg[]): { joined: number; tolerance: n
   return { joined, tolerance: tol };
 }
 
-export function detectFoldSetup(flat: FlatDieline): DetectResult {
+export function detectFoldSetup(flat: FlatDieline, options: DetectOptions = {}): DetectResult {
   const warnings: string[] = [];
   const pts = new Points();
 
@@ -833,7 +838,15 @@ export function detectFoldSetup(flat: FlatDieline): DetectResult {
   let root = materialFaces[0]!;
   for (const fi of materialFaces) if (faces[fi]!.area > faces[root]!.area + 1e-9) root = fi;
   const neighbours = new Map<number, { other: number; cand: number }[]>();
+  // Fold lines the admin chose to keep open (a seam of a ring of panels) are not used as hinges.
+  const keepOpen = (options.openLines ?? []).filter((o) => o.length === 4 && o.every(Number.isFinite));
+  const isKeptOpen = (c: { lo: number; hi: number }) => {
+    const [ax, ay, bx, by] = [pts.xs[c.lo]!, pts.ys[c.lo]!, pts.xs[c.hi]!, pts.ys[c.hi]!];
+    const near = (x: number, y: number, u: number, v: number) => Math.hypot(x - u, y - v) <= OPEN_MATCH;
+    return keepOpen.some((o) => (near(ax, ay, o[0]!, o[1]!) && near(bx, by, o[2]!, o[3]!)) || (near(ax, ay, o[2]!, o[3]!) && near(bx, by, o[0]!, o[1]!)));
+  };
   candidates.forEach((c, i) => {
+    if (isKeptOpen(c)) return;
     for (const [x, y] of [
       [c.fa, c.fb],
       [c.fb, c.fa],
@@ -921,8 +934,6 @@ export function detectFoldSetup(flat: FlatDieline): DetectResult {
   if (partRoots.length > 0) {
     warnings.push(`The sheet has ${partRoots.length + 1} separate pieces. The largest panel's piece is the main body; ${partRoots.length === 1 ? "the other is an extra part" : `the other ${partRoots.length} are extra parts`} that you place in 3D (for example as a lid).`);
   }
-  const loopClosing = candidates.filter((c, i) => !used.has(i) && depth.has(c.fa) && depth.has(c.fb)).length;
-  if (loopClosing > 0) warnings.push(`${loopClosing} fold line${loopClosing === 1 ? "" : "s"} would fold a panel back onto one it is already attached to (a loop), so ${loopClosing === 1 ? "it was" : "they were"} ignored.`);
   const unreachable = materialFaces.filter((fi) => !depth.has(fi));
   if (unreachable.length > 0) {
     const where = unreachable.map((fi) => {
@@ -997,5 +1008,42 @@ export function detectFoldSetup(flat: FlatDieline): DetectResult {
     hinges,
     ...(partRoots.length > 0 ? { parts: partRoots.map((fi) => ({ rootId: idOf.get(fi)!, placement: { mode: "open" as const, openDeg: 30 } })) } : {}),
   };
-  return { setup: deepestAsMain(setup), warnings };
+  // Rings: every fold line that was left out because it would close a loop, with the other fold lines of that loop.
+  const hingeOfChild = new Map(treeHinges.map((t) => [t.child, t.cand]));
+  const lineOf = (cand: number, a: number, b: number): FoldRingLine => {
+    const c = candidates[cand]!;
+    return { line: [pts.xs[c.lo]!, pts.ys[c.lo]!, pts.xs[c.hi]!, pts.ys[c.hi]!], a: idOf.get(a)!, b: idOf.get(b)! };
+  };
+  const upChain = (f: number) => {
+    const out = [f];
+    while (parentOf.has(out[out.length - 1]!)) out.push(parentOf.get(out[out.length - 1]!)!);
+    return out;
+  };
+  const rings: FoldRing[] = [];
+  let tiny = 0;
+  candidates.forEach((c, i) => {
+    if (used.has(i) || !depth.has(c.fa) || !depth.has(c.fb)) return;
+    const ca = upChain(c.fa);
+    const cb = upChain(c.fb);
+    const meet = ca.find((f) => cb.includes(f));
+    if (meet === undefined) return;
+    const ring: FoldRingLine[] = [];
+    for (const chain of [ca, cb]) {
+      for (let k = 0; chain[k] !== meet; k++) {
+        const child = chain[k]!;
+        ring.push(lineOf(hingeOfChild.get(child)!, child, chain[k + 1]!));
+      }
+    }
+    const open = lineOf(i, c.fa, c.fb);
+    // A very short shared edge (a corner of one panel touching another) is not a fold: nothing to decide, so it is left out of the list.
+    const len = (l: FoldRingLine) => Math.hypot(l.line[2] - l.line[0], l.line[3] - l.line[1]);
+    if (!isKeptOpen(c) && len(open) < Math.max(TINY_SEAM_MM, TINY_SEAM_SHARE * Math.max(...ring.map(len)))) {
+      tiny++;
+      return;
+    }
+    rings.push({ open, lines: [open, ...ring] });
+  });
+  if (rings.length > 0) warnings.push(`${rings.length} fold line${rings.length === 1 ? "" : "s"} would fold a panel back onto one it is already attached to (a loop), so ${rings.length === 1 ? "it was" : "they were"} left open as a slit.`);
+  if (tiny > 0) warnings.push(`${tiny} very short shared edge${tiny === 1 ? "" : "s"} between panels (a corner touching another panel) ${tiny === 1 ? "was" : "were"} ignored: ${tiny === 1 ? "it is" : "they are"} not real folds.`);
+  return { setup: deepestAsMain(setup), warnings, ...(rings.length > 0 ? { loops: rings } : {}) };
 }
