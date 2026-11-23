@@ -1,18 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AppWindow, ListOrdered, Merge, Pencil, Play, Redo2, RotateCcw, Scissors, Undo2, Wand2, X } from "lucide-react";
+import { AppWindow, Check, ListOrdered, Menu, Merge, Minus, Pencil, Play, Plus, Redo2, RotateCcw, Scissors, Undo2, Wand2, X } from "lucide-react";
 import { applyWindows, createImportedGenerator, detectFoldSetup, THICKNESS_RANGE, validateFoldSetup, type DielineGeometry, type FlatDieline, type FoldHingeSpec, type FoldRing, type FoldSetup, type PanelRole, type WindowSpec, partFits } from "@packaging/dieline-engine";
 import type { FlatDielineData } from "@packaging/svg-import";
 import { Button } from "@/components/ui/button";
 import { CartonView, type CartonViewHandle } from "@/components/viewer3d/carton-view";
-import { applyFoldSteps, depthOf, makeBase, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootsOf, setGround, setStepNumber, sortedHinges, stepsOf, updateHinge, updatePanel } from "@/lib/fold-edit";
+import { applyFoldSteps, depthOf, makeBase, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootsOf, setGround, shiftSteps, sortedHinges, stepsOf, updateHinge, updatePanel } from "@/lib/fold-edit";
 import { cutPreview, mergePanels, panelAt, splitPanel, type PanelEdit } from "@/lib/panel-edit";
 import { notify } from "@/lib/notify";
 import { ConstructionEditor, PieceLinksEditor } from "./construction-editor";
 import { HelpTip, InfoTip } from "./help-tip";
 import { PiecesEditor } from "./pieces-editor";
-import { HingeList, StepNumberTool } from "./hinge-list";
+import { HingeList } from "./hinge-list";
 import { FoldRowPanel } from "./fold-row-panel";
 import { FoldSeamsDialog } from "./fold-seams-dialog";
 import { PanelKindHelp } from "./panel-kind-help";
@@ -26,10 +26,20 @@ import { importedStartParams } from "@/lib/imported-start";
 import { materialFor, materialsFor, MATERIAL_TYPES, type Unit } from "@/components/dielines/units";
 import { boardLookOf } from "@/lib/board-look";
 import { WindowEditorModal } from "./window-editor-modal";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { createSize } from "@/lib/saved-size";
 import { RangeSlider } from "@/components/ui/range-slider";
 
 /** The "Bottom (on the ground)" picker is hidden for now (the code stays; set this to true to show it again). A ground panel set earlier still applies. */
 const SHOW_GROUND_PICKER = false;
+/** The sheet and the 3D view share one height: this at first, never below the minimum (px). */
+const SECTION_H = 460;
+const SECTION_MIN_H = 240;
+/** How long a panel blinks on the sheet after a double click in the 3D view (ms). */
+const FLASH_MS = 4000;
+/** Sizes the user dragged are remembered for the next visit. */
+const splitSize = createSize("fold-editor-split", 50, 25, 75);
+const sectionSize = createSize("fold-editor-height", SECTION_H, SECTION_MIN_H, 4000);
 
 const ROLE_OPTIONS: { value: PanelRole; label: string; hint: string }[] = [
   { value: "body", label: "Wall / main panel", hint: "A side of the box or the front of a card." },
@@ -109,6 +119,10 @@ export function FoldSetupEditor({
   const [hoverId, setHoverId] = useState<string | null>(null);
   // The panel under the mouse in the 3D view: it is lit on the flat sheet.
   const [hover3d, setHover3d] = useState<string | null>(null);
+  // The panel that blinks on the sheet after a double click in the 3D view.
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const flashTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(flashTimer.current), []);
   // The fold line whose chip in the Quick sort bar is under the pointer: its panel is lit on the sheet and on the 3D box.
   const [sortHover, setSortHover] = useState<string | null>(null);
   // Hand tools for the panels: "merge" (click a fold line to join the two panels it separates) and "split" (two clicks draw a cut across a panel).
@@ -222,7 +236,11 @@ export function FoldSetupEditor({
   // Sheet | 3D side by side (xl and up): share (%) of the width the sheet takes, set by dragging the divider between them.
   const splitBox = useRef<HTMLDivElement>(null);
   const splitDrag = useRef<number | null>(null);
-  const [splitPct, setSplitPct] = useState(40);
+  const [splitPct, setSplitPct] = splitSize.useSize();
+  // Height (px) of the sheet and the 3D view, one for both: the bar under them drags it taller or shorter.
+  const [sectionH, setSectionH] = sectionSize.useSize();
+  const heightDrag = useRef<{ y: number; h: number } | null>(null);
+  const resizeSection = (h: number) => setSectionH(Math.min(Math.max(SECTION_MIN_H, window.innerHeight * 1.5), h));
   const anim = useRef<number | null>(null);
   // The board picked on the "Material & Paper" tab (null = not picked: the family is guessed from the thickness). The 3D preview shows its colour, grain, cut edge and thickness.
   const [pickedMaterial, setPickedMaterial] = useState<string | null>(null);
@@ -496,6 +514,20 @@ export function FoldSetupEditor({
       return q.filter((x) => x.id !== id);
     });
   };
+  // Double click on a panel in the 3D view: its name floats up from it like a balloon and fades out, and the panel blinks on the sheet for a few seconds.
+  const onPanel3dDouble = (id: string) => {
+    const p = fold?.panels.find((x) => x.id === id);
+    if (!p) return;
+    view.current?.popLabel(id, p.label || p.id);
+    setFlashId(id);
+    // A zoomed sheet may have the panel out of view: move it to the middle.
+    if (zoomed) {
+      const [cx, cy] = centroid(p.polygon);
+      if (cx < zoomed.x || cx > zoomed.x + zoomed.w || cy < zoomed.y || cy > zoomed.y + zoomed.h) setZoomed({ ...zoomed, x: cx - zoomed.w / 2, y: cy - zoomed.h / 2 });
+    }
+    window.clearTimeout(flashTimer.current);
+    flashTimer.current = window.setTimeout(() => setFlashId(null), FLASH_MS);
+  };
   // Quick sort: a click on a panel in the 3D view picks its fold line, like a click on the panel in the flat sheet.
   const onPanel3dClick = (id: string) => {
     if (!quick || quickClosing) return;
@@ -607,14 +639,24 @@ export function FoldSetupEditor({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
+          {/* The less used tools sit in one menu (the icon left of Quick sort), so the bar stays clean. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger openOnHover delay={80} closeDelay={200} render={<Button type="button" variant="dark" size="sm" aria-label="Panel and fold tools" title="Panel and fold tools" />}>
+              <Menu className="size-4" aria-hidden />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-60">
+              <DropdownMenuItem disabled={stale} onClick={() => pickTool("merge")}><Merge aria-hidden /> Merge panels{tool === "merge" ? <Check className="ml-auto" aria-label="On" /> : null}</DropdownMenuItem>
+              <DropdownMenuItem disabled={stale} onClick={() => pickTool("split")}><Scissors aria-hidden /> Split panel{tool === "split" ? <Check className="ml-auto" aria-label="On" /> : null}</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled={history.past.length === 0} aria-keyshortcuts="Control+Z Meta+Z" onClick={undoEdit}><Undo2 aria-hidden /> Undo<DropdownMenuShortcut>Ctrl Z</DropdownMenuShortcut></DropdownMenuItem>
+              <DropdownMenuItem disabled={history.future.length === 0} aria-keyshortcuts="Control+Y Control+Shift+Z Meta+Shift+Z" onClick={redoEdit}><Redo2 aria-hidden /> Redo<DropdownMenuShortcut>Ctrl Y</DropdownMenuShortcut></DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => void detectAgain()}><Wand2 aria-hidden /> Detect again</DropdownMenuItem>
+              {fold && !stale ? <DropdownMenuItem onClick={() => setSeamsOpen(true)}><Scissors aria-hidden /> Set the slits{rings.length > 0 ? <span className="ml-auto rounded-full bg-primary px-1.5 text-[10px] leading-4 font-semibold text-primary-foreground" title="Circles of panels">{rings.length}</span> : null}</DropdownMenuItem> : null}
+              {onEditLines ? <DropdownMenuItem onClick={onEditLines}><Pencil aria-hidden /> Edit fold lines</DropdownMenuItem> : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button type="button" variant="dark" size="sm" aria-pressed={quick} onClick={() => (quick ? closeQuick() : (setTool(null), setCutFrom(null), setQuick(true), setSel(null)))}><ListOrdered className="size-4" aria-hidden /> Quick sort</Button>
-          <Button type="button" variant="dark" size="sm" aria-pressed={tool === "merge"} disabled={stale} title="Join two panels into one: click the fold line between them" onClick={() => pickTool("merge")}><Merge className="size-4" aria-hidden /> Merge panels</Button>
-          <Button type="button" variant="dark" size="sm" aria-pressed={tool === "split"} disabled={stale} title="Cut a panel in two: click two points to draw the cut line" onClick={() => pickTool("split")}><Scissors className="size-4" aria-hidden /> Split panel</Button>
-          <Button type="button" variant="dark" size="sm" disabled={history.past.length === 0} title="Undo the last change (Ctrl / Cmd + Z)" aria-keyshortcuts="Control+Z Meta+Z" onClick={undoEdit}><Undo2 className="size-4" aria-hidden /> Undo</Button>
-          <Button type="button" variant="dark" size="sm" disabled={history.future.length === 0} title="Redo (Ctrl + Y, or Ctrl / Cmd + Shift + Z)" aria-keyshortcuts="Control+Y Control+Shift+Z Meta+Shift+Z" onClick={redoEdit}><Redo2 className="size-4" aria-hidden /> Redo</Button>
-          <Button type="button" variant="dark" size="sm" onClick={() => void detectAgain()}><Wand2 className="size-4" aria-hidden /> Detect again</Button>
-          {fold && !stale ? <Button type="button" variant="dark" size="sm" onClick={() => setSeamsOpen(true)} title="Choose which fold lines stay open as slits"><Scissors className="size-4" aria-hidden /> Set the slits{rings.length > 0 ? <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[10px] leading-4 font-semibold text-primary-foreground" title="Circles of panels">{rings.length}</span> : null}</Button> : null}
-          {onEditLines ? <Button type="button" variant="dark" size="sm" onClick={onEditLines} title="Change the fold lines as raw data, to make a line longer or shorter. Then press Detect again."><Pencil className="size-4" aria-hidden /> Edit fold lines</Button> : null}
           {onWindows ? (
             <Button type="button" variant="dark" size="sm" className="ml-auto" disabled={!geo.geo} title={geo.geo ? "Cut window holes that new projects start with" : "Set up the 3D fold first"} onClick={() => setWindowsOpen(true)}>
               <AppWindow className="size-4" aria-hidden /> Window holes{windows.length > 0 ? <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[10px] leading-4 font-semibold text-primary-foreground">{windows.length}</span> : null}
@@ -658,7 +700,8 @@ export function FoldSetupEditor({
         </details>
       ) : null}
 
-      <div ref={splitBox} style={{ "--split": `${splitPct}%` } as React.CSSProperties} className="flex flex-col gap-4 xl:flex-row xl:gap-0">
+      <section aria-label="Dieline and 3D view" className="flex flex-col gap-1">
+      <div ref={splitBox} style={{ "--split": `${splitPct}%`, "--section-h": `${sectionH}px` } as React.CSSProperties} className="flex flex-col gap-4 xl:flex-row xl:gap-0">
         {/* flat sheet with panels and fold lines */}
         <div className="flex min-w-0 flex-col gap-2 xl:flex-none xl:basis-(--split) xl:pr-2">
           <div className="relative rounded-xl border bg-white p-2">
@@ -676,14 +719,15 @@ export function FoldSetupEditor({
             <HelpTip label="About the colours and numbers">
               Colours show how deep a panel is from the base. Numbers on the fold lines are the fold steps. <span className="text-teal-700 dark:text-teal-300">Green</span> folds inward, <span className="text-orange-600">orange</span> outward.
             </HelpTip>
-            <svg ref={sheetSvg} viewBox={`${(zoomed ?? base).x} ${(zoomed ?? base).y} ${(zoomed ?? base).w} ${(zoomed ?? base).h}`} style={{ touchAction: "none" }} className={`max-h-[60vh] w-full select-none ${tool === "split" ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"}`} role="img" aria-label="Flat sheet: panels in colour, fold lines numbered by fold step. Scroll to zoom, drag with any mouse button to move." onPointerDown={startPan} onContextMenu={(e) => e.preventDefault()} onClickCapture={(e) => { if (dragged.current) { e.stopPropagation(); dragged.current = false; } }} onClick={onSheetClick} onPointerMove={tool === "split" && cutFrom ? (e) => setCutTo(toSheet(e)) : undefined}>
+            <svg ref={sheetSvg} viewBox={`${(zoomed ?? base).x} ${(zoomed ?? base).y} ${(zoomed ?? base).w} ${(zoomed ?? base).h}`} style={{ touchAction: "none" }} className={`h-(--section-h) w-full select-none ${tool === "split" ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"}`} role="img" aria-label="Flat sheet: panels in colour, fold lines numbered by fold step. Scroll to zoom, drag with any mouse button to move." onPointerDown={startPan} onContextMenu={(e) => e.preventDefault()} onClickCapture={(e) => { if (dragged.current) { e.stopPropagation(); dragged.current = false; } }} onClick={onSheetClick} onPointerMove={tool === "split" && cutFrom ? (e) => setCutTo(toSheet(e)) : undefined}>
               {fold.panels.map((p) => {
                 const d = depth.get(p.id) ?? 0;
                 const on = sel?.kind === "panel" && sel.id === p.id;
                 const hot = (blinkMode && hoverId === p.id && !on) || (hover3d === p.id && !on);
                 const litSort = sortPanel === p.id;
+                const flash = flashId === p.id;
                 const litMerge = mergePair?.parentId === p.id || mergePair?.childId === p.id;
-                const lit3d = (hover3d === p.id || litSort || litMerge) && !on;
+                const lit3d = (hover3d === p.id || litSort || litMerge || flash) && !on;
                 const [cx, cy] = centroid(p.polygon);
                 // Names are 1.5x the old size (half of the earlier 3x, which was too big), never wider than their panel: a narrow panel turns its name or shrinks it.
                 const xs = p.polygon.filter((_, i) => i % 2 === 0);
@@ -700,11 +744,11 @@ export function FoldSetupEditor({
                   <g key={p.id}>
                     <path
                       d={pathData(p.polygon, true)}
-                      fill={DEPTH_COLORS[d % DEPTH_COLORS.length]}
+                      fill={flash ? "#fbbf24" : DEPTH_COLORS[d % DEPTH_COLORS.length]}
                       fillOpacity={on || lit3d ? 0.95 : 0.6}
-                      stroke={on || hot ? "#2563eb" : "#ffffff"}
+                      stroke={on || hot || flash ? "#2563eb" : "#ffffff"}
                       strokeWidth={size / (on || lit3d ? 120 : hot ? 220 : 400)}
-                      className={hover3d === p.id || litSort ? "cursor-pointer animate-pulse" : "cursor-pointer"}
+                      className={flash ? "cursor-pointer panel-flash" : hover3d === p.id || litSort ? "cursor-pointer animate-pulse" : "cursor-pointer"}
                       onPointerEnter={() => setHoverId(p.id)}
                       onPointerLeave={() => setHoverId((cur) => (cur === p.id ? null : cur))}
                       onClick={(e) => {
@@ -776,7 +820,7 @@ export function FoldSetupEditor({
           aria-valuemax={75}
           aria-valuenow={Math.round(splitPct)}
           tabIndex={0}
-          title="Drag to resize (double click: 40/60)"
+          title="Drag to resize (double click: 50/50)"
           className="group relative z-10 hidden w-0 shrink-0 cursor-col-resize touch-none outline-none xl:block"
           onPointerDown={(e) => {
             if (e.button !== 0) return;
@@ -787,16 +831,16 @@ export function FoldSetupEditor({
           onPointerMove={(e) => {
             if (splitDrag.current !== e.pointerId) return;
             const r = splitBox.current?.getBoundingClientRect();
-            if (r && r.width > 0) setSplitPct(Math.min(75, Math.max(25, ((e.clientX - r.left) / r.width) * 100)));
+            if (r && r.width > 0) setSplitPct(((e.clientX - r.left) / r.width) * 100);
           }}
           onPointerUp={() => (splitDrag.current = null)}
           onPointerCancel={() => (splitDrag.current = null)}
-          onDoubleClick={() => setSplitPct(40)}
+          onDoubleClick={() => setSplitPct(50)}
           onKeyDown={(e) => {
             const step = e.shiftKey ? 10 : 2;
-            if (e.key === "ArrowLeft") setSplitPct((v) => Math.max(25, v - step));
-            else if (e.key === "ArrowRight") setSplitPct((v) => Math.min(75, v + step));
-            else if (e.key === "Home") setSplitPct(40);
+            if (e.key === "ArrowLeft") setSplitPct(splitPct - step);
+            else if (e.key === "ArrowRight") setSplitPct(splitPct + step);
+            else if (e.key === "Home") setSplitPct(50);
             else return;
             e.preventDefault();
           }}
@@ -814,7 +858,7 @@ export function FoldSetupEditor({
         <div className="flex min-w-0 flex-col gap-2 xl:min-w-0 xl:flex-1 xl:basis-0 xl:pl-2">
           <div className="relative overflow-hidden rounded-xl border bg-muted/40">
             {geo.geo ? (
-              <CartonView ref={view} className="h-[min(420px,50vh)] w-full" geo={shownGeo ?? geo.geo} texture={null} textureRect={null} progress={progress} outsideColor={boardColor} insideColor={boardLook.inside} thickness={boardThickness} boardGrain={boardLook.grain} boardEdge={{ color: boardLook.edge, flute: boardLook.flute }} initialView={startView} onPanelHover={setHover3d} onPanelClick={onPanel3dClick} onUserView={() => { turnedFrom.current = null; }} onReady={onViewReady} />
+              <CartonView ref={view} className="h-(--section-h) w-full" geo={shownGeo ?? geo.geo} texture={null} textureRect={null} progress={progress} outsideColor={boardColor} insideColor={boardLook.inside} thickness={boardThickness} boardGrain={boardLook.grain} boardEdge={{ color: boardLook.edge, flute: boardLook.flute }} initialView={startView} onPanelHover={setHover3d} onPanelClick={onPanel3dClick} onPanelDoubleClick={onPanel3dDouble} onUserView={() => { turnedFrom.current = null; }} onReady={onViewReady} />
             ) : (
               <p className="grid h-48 place-items-center px-4 text-center text-sm text-muted-foreground">{geo.error ?? "Fix the problems above to see the 3D preview."}</p>
             )}
@@ -835,7 +879,38 @@ export function FoldSetupEditor({
           </div>
         </div>
       </div>
-
+      {/* Drag this bar up or down to make the sheet and the 3D view taller or shorter (double click: back to the usual height). */}
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Drag to change the height of the sheet and the 3D view (double click to reset)"
+        aria-valuemin={SECTION_MIN_H}
+        aria-valuenow={sectionH}
+        tabIndex={0}
+        title="Drag up or down to change the height (double click: reset)"
+        className="group flex h-4 cursor-ns-resize touch-none items-center justify-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onPointerDown={(e) => {
+          if (e.button !== 0) return;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          heightDrag.current = { y: e.clientY, h: sectionH };
+          e.preventDefault();
+        }}
+        onPointerMove={(e) => heightDrag.current && resizeSection(heightDrag.current.h + (e.clientY - heightDrag.current.y))}
+        onPointerUp={() => (heightDrag.current = null)}
+        onPointerCancel={() => (heightDrag.current = null)}
+        onDoubleClick={() => setSectionH(SECTION_H)}
+        onKeyDown={(e) => {
+          const step = e.shiftKey ? 100 : 24;
+          if (e.key === "ArrowDown") resizeSection(sectionH + step);
+          else if (e.key === "ArrowUp") resizeSection(sectionH - step);
+          else if (e.key === "Home") setSectionH(SECTION_H);
+          else return;
+          e.preventDefault();
+        }}
+      >
+        <span aria-hidden className="h-1.5 w-16 rounded-full bg-neutral-300 transition-colors group-hover:bg-neutral-500 group-focus-visible:bg-neutral-500 group-active:bg-neutral-600" />
+      </div>
+      </section>
 
       {/* inspector */}
       {/* Panel settings: a dialog that slides down from the top when a panel is clicked */}
@@ -976,20 +1051,16 @@ export function FoldSetupEditor({
                   </InfoTip>
                 </p>
                 <div className="flex items-center gap-2">
+                  {sortedHinges(fold, curTab.i).length ? (
+                    <div role="group" aria-label="Move every step of this part" className="flex items-center gap-px">
+                      <Button type="button" variant="dark" size="xs" className="rounded-r-none" disabled={stale || sortedHinges(fold, curTab.i).some((h) => h.order <= 1)} title="Every row of this part folds one step earlier" onClick={() => onChange(shiftSteps(fold, curTab.i, -1))}><Minus className="size-3.5" aria-hidden /> Step</Button>
+                      <Button type="button" variant="dark" size="xs" className="rounded-l-none" disabled={stale || sortedHinges(fold, curTab.i).some((h) => h.order >= 100)} title="Every row of this part folds one step later" onClick={() => onChange(shiftSteps(fold, curTab.i, 1))}><Plus className="size-3.5" aria-hidden /> Step</Button>
+                    </div>
+                  ) : null}
                   {sortedHinges(fold, curTab.i).length ? <Button type="button" variant="dark" size="xs" disabled={stale} aria-pressed={quick} title="Open Quick sort with the lines already grouped in their steps" onClick={sortAgain}><ListOrdered className="size-3.5" aria-hidden /> Sort again</Button> : null}
                   {curTab.i > 0 ? <Button type="button" variant="dark" size="xs" onClick={() => onChange(makeMain(fold, roots[curTab.i]!))}>Make main body</Button> : null}
                 </div>
               </div>
-              {sortedHinges(fold, curTab.i).length ? (
-                <StepNumberTool
-                  steps={stepsOf(fold, curTab.i).map((step) => {
-                    const lines = sortedHinges(fold, curTab.i).filter((h) => h.order === step);
-                    const first = Math.abs(lines[0]!.angleDeg);
-                    return { step, count: lines.length, angle: lines.every((h) => Math.abs(h.angleDeg) === first) ? first : null };
-                  })}
-                  onApply={(step, toStep) => onChange(setStepNumber(fold, curTab.i, step, toStep))}
-                />
-              ) : null}
               {sortedHinges(fold, curTab.i).length ? (
                 <HingeList hinges={sortedHinges(fold, curTab.i)} label={label} selectedId={quick ? picked : sel?.kind === "hinge" ? sel.id : null} onSelect={(id) => setSel({ kind: "hinge", id })} onSetHinge={setHinge} onMove={(id, to) => onChange(moveHinge(fold, id, to))} kinds={ROLE_OPTIONS} kindOf={(id) => fold.panels.find((p) => p.id === id)?.role ?? "body"} onKind={(id, role) => onChange(updatePanel(fold, id, { role: role as PanelRole }))} />
               ) : (

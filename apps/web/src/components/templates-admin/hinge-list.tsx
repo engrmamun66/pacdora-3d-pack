@@ -3,7 +3,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { ChevronDown, ChevronUp, GripVertical } from "lucide-react";
 import type { FoldHingeSpec } from "@packaging/dieline-engine";
-import { Button } from "@/components/ui/button";
 
 const field = "h-9 rounded-lg border border-input bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 const COLS = "grid grid-cols-[2.25rem_minmax(6rem,1fr)_6.5rem_6rem_minmax(5.5rem,170px)_minmax(9rem,1.2fr)] items-center";
@@ -270,66 +269,6 @@ export function HingeList({
           })}
         </ul>
       </div>
-    </div>
-  );
-}
-
-export interface StepSummary {
-  step: number;
-  /** How many fold lines are in this step. */
-  count: number;
-  /** The angle all of them share, or null when they differ. */
-  angle: number | null;
-}
-
-/**
- * Change the number of a whole step at once: all its lines get the new number. A number another step has joins that step (they fold
- * together); a number between two steps puts the lines between them. The numbers are then closed up (1, 2, 3...).
- */
-export function StepNumberTool({ steps, onApply }: { steps: readonly StepSummary[]; onApply: (step: number, toStep: number) => void }) {
-  const [picked, setPicked] = useState<number | null>(null);
-  const [draft, setDraft] = useState<string | null>(null);
-  // Step numbers get renumbered: fall back to the first step when the picked one is gone.
-  const current = steps.find((s) => s.step === picked) ?? steps.find((s) => s.count > 1) ?? steps[0];
-  if (!current || steps.length === 0) return null;
-  const shown = draft ?? String(current.step);
-  const to = Math.round(Number(shown));
-  const valid = shown.trim() !== "" && Number.isFinite(to) && to >= 1 && to <= 100;
-  const apply = () => {
-    if (!valid || to === current.step) return;
-    onApply(current.step, to);
-    // The lines now stand where `to` ranks among the other steps.
-    const others = new Set(steps.map((s) => s.step).filter((s) => s !== current.step));
-    others.add(to);
-    setPicked([...others].sort((a, b) => a - b).indexOf(to) + 1);
-    setDraft(null);
-  };
-  return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/30 px-3 py-2 text-sm" role="group" aria-label="Change the number of a whole step">
-      <span className="text-xs font-medium text-muted-foreground">Change a step number</span>
-      <label className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">Step</span>
-        <select className={field} value={current.step} onChange={(e) => { setPicked(Number(e.target.value)); setDraft(null); }}>
-          {steps.map((s) => (
-            <option key={s.step} value={s.step}>{s.step} ({s.count} {s.count === 1 ? "line" : "lines"})</option>
-          ))}
-        </select>
-      </label>
-      <label className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">New number</span>
-        <input
-          className={`${field} w-16`}
-          type="number"
-          min={1}
-          max={100}
-          step={1}
-          value={shown}
-          aria-label="New step number for the whole step"
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); apply(); } }}
-        />
-      </label>
-      <Button type="button" variant="dark" size="xs" disabled={!valid || to === current.step} onClick={apply}>Change step {current.step} to {valid ? to : "…"}</Button>
     </div>
   );
 }

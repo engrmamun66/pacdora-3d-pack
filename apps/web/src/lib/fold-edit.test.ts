@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FoldSetup } from "@packaging/dieline-engine";
-import { applyFoldSequence, applyFoldSteps, compactOrders, depthOf, linesKey, makeBase, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootAt, rootsOf, setGround, setMainName, setStepAngle, setStepNumber, sortedHinges, stepsOf, updateHinge, updatePanel, updatePartMeta } from "./fold-edit";
+import { applyFoldSequence, applyFoldSteps, compactOrders, depthOf, linesKey, makeBase, makeMain, moveHinge, pieceMap, pieceNameOf, pieceOf, rootAt, rootsOf, setGround, setMainName, setStepAngle, setStepNumber, shiftSteps, sortedHinges, stepsOf, updateHinge, updatePanel, updatePartMeta } from "./fold-edit";
 
 const sq = [0, 0, 10, 0, 10, 10, 0, 10];
 const setup: FoldSetup = {
@@ -286,5 +286,25 @@ describe("setStepNumber", () => {
     expect(setStepNumber(s, 0, 9, 2)).toBe(s);
     expect(orders(setStepNumber(s, 0, 3, Number.NaN))).toEqual([1, 1, 2, 3]);
     expect(orders(setStepNumber(s, 0, 1, 0))).toEqual([1, 1, 2, 3]); // 0 is clamped to 1: the same step
+  });
+});
+
+describe("shiftSteps", () => {
+  const sheet = (orders: number[]): FoldSetup => ({
+    rootId: "a",
+    panels: ["a", "b", "c", "d"].map((id) => ({ id, label: id, role: "body" as const, printable: true, polygon: sq })),
+    hinges: orders.map((order, i) => ({ id: `h${i + 1}`, parentId: "a", childId: "bcd"[i]!, line: [0, 0, 1, 0] as [number, number, number, number], angleDeg: 90, order })),
+  });
+  const orders = (s: FoldSetup) => s.hinges.map((h) => h.order);
+
+  it("moves every line one step later or earlier and keeps their order", () => {
+    expect(orders(shiftSteps(sheet([1, 1, 2]), 0, 1))).toEqual([2, 2, 3]);
+    expect(orders(shiftSteps(sheet([2, 2, 3]), 0, -1))).toEqual([1, 1, 2]);
+  });
+  it("does nothing when a line would go below step 1 or above step 100", () => {
+    const low = sheet([1, 2, 3]);
+    expect(shiftSteps(low, 0, -1)).toBe(low);
+    const high = sheet([1, 2, 100]);
+    expect(shiftSteps(high, 0, 1)).toBe(high);
   });
 });

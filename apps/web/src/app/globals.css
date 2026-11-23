@@ -772,3 +772,8 @@ label input, label textarea, label select, [role="toolbar"] input, [role="toolba
   -webkit-user-select: text;
   user-select: text;
 }
+
+/* A panel found with a double click in the 3D view: it flashes strongly on the flat sheet. */
+@keyframes panel-flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }
+.panel-flash { animation: panel-flash 0.5s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .panel-flash { animation: none; } }

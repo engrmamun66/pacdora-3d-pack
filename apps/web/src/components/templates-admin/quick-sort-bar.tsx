@@ -5,10 +5,13 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { GripVertical, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { createSize } from "@/lib/saved-size";
 
 const MIN_H = 150;
 /** Height the bar opens with (and returns to on a double-click on the grip). */
 const START_H = 200;
+/** The height the admin dragged the bar to is remembered for the next visit. */
+const barSize = createSize("quick-sort-bar-height", START_H, MIN_H, 4000);
 /** How long a chip takes to slide in or out (ms); a little more than the CSS animation. */
 const CHIP_MS = 240;
 /** How long the bar takes to slide up or down (ms); the editor waits this long before it lets go of the sort. */
@@ -95,7 +98,9 @@ export function QuickSortBar({
   // Where a dragged chip would land: before or after this chip.
   const [landing, setLanding] = useState<{ id: string; after: boolean } | null>(null);
   // Height of the bar. The grip at the top centre makes it taller (as tall as the window allows) so more steps show at once.
-  const [height, setHeight] = useState(START_H);
+  const [savedHeight, setHeight] = barSize.useSize();
+  // A height saved on a bigger window must still fit this one.
+  const height = typeof window === "undefined" ? savedHeight : Math.min(savedHeight, Math.max(MIN_H, window.innerHeight - 80));
   // The placeholder in the page tells where the bar goes sideways (the editor's column); the bar itself is fixed to the window.
   const slot = useRef<HTMLDivElement>(null);
   const [column, setColumn] = useState<{ left: number; width: number } | null>(null);
@@ -117,7 +122,7 @@ export function QuickSortBar({
   }, []);
   const grip = useRef<{ y: number; h: number } | null>(null);
   const maxH = () => Math.max(MIN_H, window.innerHeight - 80);
-  const resize = (h: number) => setHeight(Math.min(maxH(), Math.max(MIN_H, Math.round(h))));
+  const resize = (h: number) => setHeight(Math.min(maxH(), h));
 
   // Chips slide in from the right when a line joins, and slide back out when it leaves. A removed chip stays on screen
   // (in `leaving`) until its exit animation is done; `fresh` holds the chips that have just joined.

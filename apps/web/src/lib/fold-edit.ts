@@ -203,6 +203,18 @@ export function setStepNumber(setup: FoldSetup, piece: number, step: number, toS
   return compactOrders({ ...setup, hinges: setup.hinges.map((h) => (ids.has(h.id) ? { ...h, order: to } : h)) });
 }
 
+/**
+ * Move every fold line of one piece one step later (`delta` 1) or earlier (-1): "Step +" and "Step -".
+ * The order of the lines stays; only the numbers change. Nothing happens when a line would pass step 1 or step 100.
+ */
+export function shiftSteps(setup: FoldSetup, piece: number, delta: 1 | -1): FoldSetup {
+  const ids = new Set(inPiece(setup, piece).map((h) => h.id));
+  if (ids.size === 0) return setup;
+  const lines = setup.hinges.filter((h) => ids.has(h.id));
+  if (lines.some((h) => h.order + delta < 1 || h.order + delta > 100)) return setup;
+  return { ...setup, hinges: setup.hinges.map((h) => (ids.has(h.id) ? { ...h, order: h.order + delta } : h)) };
+}
+
 /** Renumber the steps of the given lines (a piece's) 1, 2, 3... in the order of `seq`; the rest of the setup is untouched. */
 function renumber(setup: FoldSetup, order: Map<string, number>): FoldSetup {
   return { ...setup, hinges: setup.hinges.map((h) => ({ ...h, order: order.get(h.id) ?? h.order })) };

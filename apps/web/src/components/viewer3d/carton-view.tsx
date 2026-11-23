@@ -153,6 +153,8 @@ export interface CartonViewProps {
   onPanelHover?: (id: string | null) => void;
   /** Called with the id of the panel the person clicks (a click, not a camera drag). Not called when the click misses the box. */
   onPanelClick?: (id: string) => void;
+  /** Called with the id of the panel the person double-clicks. */
+  onPanelDoubleClick?: (id: string) => void;
 }
 
 /** Camera angles in degrees. */
@@ -215,6 +217,8 @@ export interface CartonViewHandle {
    * panels while the box turns or folds, and stay when the box is rebuilt.
    */
   setPanelLabels(labels: Readonly<Record<string, string>> | null): void;
+  /** Let the panel's name rise from the panel like a balloon, sway a little and fade out. */
+  popLabel(id: string, text: string): void;
   /**
    * Show the size of every part of the box (width, depth, height) as arrows along its edges, the value at the middle of each
    * arrow, outside and (with a board thickness) inside, in this unit. null hides them. They follow the box while it folds.
@@ -254,7 +258,7 @@ export interface CartonViewHandle {
 
 /** Interactive 3D carton built from the engine's fold tree (three.js, no React renderer). */
 export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function CartonView(
-  { geo, layout = null, texture, textureRect, progress, outsideColor, insideColor, thickness = 0, watermark = null, boardGrain = 0, boardEdge, className, autoRotate = false, transparent = false, shadows = true, frameMm, rotateOnly = false, initialView = null, onViewChange, onUserView, onReady, onPanelHover, onPanelClick },
+  { geo, layout = null, texture, textureRect, progress, outsideColor, insideColor, thickness = 0, watermark = null, boardGrain = 0, boardEdge, className, autoRotate = false, transparent = false, shadows = true, frameMm, rotateOnly = false, initialView = null, onViewChange, onUserView, onReady, onPanelHover, onPanelClick, onPanelDoubleClick },
   ref,
 ) {
   const host = useRef<HTMLDivElement>(null);
@@ -270,6 +274,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   const onReadyRef = useRef(onReady);
   const onPanelHoverRef = useRef(onPanelHover);
   const onPanelClickRef = useRef(onPanelClick);
+  const onPanelDoubleClickRef = useRef(onPanelDoubleClick);
   const readyFired = useRef(false);
   const progressRef = useRef(progress);
   /** The layout (an arrangement of copies), the copies added to the scene besides the main box, and the size and centre of the whole group (null = one box). */
@@ -287,6 +292,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     onReadyRef.current = onReady;
     onPanelHoverRef.current = onPanelHover;
     onPanelClickRef.current = onPanelClick;
+    onPanelDoubleClickRef.current = onPanelDoubleClick;
     progressRef.current = progress;
   });
   /** The panel that blinks (id), the blink overlays now on the model, and their shared materials. */
@@ -319,6 +325,9 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   const keepView = useRef(false);
   /** Cell size (mm) of the floor grid; set when the camera is framed. */
   const gridStep = useRef(10);
+  /** How far (mm, from the centre of the floor) the model has reached on the floor since this geometry was set; the grid grows to cover it. */
+  const gridReach = useRef(0);
+  const gridReachGeo = useRef<unknown>(null);
   const rotationListeners = useRef(new Set<(r: Rotation) => void>());
   const rebuild = useRef<(p: number, hingeProgress?: Readonly<Record<string, number>>) => void>(() => {});
   /** The fold amount the model was last built at (an export rebuilds the model with the same fold). */
@@ -427,8 +436,10 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       gridObj.current = null;
     }
     if (!gridOn.current) return;
-    const cells = 40;
-    const g = new THREE.GridHelper(gridStep.current * cells, cells, 0x8f8f8a, 0xc4c4bf);
+    // 40 cells across; more when a part of the model lies outside that (a second or third part set aside), so the floor always covers it.
+    const step = gridStep.current;
+    const cells = Math.max(40, Math.ceil((gridReach.current * 1.15 * 2) / step / 2) * 2);
+    const g = new THREE.GridHelper(step * cells, cells, 0x8f8f8a, 0xc4c4bf);
     const m = g.material as THREE.LineBasicMaterial;
     m.transparent = true;
     m.opacity = 0.8;
@@ -436,6 +447,23 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     g.position.y = 0.3; // just under the carton's bottom, above the shadow plane
     t.scene.add(g);
     gridObj.current = g;
+  };
+
+  /** Note how far the model reaches over the floor; if it passes the grid, make the grid bigger (it never shrinks while the same geometry is shown). */
+  const growGrid = (geo: unknown) => {
+    const t = three.current;
+    if (!t?.model) return;
+    if (gridReachGeo.current !== geo) {
+      gridReachGeo.current = geo;
+      gridReach.current = 0;
+    }
+    const box = new THREE.Box3().setFromObject(t.model.object);
+    const reach = Math.max(Math.abs(box.min.x), Math.abs(box.max.x), Math.abs(box.min.z), Math.abs(box.max.z));
+    if (!Number.isFinite(reach) || reach <= gridReach.current) return;
+    const before = Math.max(40, Math.ceil((gridReach.current * 1.15 * 2) / gridStep.current / 2) * 2);
+    gridReach.current = reach;
+    const after = Math.max(40, Math.ceil((reach * 1.15 * 2) / gridStep.current / 2) * 2);
+    if (after !== before && gridOn.current) rebuildGrid();
   };
 
   /** Put the sun, the shadow switch and the shadow darkness where `shadowCfg` says. */
@@ -858,6 +886,34 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
   };
   labelTick.current = followLabels;
 
+  /** The name of a panel rises from it like a balloon: straight up, growing a bit, and fades out (a plain fade when motion is reduced). */
+  const popLabel = (id: string, text: string) => {
+    const layer = dimLayer();
+    const info = panelInfo(id);
+    if (!layer || !info) return;
+    const tag = document.createElement("div");
+    tag.textContent = text;
+    tag.style.cssText = "position:absolute;left:0;top:0;white-space:nowrap;padding:2px 10px;border-radius:9999px;background:rgba(255,255,255,.95);color:#18181b;border:1px solid rgba(24,24,27,.3);font:600 13px/18px system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.25);will-change:transform,opacity";
+    layer.appendChild(tag);
+    const x = Math.round(info.x);
+    const y = Math.round(info.y);
+    const at = (dx: number, dy: number, k: number) => `translate(${x + dx}px, ${y + dy}px) translate(-50%, -50%) scale(${k})`;
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const frames: Keyframe[] = calm
+      ? [{ transform: at(0, 0, 1), opacity: 1 }, { transform: at(0, 0, 1), opacity: 1, offset: 0.6 }, { transform: at(0, 0, 1), opacity: 0 }]
+      : [
+          { transform: at(0, 0, 0.6), opacity: 0 },
+          { transform: at(0, -14, 1.1), opacity: 1, offset: 0.1 },
+          { transform: at(0, -48, 1.08), opacity: 1, offset: 0.35 },
+          { transform: at(0, -92, 1.05), opacity: 0.9, offset: 0.62 },
+          { transform: at(0, -136, 1), opacity: 0.5, offset: 0.85 },
+          { transform: at(0, -168, 0.95), opacity: 0 },
+        ];
+    const run = tag.animate(frames, { duration: calm ? 1000 : 1400, easing: "ease-out", fill: "forwards" });
+    run.onfinish = () => tag.remove();
+    run.oncancel = () => tag.remove();
+  };
+
   /** Take the arrows and their numbers away. */
   const clearDims = () => {
     const g = dimGroup.current;
@@ -1215,6 +1271,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
     },
     setProgress: (p, hingeProgress) => rebuild.current(p, hingeProgress),
     getModelObject: () => three.current?.model?.object ?? null,
+    popLabel,
     resetView: frame,
     getView,
     setView: (v) => applyView(v),
@@ -1470,6 +1527,18 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       const group = picker.intersectObject(t.model.object, true)[0]?.object.parent;
       if (group && group.name && !group.name.startsWith("fold-")) onPanelClickRef.current(group.name);
     };
+    const onDouble = (e: MouseEvent) => {
+      if (!onPanelDoubleClickRef.current) return;
+      const t = three.current;
+      if (!t?.model) return;
+      const r = renderer.domElement.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return;
+      ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      picker.setFromCamera(ndc, camera);
+      const group = picker.intersectObject(t.model.object, true)[0]?.object.parent;
+      if (group && group.name && !group.name.startsWith("fold-")) onPanelDoubleClickRef.current(group.name);
+    };
+    renderer.domElement.addEventListener("dblclick", onDouble);
     renderer.domElement.addEventListener("pointermove", onMove);
     renderer.domElement.addEventListener("pointerleave", onLeave);
     renderer.domElement.addEventListener("pointerdown", onDown);
@@ -1495,6 +1564,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
       renderer.domElement.removeEventListener("pointerleave", onLeave);
       renderer.domElement.removeEventListener("pointerdown", onDown);
       renderer.domElement.removeEventListener("pointerup", onUp);
+      renderer.domElement.removeEventListener("dblclick", onDouble);
       setHovered(null);
       controls.removeEventListener("change", onChange);
       renderer.setAnimationLoop(null);
@@ -1602,6 +1672,7 @@ export const CartonView = forwardRef<CartonViewHandle, CartonViewProps>(function
         ...(boardEdge ? { boardEdgeColor: boardEdge.color, ...(boardEdge.flute ? { boardEdgeTexture: fluteTexture(boardEdge.color) } : {}) } : {}),
       });
       t.scene.add(t.model.object);
+      growGrid(geo);
       placeLayout();
       applyBlink();
     };
