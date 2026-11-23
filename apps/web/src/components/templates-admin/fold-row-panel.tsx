@@ -86,6 +86,7 @@ export function FoldRowPanel({
       </div>
       <div key={hinge.id} className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-3 text-xs">
         <p className="text-[11px] leading-snug text-muted-foreground">{name} folds along its edge with {parentName}.</p>
+        <LiveNumber label="Step" min={1} max={MAX_STEP} value={hinge.order} hint="Lines with the same step fold together." onValue={(n) => onChange({ order: n })} />
         <div className="flex flex-col gap-0.5 text-xs font-medium">
           <span id="fold-direction-label">Direction</span>
           <div role="group" aria-labelledby="fold-direction-label" className="flex gap-1">
@@ -94,7 +95,6 @@ export function FoldRowPanel({
             ))}
           </div>
         </div>
-        <LiveNumber label="Step" min={1} max={MAX_STEP} value={hinge.order} hint="Lines with the same step fold together." onValue={(n) => onChange({ order: n })} />
         <div className="flex flex-col gap-1">
           <LiveNumber label="Angle (°)" min={1} max={180} value={Math.abs(hinge.angleDeg)} onValue={(n) => onChange({ angleDeg: sign * n })} />
           <div role="group" aria-label="Set the angle" className="flex gap-1">

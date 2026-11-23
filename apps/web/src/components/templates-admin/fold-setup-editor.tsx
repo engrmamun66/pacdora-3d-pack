@@ -347,6 +347,9 @@ export function FoldSetupEditor({
   // Blink Mode: the panel under the mouse on the flat sheet blinks on the 3D box (the box keeps it across rebuilds).
   const sortHinge = quick && sortHover && queue.some((q) => q.id === sortHover) ? fold?.hinges.find((h) => h.id === sortHover) ?? null : null;
   const sortPanel = sortHinge?.childId ?? null;
+  // The panel under the pointer on the sheet or in the 3D view: its chip in the Quick sort bar blinks, and the bar scrolls to its step.
+  const overPanel = hoverId ?? hover3d;
+  const overChip = quick && overPanel ? (fold?.hinges.find((h) => h.childId === overPanel && queue.some((q) => q.id === h.id))?.id ?? null) : null;
   const blinkTarget = blinkMode ? sortPanel ?? hoverId ?? hover3d : null;
   useEffect(() => {
     view.current?.focusPanel(blinkTarget);
@@ -574,6 +577,18 @@ export function FoldSetupEditor({
   };
   // Give a queued line another step (dragged into it, or moved with the keys); the list stays in step order.
   const setQueuedStep = (id: string, step: number) => setQueue((q) => q.map((x) => (x.id === id ? { ...x, step: Math.max(1, step) } : x)).sort((a, b) => a.step - b.step));
+  // Put a queued line in a step before another line of it (or last in the step); lines of one step fold together, so this only changes how they are listed.
+  const moveQueued = (id: string, step: number, beforeId: string | null) =>
+    setQueue((q) => {
+      const item = q.find((x) => x.id === id);
+      if (!item || id === beforeId) return q;
+      const rest = q.filter((x) => x.id !== id);
+      const moved = { ...item, step: Math.max(1, step) };
+      const at = beforeId === null ? -1 : rest.findIndex((x) => x.id === beforeId);
+      if (at < 0) rest.push(moved);
+      else rest.splice(at, 0, moved);
+      return rest.sort((a, b) => a.step - b.step);
+    });
   // Drop a step and its lines; later steps move up one. The open step follows, and never goes below 1.
   const removeQueuedStep = (n: number) => {
     setQueue((q) => q.filter((x) => x.step !== n).map((x) => (x.step > n ? { ...x, step: x.step - 1 } : x)));
@@ -997,10 +1012,12 @@ export function FoldSetupEditor({
           onHover={setSortHover}
           partNames={sortingParts}
           activeId={editHinge}
+          lightId={overChip}
           preview={previewSort}
           onPreviewChange={setPreviewSort}
           onAddStep={() => { setQuickCount(stepsShown + 1); setQuickStep(stepsShown + 1); }}
           onSetStep={setQueuedStep}
+          onMove={moveQueued}
           onRemoveStep={removeQueuedStep}
           onRemove={(id) => setQueue((q) => q.filter((x) => x.id !== id))}
           onClear={() => { setQueue([]); setQuickStep(1); setQuickCount(1); }}

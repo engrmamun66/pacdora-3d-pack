@@ -40,8 +40,10 @@ export function QuickSortBar({
   onHover,
   partNames,
   activeId = null,
+  lightId = null,
   count,
   onSetStep,
+  onMove,
   onRemoveStep,
   onRemove,
   onClear,
@@ -69,10 +71,14 @@ export function QuickSortBar({
   onHover?: (id: string | null) => void;
   /** The line being edited in the side panel: its chip stays highlighted. */
   activeId?: string | null;
+  /** The panel under the pointer on the sheet or in the 3D view has this line: its chip blinks and its step is scrolled into view. */
+  lightId?: string | null;
   /** How many steps to show (empty ones too), at least. */
   count: number;
   /** Give a line this step. */
   onSetStep: (id: string, step: number) => void;
+  /** Put a line in a step just before another line of it (`beforeId`), or at the end of the step when `beforeId` is null. */
+  onMove: (id: string, step: number, beforeId: string | null) => void;
   /** Drop a whole step with its lines; the steps after it move up one. */
   onRemoveStep: (step: number) => void;
   onRemove: (id: string) => void;
@@ -86,6 +92,8 @@ export function QuickSortBar({
 }) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overStep, setOverStep] = useState<number | null>(null);
+  // Where a dragged chip would land: before or after this chip.
+  const [landing, setLanding] = useState<{ id: string; after: boolean } | null>(null);
   // Height of the bar. The grip at the top centre makes it taller (as tall as the window allows) so more steps show at once.
   const [height, setHeight] = useState(START_H);
   // The placeholder in the page tells where the bar goes sideways (the editor's column); the bar itself is fixed to the window.
@@ -146,6 +154,20 @@ export function QuickSortBar({
     if (box && group) box.scrollTo({ top: group.offsetTop + group.offsetHeight - box.clientHeight, behavior: reduce ? "auto" : "smooth" });
   }, [step]);
 
+  // A panel under the pointer elsewhere: bring its step into view in the list (only the list scrolls, not the page).
+  useEffect(() => {
+    if (!lightId) return;
+    const box = list.current;
+    const chip = box?.querySelector<HTMLElement>(`[data-chip="${CSS.escape(lightId)}"]`);
+    const group = chip?.closest<HTMLElement>("[data-step]");
+    if (!box || !group) return;
+    const top = group.offsetTop;
+    const bottom = top + group.offsetHeight;
+    if (top >= box.scrollTop && bottom <= box.scrollTop + box.clientHeight) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    box.scrollTo({ top: Math.max(0, top - 4), behavior: reduce ? "auto" : "smooth" });
+  }, [lightId]);
+
   // One group per step in use, in order; the open step is always shown, even while it is still empty.
   const last = Math.max(count, step, ...items.map((i) => i.step), ...leaving.map((i) => i.step));
   const stepNumbers = Array.from({ length: last }, (_, i) => i + 1);
@@ -200,7 +222,7 @@ export function QuickSortBar({
               {partNames.length === 1 ? "Part" : "Parts"}: {partNames.join(", ")}
             </span>
           ) : null}
-          <InfoTip label="Quick sort">Click a step to open it, then click fold lines on the picture: they join the open step (now step {step}). A line already in another step moves to it; click a line in its own step to take it out. Add step makes a new empty step at the end. Lines with the same step fold together. Drag a chip into another step to move it.</InfoTip>
+          <InfoTip label="Quick sort">Click a step to open it, then click fold lines on the picture: they join the open step (now step {step}). A line already in another step moves to it; click a line in its own step to take it out. Add step makes a new empty step at the end. Lines with the same step fold together. Drag a chip into another step to move it, or onto another chip to put it before or after that chip.</InfoTip>
         </div>
         <p className="text-xs text-muted-foreground" aria-live="polite">
           {`${items.length} ${items.length === 1 ? "panel" : "panels"} selected / ${total} ${total === 1 ? "panel" : "panels"}${items.length ? ` - in ${usedSteps} ${usedSteps === 1 ? "step" : "steps"}` : ""}`}
@@ -231,6 +253,7 @@ export function QuickSortBar({
             <li
               key={g.step}
               data-step={g.step}
+              data-lit={lightId !== null && g.items.some((x) => x.id === lightId) ? "" : undefined}
               onDragOver={(e) => {
                 if (dragId) {
                   e.preventDefault();
@@ -245,14 +268,34 @@ export function QuickSortBar({
                 setDragId(null);
                 setOverStep(null);
               }}
-              className={`flex shrink-0 flex-wrap items-center gap-1.5 rounded-xl border py-1.5 pr-2 pl-1.5 cursor-pointer transition-colors ${open ? "border-primary/50 bg-primary/5" : "bg-muted/30 hover:bg-muted/50"} ${target ? "border-primary bg-primary/10 ring-2 ring-primary/30" : ""}`}
+              className={`flex shrink-0 flex-wrap items-center gap-1.5 rounded-xl border py-1.5 pr-2 pl-1.5 cursor-pointer transition-colors ${open ? "border-primary/50 bg-primary/5" : "bg-muted/30 hover:bg-muted/50"} ${lightId !== null && g.items.some((x) => x.id === lightId) ? "border-amber-400 ring-2 ring-amber-300/60" : ""} ${target ? "border-primary bg-primary/10 ring-2 ring-primary/30" : ""}`}
             >
               <button type="button" aria-pressed={open} aria-label={`Open step ${g.step}: the lines you click next join it`} className={`inline-flex h-6 items-center rounded-full px-2.5 text-xs font-semibold tabular-nums focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${open ? "bg-primary text-primary-foreground" : "bg-foreground/10 text-foreground"}`}>Step {g.step}</button>
               {g.items.length === 0 ? <span className="px-1 text-xs text-muted-foreground">Click fold lines to add them here</span> : null}
-              {g.items.map((it) => (
+              {g.items.map((it, at) => (
                 <div
                   key={it.id}
+                  data-chip={it.id}
                   draggable
+                  onDragOver={(e) => {
+                    if (!dragId || dragId === it.id) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setOverStep(g.step);
+                    setLanding({ id: it.id, after: e.clientX > r.left + r.width / 2 });
+                  }}
+                  onDragLeave={() => setLanding((c) => (c?.id === it.id ? null : c))}
+                  onDrop={(e) => {
+                    if (!dragId) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const after = landing?.id === it.id && landing.after;
+                    onMove(dragId, g.step, after ? (g.items[at + 1]?.id ?? null) : it.id);
+                    setDragId(null);
+                    setOverStep(null);
+                    setLanding(null);
+                  }}
                   onDragStart={(e) => {
                     setDragId(it.id);
                     e.dataTransfer.effectAllowed = "move";
@@ -261,12 +304,13 @@ export function QuickSortBar({
                   onDragEnd={() => {
                     setDragId(null);
                     setOverStep(null);
+                    setLanding(null);
                   }}
                   onPointerEnter={() => onHover?.(it.id)}
                   onPointerLeave={() => onHover?.(null)}
                   onFocus={() => onHover?.(it.id)}
                   onBlur={() => onHover?.(null)}
-                  className={`flex shrink-0 cursor-grab items-center gap-1 rounded-lg border border-b-2 py-0.5 pr-0.5 pl-0.5 text-xs shadow-xs transition-opacity active:cursor-grabbing ${activeId === it.id ? "border-primary border-b-primary bg-primary/10 ring-2 ring-primary/40" : "border-b-[#444444] bg-background dark:border-b-white/70"} ${dragId === it.id ? "opacity-40" : ""} ${fresh.includes(it.id) ? "chip-in" : ""}`}
+                  className={`flex shrink-0 cursor-grab items-center gap-1 rounded-lg border border-b-2 py-0.5 pr-0.5 pl-0.5 text-xs shadow-xs transition-opacity active:cursor-grabbing ${lightId === it.id ? "animate-pulse border-amber-500 border-b-amber-500 bg-amber-100 ring-2 ring-amber-400 dark:bg-amber-500/20" : activeId === it.id ? "border-primary border-b-primary bg-primary/10 ring-2 ring-primary/40" : "border-b-[#444444] bg-background dark:border-b-white/70"} ${dragId === it.id ? "opacity-40" : ""} ${landing?.id === it.id && dragId ? (landing.after ? "shadow-[3px_0_0_0_var(--color-primary)]" : "shadow-[-3px_0_0_0_var(--color-primary)]") : ""} ${fresh.includes(it.id) ? "chip-in" : ""}`}
                 >
                   <GripVertical className="size-3 text-muted-foreground" aria-hidden />
                   <button
