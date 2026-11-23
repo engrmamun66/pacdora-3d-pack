@@ -7,7 +7,7 @@ import type { FoldHingeSpec } from "@packaging/dieline-engine";
 
 const field = "h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 /** Angles the buttons under the angle field set at once. */
-const QUICK_ANGLES = [45, 90, 180] as const;
+const QUICK_ANGLES = [45, 90, 135, 180] as const;
 const MAX_STEP = 100;
 
 export interface FoldRowPatch {
@@ -86,6 +86,14 @@ export function FoldRowPanel({
       </div>
       <div key={hinge.id} className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-3 text-xs">
         <p className="text-[11px] leading-snug text-muted-foreground">{name} folds along its edge with {parentName}.</p>
+        <div className="flex flex-col gap-0.5 text-xs font-medium">
+          <span id="fold-direction-label">Direction</span>
+          <div role="group" aria-labelledby="fold-direction-label" className="flex gap-1">
+            {([[1, "Inward", "Inward: the print stays outside"], [-1, "Outward", "Outward: reverse"]] as const).map(([v, text, tip]) => (
+              <button key={v} type="button" aria-pressed={sign === v} title={tip} onClick={() => onChange({ angleDeg: v * Math.abs(hinge.angleDeg) })} className={`h-7 flex-1 rounded-md border text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${sign === v ? "border-black bg-black text-white" : "bg-background hover:bg-muted"}`}>{text}</button>
+            ))}
+          </div>
+        </div>
         <LiveNumber label="Step" min={1} max={MAX_STEP} value={hinge.order} hint="Lines with the same step fold together." onValue={(n) => onChange({ order: n })} />
         <div className="flex flex-col gap-1">
           <LiveNumber label="Angle (°)" min={1} max={180} value={Math.abs(hinge.angleDeg)} onValue={(n) => onChange({ angleDeg: sign * n })} />
@@ -100,14 +108,6 @@ export function FoldRowPanel({
           <div role="group" aria-labelledby="fold-kind-label" className="flex flex-wrap gap-1">
             {kinds.map((k) => (
               <button key={k.value} type="button" aria-pressed={kind === k.value} title={k.hint ?? k.label} onClick={() => onChange({ kind: k.value })} className={`h-7 rounded-md border px-2 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${kind === k.value ? "border-black bg-black text-white" : "bg-background hover:bg-muted"}`}>{k.label}</button>
-            ))}
-          </div>
-        </div>
-        <div className="flex flex-col gap-0.5 text-xs font-medium">
-          <span id="fold-direction-label">Direction</span>
-          <div role="group" aria-labelledby="fold-direction-label" className="flex gap-1">
-            {([[1, "Inward", "Inward: the print stays outside"], [-1, "Outward", "Outward: reverse"]] as const).map(([v, text, tip]) => (
-              <button key={v} type="button" aria-pressed={sign === v} title={tip} onClick={() => onChange({ angleDeg: v * Math.abs(hinge.angleDeg) })} className={`h-7 flex-1 rounded-md border text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${sign === v ? "border-black bg-black text-white" : "bg-background hover:bg-muted"}`}>{text}</button>
             ))}
           </div>
         </div>

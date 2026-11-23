@@ -155,7 +155,12 @@ export function FoldSetupEditor({
       if (k !== "z" && !redo) return;
       const t = e.target;
       // Typing in a field keeps the browser's own undo; so does an open dialog (the window editor has its own).
-      if (t instanceof HTMLElement && (t.isContentEditable || t.closest("input, textarea, select, [contenteditable='true']"))) return;
+      // A slider, checkbox or button has no text to undo, so the shortcut works while one of those has focus (the Open / Closed slider).
+      if (t instanceof HTMLElement) {
+        const field = t.closest("input, textarea, select, [contenteditable='true']");
+        const plain = field instanceof HTMLInputElement && ["range", "checkbox", "radio", "button", "submit", "reset", "color"].includes(field.type);
+        if (t.isContentEditable || (field && !plain)) return;
+      }
       if (document.querySelector("dialog[open], [role='dialog']")) return;
       e.preventDefault();
       if (redo) historyKeys.current.redo();
@@ -270,10 +275,13 @@ export function FoldSetupEditor({
   // Rings of panels found by the last detection (petals around a corner, for example): one fold line of each stays open, and the admin may choose which.
   const [rings, setRings] = useState<readonly FoldRing[]>([]);
   const [seamsOpen, setSeamsOpen] = useState(false);
+  // The slits the admin chose (fold lines kept open) in the last "Apply"; a plain Detect clears them.
+  const [slits, setSlits] = useState<readonly (readonly number[])[]>([]);
   const detect = (openLines?: readonly (readonly number[])[]) => {
     const r = detectFoldSetup(flat as FlatDieline, openLines ? { openLines } : {});
     setWarnings(r.warnings);
     setRings(r.loops ?? []);
+    setSlits(openLines ?? []);
     setSeamsOpen(false);
     setEditHinge(null);
     setSel(null);
@@ -343,7 +351,7 @@ export function FoldSetupEditor({
   useEffect(() => {
     view.current?.focusPanel(blinkTarget);
   }, [blinkTarget, shownGeo]);
-  // "Show labels on 3D view": the name of each panel is written on it in the 3D box (the names are the ones on the flat sheet).
+  // "Show Labels": the name of each panel is written on it in the 3D box (the names are the ones on the flat sheet).
   const [showLabels, setShowLabels] = useState(true);
   const labelNames = useMemo(() => (showLabels && fold ? Object.fromEntries(fold.panels.map((p) => [p.id, p.label || p.id])) : null), [showLabels, fold]);
   useEffect(() => {
@@ -590,6 +598,7 @@ export function FoldSetupEditor({
           <Button type="button" variant="dark" size="sm" disabled={history.past.length === 0} title="Undo the last change (Ctrl / Cmd + Z)" aria-keyshortcuts="Control+Z Meta+Z" onClick={undoEdit}><Undo2 className="size-4" aria-hidden /> Undo</Button>
           <Button type="button" variant="dark" size="sm" disabled={history.future.length === 0} title="Redo (Ctrl + Y, or Ctrl / Cmd + Shift + Z)" aria-keyshortcuts="Control+Y Control+Shift+Z Meta+Shift+Z" onClick={redoEdit}><Redo2 className="size-4" aria-hidden /> Redo</Button>
           <Button type="button" variant="dark" size="sm" onClick={() => void detectAgain()}><Wand2 className="size-4" aria-hidden /> Detect again</Button>
+          {fold && !stale ? <Button type="button" variant="dark" size="sm" onClick={() => setSeamsOpen(true)} title="Choose which fold lines stay open as slits"><Scissors className="size-4" aria-hidden /> Set the slits{rings.length > 0 ? <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[10px] leading-4 font-semibold text-primary-foreground" title="Circles of panels">{rings.length}</span> : null}</Button> : null}
           {onEditLines ? <Button type="button" variant="dark" size="sm" onClick={onEditLines} title="Change the fold lines as raw data, to make a line longer or shorter. Then press Detect again."><Pencil className="size-4" aria-hidden /> Edit fold lines</Button> : null}
           {onWindows ? (
             <Button type="button" variant="dark" size="sm" className="ml-auto" disabled={!geo.geo} title={geo.geo ? "Cut window holes that new projects start with" : "Set up the 3D fold first"} onClick={() => setWindowsOpen(true)}>
@@ -615,18 +624,11 @@ export function FoldSetupEditor({
       ) : null}
       {stale ? <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">The lines changed after the fold was set up. Detect the panels again before saving.</p> : null}
       {problems.length ? <ul role="alert" className="list-disc rounded-lg border border-destructive/30 bg-destructive/10 py-2 pl-7 pr-3 text-sm text-destructive">{problems.map((p) => <li key={p}>{p}</li>)}</ul> : null}
-      {rings.length ? (
-        <section aria-label="Slits" className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-          <Scissors className="size-4 shrink-0" aria-hidden />
-          <p className="min-w-0 flex-1">
-            <strong>{rings.length} {rings.length === 1 ? "circle of panels needs" : "circles of panels need"} a slit.</strong> Panels joined in a circle (like the petals around a corner) cannot all fold along every line, so one fold line of each circle stays open. We picked one for each; check them.
-          </p>
-          <Button type="button" variant="dark" size="sm" onClick={() => setSeamsOpen(true)}><Scissors className="size-4" aria-hidden /> Set the slits</Button>
-        </section>
-      ) : null}
-      {seamsOpen && rings.length > 0 && fold ? (
+      {seamsOpen && fold ? (
         <FoldSeamsDialog
+          lines={fold.hinges.map((h) => ({ line: h.line, a: h.childId, b: h.parentId }))}
           rings={rings}
+          slits={slits}
           panels={fold.panels.map((p) => ({ id: p.id, label: p.label || p.id, polygon: p.polygon }))}
           cut={flat.cut.map((p) => ({ pts: [...p.pts], closed: p.closed }))}
           label={label}
@@ -811,7 +813,7 @@ export function FoldSetupEditor({
               <button type="button" aria-label="Reset camera" className="grid size-7 place-items-center rounded-md border hover:bg-muted" onClick={() => view.current?.resetView()}><RotateCcw className="size-3.5" /></button>
               <label className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap select-none">
                 <input type="checkbox" className="size-3.5 accent-primary" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} />
-                Show labels on 3D view
+                Show Labels
               </label>
             </div>
             {geo.geo ? <><GridToggle viewRef={view} keepViewByDefault /><RotationControls viewRef={view} /></> : null}

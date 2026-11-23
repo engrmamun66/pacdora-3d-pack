@@ -558,10 +558,19 @@ export function TemplateWizard({ mode, categories, initial, svgColors, onCreated
                 ))}
               </ul>
               {!hasCut ? <p role="alert" className="text-sm text-destructive">Mark at least one style as Cut.</p> : !hasClosedCut ? <p role="alert" className="text-sm text-destructive">The Cut lines must include a closed outline (the outer shape of the box).</p> : null}
+              <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                {ROLE_ORDER.map((r) => (
+                  <div key={r} className="contents">
+                    <dt className="font-medium text-foreground">{ROLE_LABELS[r]}</dt>
+                    <dd>{ROLE_HINTS[r]}</dd>
+                  </div>
+                ))}
+              </dl>
             </div>
 
             <div className="flex min-w-0 flex-col gap-3">
               <div className="flex flex-wrap items-center gap-3 text-sm">
+                <Button type="button" variant="outline" onClick={() => setOverrides({})}><Wand2 className="size-4" aria-hidden /> Auto-detect again</Button>
                 <Button type="button" variant="outline" onClick={() => setReplay((n) => n + 1)}><RotateCcw className="size-4" aria-hidden /> Replay animation</Button>
                 <label className="flex items-center gap-1.5"><input type="checkbox" checked={showBleed} onChange={(e) => setShowBleed(e.target.checked)} /> Bleed</label>
                 <label className="flex items-center gap-1.5"><input type="checkbox" checked={showGuides} onChange={(e) => setShowGuides(e.target.checked)} /> Guides</label>
@@ -571,15 +580,6 @@ export function TemplateWizard({ mode, categories, initial, svgColors, onCreated
                 <HelpTip label="About this sheet">Clients can resize this sheet, add artwork, and export it. The 3D fold is set up in its own step (create) or section (edit).</HelpTip>
                 <ImportedPreview dieline={dieline} roles={previewRoles} animate replayKey={replay} className="mx-auto max-h-[60vh] w-full" />
               </div>
-              <Button type="button" variant="outline" onClick={() => setOverrides({})}><Wand2 className="size-4" aria-hidden /> Auto-detect again</Button>
-              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                {ROLE_ORDER.map((r) => (
-                  <div key={r} className="contents">
-                    <dt className="font-medium text-foreground">{ROLE_LABELS[r]}</dt>
-                    <dd>{ROLE_HINTS[r]}</dd>
-                  </div>
-                ))}
-              </dl>
             </div>
           </div>
         </section>
