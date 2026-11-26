@@ -9,3 +9,6 @@ export default async function TemplatesPageContentAdmin() {
   const { content } = await readSiteContent();
   return <TemplatesPageEditor initial={content.templatesPage} />;
 }
+
+/** Reads the signed-in session, so it cannot be part of a static shell. */
+export const instant = false;

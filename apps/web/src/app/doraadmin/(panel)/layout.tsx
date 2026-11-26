@@ -10,6 +10,9 @@ import { db } from "@/server/db";
 import { env } from "@/server/env";
 import { getSiteIdentity } from "@/server/site-identity";
 
+/** Every admin page reads the signed-in session, so it can never be part of a static shell: allow it to block (silences the dev-only "blocking route" insight). */
+export const instant = false;
+
 /** Admin tab titles follow the site pattern: "<site name> | Admin | <page>". */
 export async function generateMetadata(): Promise<Metadata> {
   const { title } = await getSiteIdentity();

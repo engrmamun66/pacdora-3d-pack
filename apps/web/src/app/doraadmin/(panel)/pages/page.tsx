@@ -10,3 +10,6 @@ export default async function HomePageContent() {
   const { content } = await readSiteContent();
   return <HomeEditor initial={content.home} />;
 }
+
+/** Reads the signed-in session, so it cannot be part of a static shell. */
+export const instant = false;

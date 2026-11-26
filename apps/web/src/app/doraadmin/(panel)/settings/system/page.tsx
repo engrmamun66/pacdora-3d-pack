@@ -44,3 +44,6 @@ export default async function SystemSettings() {
     </section>
   );
 }
+
+/** Reads the signed-in session, so it cannot be part of a static shell. */
+export const instant = false;

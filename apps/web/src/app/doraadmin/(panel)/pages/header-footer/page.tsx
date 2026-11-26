@@ -9,3 +9,6 @@ export default async function HeaderFooterAdmin() {
   const { content } = await readSiteContent();
   return <ChromeEditor initial={content.chrome} />;
 }
+
+/** Reads the signed-in session, so it cannot be part of a static shell. */
+export const instant = false;

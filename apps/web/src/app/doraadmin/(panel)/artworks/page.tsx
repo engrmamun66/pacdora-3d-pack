@@ -77,3 +77,6 @@ export default async function ArtworksPage({ searchParams }: PageProps<"/doraadm
     </div>
   );
 }
+
+/** Reads the signed-in session, so it cannot be part of a static shell. */
+export const instant = false;

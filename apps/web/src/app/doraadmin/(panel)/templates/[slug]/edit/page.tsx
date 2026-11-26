@@ -60,3 +60,6 @@ export default async function EditTemplatePage({ params }: PageProps<"/doraadmin
     </div>
   );
 }
+
+/** Reads the signed-in session, so it cannot be part of a static shell. */
+export const instant = false;
